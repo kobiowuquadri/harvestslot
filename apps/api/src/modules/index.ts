@@ -22,6 +22,18 @@ import { FleetService } from './transport/fleet.service.js';
 import { QuotesService } from './transport/quotes.service.js';
 import { ShipmentsService } from './transport/shipments.service.js';
 import { TransportController } from './transport/transport.controller.js';
+import { ReceivingController } from './receiving/receiving.controller.js';
+import { ReceivingService } from './receiving/receiving.service.js';
+import { FinanceController } from './finance/finance.controller.js';
+import { FinanceService } from './finance/finance.service.js';
+import { DisputesController } from './disputes/disputes.controller.js';
+import { DisputesService } from './disputes/disputes.service.js';
+import { UploadsController } from './uploads/uploads.controller.js';
+import { UploadsService } from './uploads/uploads.service.js';
+import { NotificationsController, NotificationsService } from './notifications/notifications.controller.js';
+import { AdminController, AnalyticsController, PrivacyController } from './admin/admin.controller.js';
+import { AdminService } from './admin/admin.service.js';
+import { AnalyticsService } from './analytics/analytics.service.js';
 
 @Module({ controllers: [AuthController], providers: [AuthService, OtpService], exports: [AuthService, OtpService] })
 export class AuthModule {}
@@ -53,6 +65,24 @@ export class BookingsModule {}
 @Module({ imports: [BookingEngineModule], controllers: [TransportController], providers: [FleetService, QuotesService, ShipmentsService] })
 export class TransportModule {}
 
+@Module({ imports: [BookingEngineModule], controllers: [ReceivingController], providers: [ReceivingService] })
+export class ReceivingModule {}
+
+@Module({ controllers: [FinanceController], providers: [FinanceService], exports: [FinanceService] })
+export class FinanceModule {}
+
+@Module({ imports: [BookingEngineModule], controllers: [DisputesController], providers: [DisputesService] })
+export class DisputesModule {}
+
+@Module({ controllers: [UploadsController], providers: [UploadsService], exports: [UploadsService] })
+export class UploadsModule {}
+
+@Module({ controllers: [NotificationsController], providers: [NotificationsService] })
+export class NotificationsModule {}
+
+@Module({ controllers: [AdminController, AnalyticsController, PrivacyController], providers: [AdminService, AnalyticsService] })
+export class AdminModule {}
+
 export const FEATURE_MODULES = [
   AuthModule,
   SystemModule,
@@ -63,4 +93,10 @@ export const FEATURE_MODULES = [
   OffersModule,
   BookingsModule,
   TransportModule,
+  ReceivingModule,
+  FinanceModule,
+  DisputesModule,
+  UploadsModule,
+  NotificationsModule,
+  AdminModule,
 ];

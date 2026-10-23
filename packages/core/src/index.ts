@@ -20,3 +20,4 @@ export * from './payments.js';
 export * from './messaging.js';
 export * from './storage.js';
 export * from './sweeps.js';
+export * from './privacy.js';

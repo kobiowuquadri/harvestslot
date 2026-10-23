@@ -77,6 +77,19 @@ export class Client {
     return this.send<T>('put', path, body ?? {});
   }
 
+  async upload<T = any>(fields: Record<string, string>, file: { buffer: Buffer; filename: string }): Promise<Res<T>> {
+    if (!this.cookies.has('hs_csrf')) await this.get('/auth/csrf');
+    let req = request(this.app.getHttpServer())
+      .post('/api/v1/uploads')
+      .set('Cookie', this.cookieHeader())
+      .set('Origin', 'http://localhost:3000')
+      .set('X-CSRF-Token', decodeURIComponent(this.cookies.get('hs_csrf') ?? ''));
+    for (const [k, v] of Object.entries(fields)) req = req.field(k, v);
+    const r = await req.attach('file', file.buffer, file.filename);
+    this.store(r.headers);
+    return { status: r.status, body: r.body as T, headers: r.headers as Record<string, string> };
+  }
+
   async login(identifier: string, password = PASSWORD): Promise<Res> {
     const r = await this.post('/auth/login', { identifier, password });
     if (r.status !== 200) throw new Error(`login failed for ${identifier}: ${r.status} ${JSON.stringify(r.body)}`);
