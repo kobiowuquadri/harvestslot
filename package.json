@@ -15,7 +15,7 @@
     "db:generate": "pnpm --filter @harvestslot/db generate",
     "db:migrate": "pnpm --filter @harvestslot/db migrate:deploy",
     "db:migrate:create": "pnpm --filter @harvestslot/db migrate:create",
-    "db:seed": "pnpm --filter @harvestslot/db seed",
+    "db:seed": "pnpm --filter @harvestslot/api build && pnpm --filter @harvestslot/api seed",
     "db:reset": "pnpm --filter @harvestslot/db reset",
     "admin:create": "pnpm --filter @harvestslot/api admin:create",
     "build:packages": "pnpm --filter \"./packages/**\" -r build",

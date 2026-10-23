@@ -29,8 +29,8 @@ export const optionalText = (max = 2000) =>
     .string()
     .trim()
     .max(max)
-    .optional()
-    .transform((v) => (v === '' ? undefined : v));
+    .transform((v) => (v === '' ? undefined : v))
+    .optional();
 
 /** E.164 Nigerian mobile numbers (+234…); local 0-prefixed numbers are normalised. */
 export const phoneNumber = z

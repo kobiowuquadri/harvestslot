@@ -11,7 +11,8 @@
     "admin:create": "node dist/cli/create-admin.js",
     "openapi:export": "node dist/cli/export-openapi.js",
     "test": "vitest run --project unit",
-    "test:integration": "vitest run --project integration"
+    "test:integration": "vitest run --project integration",
+    "seed": "node --enable-source-maps dist/cli/seed.js"
   },
   "dependencies": {
     "@harvestslot/config": "workspace:*",
