@@ -1,0 +1,2050 @@
+// HarvestSlot database schema.
+//
+// Conventions
+// - Table names are snake_case (@@map); columns are camelCase (quote them in raw SQL).
+// - Quantities: NUMERIC(14,3) kilograms. Money: BIGINT kobo. Percentages: integer basis points.
+// - Timestamps are UTC (timestamptz). Harvest dates are calendar dates in Africa/Lagos (DATE).
+// - Mutable business records carry `version` for optimistic concurrency.
+// - Contractual/financial history uses onDelete: Restrict; constraints and immutability triggers that
+//   Prisma cannot express live in the SQL migration `*_constraints_and_triggers`.
+
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/generated/prisma"
+  moduleFormat           = "esm"
+  generatedFileExtension = "ts"
+  importFileExtension    = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────────────────────── Enums ─────────────────────────────
+
+enum PlatformRole {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum TokenPurpose {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+  PHONE_VERIFY
+  PHONE_RECOVERY
+  ACCOUNT_CLAIM
+  STAFF_INVITE
+}
+
+enum OrgType {
+  PROCESSOR
+  TRANSPORTER
+  COOPERATIVE
+}
+
+enum OrgStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum MembershipRole {
+  OWNER
+  MANAGER
+  RECEIVING_OFFICER
+  FINANCE_OFFICER
+  DISPATCHER
+  DRIVER
+  REPRESENTATIVE
+}
+
+enum MembershipStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum FarmerClaimStatus {
+  SELF_REGISTERED
+  REPRESENTED_UNCLAIMED
+  CLAIMED
+}
+
+enum LocationSource {
+  DEVICE_GPS
+  SELF_REPORTED_PIN
+  COOPERATIVE_REPORTED
+  DESCRIPTION_ONLY
+}
+
+enum CoopMembershipStatus {
+  ACTIVE
+  ENDED
+}
+
+enum DelegationScope {
+  ASSIST_DATA_ENTRY
+  APPROVE_SALE
+  CONFIRM_HANDOVER
+  VIEW_FINANCIALS
+  CONFIRM_PAYMENT_RECEIPT
+}
+
+enum ConsentMethod {
+  FARMER_IN_APP
+  RECORDED_BY_REPRESENTATIVE
+}
+
+enum FacilityStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ProcessingProduct {
+  GARRI
+  FLOUR
+  STARCH
+  FUFU
+  CHIPS
+  OTHER
+}
+
+enum LineStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum SlotStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  CANCELLED
+}
+
+enum HarvestRequestStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  WITHDRAWN
+}
+
+enum TransportPreference {
+  PROCESSOR_PAYS
+  FARMER_MAY_PAY
+}
+
+enum OfferStatus {
+  OPEN
+  COUNTERED
+  ACCEPTED
+  DECLINED
+  WITHDRAWN
+  EXPIRED
+  LAPSED
+}
+
+enum ProposerParty {
+  PROCESSOR
+  FARMER
+}
+
+enum FreightPayer {
+  PROCESSOR
+  FARMER
+}
+
+enum RejectionHandling {
+  RETURNED_AT_PROCESSOR_COST
+  FARMER_COLLECTS
+  AGREED_DISPOSAL
+}
+
+enum ReservationStatus {
+  HELD
+  CONFIRMED
+  CONSUMED
+  RELEASED
+  EXPIRED
+}
+
+enum HarvestLotStatus {
+  ALLOCATED
+  HARVEST_STARTED
+  READY_FOR_PICKUP
+  COLLECTED
+  DELIVERED
+  RELEASED
+  INCIDENT
+}
+
+enum BookingStatus {
+  DRAFT
+  AWAITING_CONFIRMATIONS
+  CONFIRMED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum TermsChangeReason {
+  INITIAL
+  TRANSPORT_ADDED
+  TRANSPORT_REPLACED
+  TRANSPORT_REMOVED
+  AMENDMENT
+  OVER_DELIVERY
+}
+
+enum AmendmentStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+  SUPERSEDED
+}
+
+enum BookingParty {
+  FARMER
+  PROCESSOR
+  TRANSPORTER
+  ADMIN
+}
+
+enum ConfirmationMethod {
+  EXPLICIT
+  OFFER_ISSUANCE
+  QUOTE_ACCEPTANCE
+  CARRIED_FORWARD
+}
+
+enum VehicleType {
+  PICKUP_VAN
+  LIGHT_TRUCK
+  MEDIUM_TRUCK
+  HEAVY_TRUCK
+  TRACTOR_TRAILER
+}
+
+enum VehicleStatus {
+  ACTIVE
+  MAINTENANCE
+  RETIRED
+}
+
+enum DriverStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum QuoteStatus {
+  SUBMITTED
+  ACCEPTED
+  DECLINED
+  WITHDRAWN
+  EXPIRED
+  SUPERSEDED
+}
+
+enum TripStatus {
+  HELD
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  RELEASED
+  EXPIRED
+  CANCELLED
+}
+
+enum ShipmentStatus {
+  ASSIGNED
+  EN_ROUTE_TO_PICKUP
+  ARRIVED_AT_PICKUP
+  COLLECTED
+  PICKUP_CONFIRMED
+  IN_TRANSIT
+  ARRIVED_AT_FACILITY
+  DELIVERED
+  CANCELLED
+}
+
+enum HandoverPurpose {
+  PICKUP
+  DELIVERY
+}
+
+enum HandoverMethod {
+  COUNTERPARTY_APP
+  HANDOVER_CODE
+  EXCEPTION_APPROVED
+}
+
+enum ReceivingStatus {
+  DRAFT
+  AWAITING_FARMER_REVIEW
+  FINAL
+  DISPUTED
+  REVIEW_OVERDUE
+}
+
+enum WeighingMethod {
+  WEIGHBRIDGE
+  PLATFORM_SCALE
+  HANGING_SCALE
+  COUNT_ESTIMATE
+}
+
+enum EvidenceVerification {
+  SELF_REPORTED
+  DOCUMENT_UPLOADED
+  ADMIN_REVIEWED
+}
+
+enum WeightEvidenceKind {
+  WEIGHBRIDGE_TICKET
+  SCALE_PHOTO
+  OTHER
+}
+
+enum RejectionReason {
+  ROTTEN_OR_DAMAGED
+  UNDERSIZED
+  EXCESS_SOIL_OR_STEMS
+  TOO_LONG_SINCE_HARVEST
+  OVER_CONTRACT_EXCESS
+  OTHER
+}
+
+enum RejectedDisposition {
+  NONE
+  RETURNED_TO_FARMER
+  FARMER_COLLECTS
+  AGREED_DISPOSAL
+  PENDING
+}
+
+enum FarmerReceivingDecision {
+  ACCEPTED
+  DISPUTED
+}
+
+enum ProcessingStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum InvoiceKind {
+  PRODUCE
+  FREIGHT
+  PLATFORM_FEE
+}
+
+enum PartyType {
+  FARMER
+  ORGANISATION
+  PLATFORM
+}
+
+enum InvoiceStatus {
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  VOID
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  CASH
+  MOBILE_MONEY
+  PAYSTACK
+  PAYSTACK_SIMULATED
+}
+
+enum PaymentAttemptStatus {
+  REPORTED
+  CONFIRMED_BY_RECIPIENT
+  REJECTED_BY_RECIPIENT
+  PROVIDER_PENDING
+  PROVIDER_SUCCESS
+  PROVIDER_FAILED
+  PROVIDER_ABANDONED
+  PROVIDER_REVERSED
+}
+
+enum VerificationLevel {
+  REPORTED_BY_PAYER
+  CONFIRMED_BY_RECIPIENT
+  VERIFIED_BY_PROVIDER
+  SIMULATED
+}
+
+enum ReceiptDecision {
+  CONFIRMED
+  NOT_RECEIVED
+  AMOUNT_DIFFERS
+}
+
+enum RefundStatus {
+  REPORTED
+  CONFIRMED_BY_RECIPIENT
+  PROVIDER_PROCESSED
+}
+
+enum DisputeCategory {
+  WEIGHT
+  QUALITY_REJECTION
+  PAYMENT_NOT_RECEIVED
+  PAYMENT_AMOUNT
+  PICKUP
+  DELIVERY
+  CANCELLATION
+  OTHER
+}
+
+enum DisputeStatus {
+  OPEN
+  AWAITING_RESPONSE
+  UNDER_REVIEW
+  RESOLVED
+  WITHDRAWN
+}
+
+enum ResolutionKind {
+  ADMIN_DECISION
+  MUTUAL_SETTLEMENT
+}
+
+enum IncidentKind {
+  TRANSPORT_FAILURE
+  PROCESSOR_CANNOT_RECEIVE
+  HARVEST_PROBLEM
+  HANDOVER_EXCEPTION
+  OTHER
+}
+
+enum IncidentStatus {
+  OPEN
+  RESOLVED
+}
+
+enum AttachmentPurpose {
+  ORG_DOCUMENT
+  IDENTITY_DOCUMENT
+  HARVEST_PHOTO
+  PICKUP_EVIDENCE
+  DELIVERY_EVIDENCE
+  WEIGHT_EVIDENCE
+  QUALITY_PHOTO
+  PAYMENT_EVIDENCE
+  DISPUTE_EVIDENCE
+  MESSAGE_ATTACHMENT
+  CONSENT_FORM
+  VOICE_NOTE
+  DATA_EXPORT
+}
+
+enum ScanStatus {
+  PENDING
+  CLEAN
+  INFECTED
+  NOT_SCANNED
+}
+
+enum DocumentReviewStatus {
+  UNREVIEWED
+  ADMIN_APPROVED
+  ADMIN_REJECTED
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  SMS
+}
+
+enum DeliveryStatus {
+  QUEUED
+  SENT
+  FAILED
+  UNAVAILABLE
+  SUPPRESSED
+  CAPTURED_LOCALLY
+  DEAD
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+  DEAD
+}
+
+enum IdempotencyState {
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum WebhookStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+}
+
+enum ConsentType {
+  TERMS
+  PRIVACY
+  CONTACT_EMAIL
+  CONTACT_SMS
+  LOCATION
+  VOICE_PROCESSING
+}
+
+enum DataRequestType {
+  EXPORT
+  DELETION
+}
+
+enum DataRequestStatus {
+  RECEIVED
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+}
+
+enum LossStage {
+  IN_TRANSIT
+  AT_FACILITY
+  PROCESSING
+}
+
+enum LossMethod {
+  MEASURED_WEIGHT
+  ESTIMATED
+}
+
+enum VoiceDraftStatus {
+  PROCESSING
+  READY_FOR_REVIEW
+  FAILED
+  DISCARDED
+  APPLIED
+}
+
+// ───────────────────────────── Identity ─────────────────────────────
+
+model User {
+  id                    String       @id @default(uuid(7)) @db.Uuid
+  email                 String?      @unique
+  emailVerifiedAt       DateTime?    @db.Timestamptz(3)
+  phone                 String?      @unique
+  phoneVerifiedAt       DateTime?    @db.Timestamptz(3)
+  passwordHash          String?
+  displayName           String
+  platformRole          PlatformRole @default(USER)
+  status                UserStatus   @default(ACTIVE)
+  statusReason          String?
+  locale                String       @default("en")
+  mfaSecretEnc          String?
+  mfaEnabledAt          DateTime?    @db.Timestamptz(3)
+  mfaRecoveryCodeHashes String[]     @default([])
+  failedLoginCount      Int          @default(0)
+  lockedUntil           DateTime?    @db.Timestamptz(3)
+  lastLoginAt           DateTime?    @db.Timestamptz(3)
+  notificationPrefs     Json         @default("{}")
+  isDemo                Boolean      @default(false)
+  createdAt             DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime     @updatedAt @db.Timestamptz(3)
+  version               Int          @default(1)
+
+  sessions           Session[]
+  verificationTokens VerificationToken[]
+  memberships        Membership[]
+  farmerProfile      FarmerProfile?      @relation("FarmerProfileUser")
+  driverProfiles     Driver[]
+  notifications      Notification[]
+  consents           ConsentRecord[]     @relation("ConsentSubjectUser")
+  dataRequests       DataRequest[]
+
+  @@map("users")
+}
+
+model Session {
+  id                String    @id @default(uuid(7)) @db.Uuid
+  userId            String    @db.Uuid
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash         String    @unique
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  lastSeenAt        DateTime  @default(now()) @db.Timestamptz(3)
+  idleExpiresAt     DateTime  @db.Timestamptz(3)
+  absoluteExpiresAt DateTime  @db.Timestamptz(3)
+  revokedAt         DateTime? @db.Timestamptz(3)
+  revokeReason      String?
+  ip                String?
+  userAgent         String?
+  /// Password verified but TOTP still required (admin MFA).
+  mfaPending        Boolean   @default(false)
+  mfaVerifiedAt     DateTime? @db.Timestamptz(3)
+
+  @@index([userId, revokedAt])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  id              String       @id @default(uuid(7)) @db.Uuid
+  userId          String?      @db.Uuid
+  user            User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  farmerProfileId String?      @db.Uuid
+  organisationId  String?      @db.Uuid
+  purpose         TokenPurpose
+  /// Normalised email or E.164 phone the token was sent to.
+  target          String
+  tokenHash       String       @unique
+  expiresAt       DateTime     @db.Timestamptz(3)
+  consumedAt      DateTime?    @db.Timestamptz(3)
+  attempts        Int          @default(0)
+  maxAttempts     Int          @default(5)
+  metadata        Json?
+  createdAt       DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@index([target, purpose, createdAt])
+  @@map("verification_tokens")
+}
+
+model Organisation {
+  id                 String    @id @default(uuid(7)) @db.Uuid
+  type               OrgType
+  name               String
+  status             OrgStatus @default(PENDING_REVIEW)
+  statusReason       String?
+  /// Self-reported (e.g. CAC number). Never shown as verified unless an admin reviewed a document.
+  registrationNumber String?
+  contactEmail       String?
+  contactPhone       String?
+  lga                String
+  state              String    @default("Oyo")
+  address            String?
+  description        String?
+  reviewedAt         DateTime? @db.Timestamptz(3)
+  reviewedByUserId   String?   @db.Uuid
+  isDemo             Boolean   @default(false)
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime  @updatedAt @db.Timestamptz(3)
+  version            Int       @default(1)
+
+  memberships       Membership[]
+  invitations       StaffInvitation[]
+  facilities        Facility[]
+  vehicles          Vehicle[]
+  drivers           Driver[]
+  serviceAreas      TransportServiceArea[]
+  availability      TransportAvailability[]
+  coopMembers       CooperativeMembership[]
+  delegations       DelegationConsent[]
+  offers            Offer[]
+  quotes            TransportQuote[]
+  processorBookings Booking[]               @relation("BookingProcessor")
+
+  @@index([type, status])
+  @@map("organisations")
+}
+
+model Membership {
+  id              String           @id @default(uuid(7)) @db.Uuid
+  userId          String           @db.Uuid
+  user            User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  organisationId  String           @db.Uuid
+  organisation    Organisation     @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  roles           MembershipRole[]
+  status          MembershipStatus @default(ACTIVE)
+  invitedByUserId String?          @db.Uuid
+  revokedAt       DateTime?        @db.Timestamptz(3)
+  revokedByUserId String?          @db.Uuid
+  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @db.Timestamptz(3)
+  version         Int              @default(1)
+
+  @@unique([userId, organisationId])
+  @@index([organisationId, status])
+  @@map("memberships")
+}
+
+model StaffInvitation {
+  id               String           @id @default(uuid(7)) @db.Uuid
+  organisationId   String           @db.Uuid
+  organisation     Organisation     @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  email            String
+  roles            MembershipRole[]
+  tokenHash        String           @unique
+  invitedByUserId  String           @db.Uuid
+  expiresAt        DateTime         @db.Timestamptz(3)
+  acceptedAt       DateTime?        @db.Timestamptz(3)
+  acceptedByUserId String?          @db.Uuid
+  revokedAt        DateTime?        @db.Timestamptz(3)
+  createdAt        DateTime         @default(now()) @db.Timestamptz(3)
+
+  @@index([email])
+  @@map("staff_invitations")
+}
+
+// ───────────────────────────── Farmers & cooperatives ─────────────────────────────
+
+model FarmerProfile {
+  id                String            @id @default(uuid(7)) @db.Uuid
+  userId            String?           @unique @db.Uuid
+  user              User?             @relation("FarmerProfileUser", fields: [userId], references: [id], onDelete: Restrict)
+  displayName       String
+  phone             String?
+  email             String?
+  preferredLanguage String            @default("en")
+  lga               String
+  community         String?
+  claimStatus       FarmerClaimStatus @default(SELF_REGISTERED)
+  createdByUserId   String?           @db.Uuid
+  createdViaOrgId   String?           @db.Uuid
+  contactConsentAt  DateTime?         @db.Timestamptz(3)
+  locationConsentAt DateTime?         @db.Timestamptz(3)
+  isDemo            Boolean           @default(false)
+  createdAt         DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime          @updatedAt @db.Timestamptz(3)
+  version           Int               @default(1)
+
+  locations       FarmLocation[]
+  coopMemberships CooperativeMembership[]
+  delegations     DelegationConsent[]
+  harvestRequests HarvestRequest[]
+  bookings        Booking[]
+  consents        ConsentRecord[]         @relation("ConsentSubjectFarmer")
+
+  @@index([lga])
+  @@map("farmer_profiles")
+}
+
+model FarmLocation {
+  id              String         @id @default(uuid(7)) @db.Uuid
+  farmerProfileId String         @db.Uuid
+  farmerProfile   FarmerProfile  @relation(fields: [farmerProfileId], references: [id], onDelete: Restrict)
+  label           String
+  lga             String
+  community       String?
+  /// Rounded to ~1 km for discovery views.
+  approxLat       Decimal?       @db.Decimal(8, 5)
+  approxLng       Decimal?       @db.Decimal(8, 5)
+  /// Exact pickup point; only disclosed to authorised booking participants.
+  exactLat        Decimal?       @db.Decimal(9, 6)
+  exactLng        Decimal?       @db.Decimal(9, 6)
+  accuracyM       Int?
+  source          LocationSource @default(DESCRIPTION_ONLY)
+  directions      String?
+  archivedAt      DateTime?      @db.Timestamptz(3)
+  isDemo          Boolean        @default(false)
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime       @updatedAt @db.Timestamptz(3)
+  version         Int            @default(1)
+
+  harvestRequests HarvestRequest[]
+
+  @@index([farmerProfileId])
+  @@map("farm_locations")
+}
+
+model CooperativeMembership {
+  id              String               @id @default(uuid(7)) @db.Uuid
+  cooperativeId   String               @db.Uuid
+  cooperative     Organisation         @relation(fields: [cooperativeId], references: [id], onDelete: Restrict)
+  farmerProfileId String               @db.Uuid
+  farmerProfile   FarmerProfile        @relation(fields: [farmerProfileId], references: [id], onDelete: Restrict)
+  status          CoopMembershipStatus @default(ACTIVE)
+  memberRef       String?
+  joinedAt        DateTime             @default(now()) @db.Timestamptz(3)
+  endedAt         DateTime?            @db.Timestamptz(3)
+  endedReason     String?
+  createdByUserId String?              @db.Uuid
+  updatedAt       DateTime             @updatedAt @db.Timestamptz(3)
+  version         Int                  @default(1)
+
+  @@unique([cooperativeId, farmerProfileId])
+  @@map("cooperative_memberships")
+}
+
+model DelegationConsent {
+  id                   String            @id @default(uuid(7)) @db.Uuid
+  cooperativeId        String            @db.Uuid
+  cooperative          Organisation      @relation(fields: [cooperativeId], references: [id], onDelete: Restrict)
+  farmerProfileId      String            @db.Uuid
+  farmerProfile        FarmerProfile     @relation(fields: [farmerProfileId], references: [id], onDelete: Restrict)
+  scopes               DelegationScope[]
+  method               ConsentMethod
+  recordedByUserId     String            @db.Uuid
+  witnessName          String?
+  evidenceAttachmentId String?           @db.Uuid
+  note                 String?
+  grantedAt            DateTime          @default(now()) @db.Timestamptz(3)
+  expiresAt            DateTime?         @db.Timestamptz(3)
+  revokedAt            DateTime?         @db.Timestamptz(3)
+  revokedByUserId      String?           @db.Uuid
+  revokeReason         String?
+
+  @@index([farmerProfileId, cooperativeId])
+  @@map("delegation_consents")
+}
+
+// ───────────────────────────── Processing capacity ─────────────────────────────
+
+model Facility {
+  id                       String            @id @default(uuid(7)) @db.Uuid
+  organisationId           String            @db.Uuid
+  organisation             Organisation      @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  name                     String
+  lga                      String
+  address                  String?
+  lat                      Decimal           @db.Decimal(9, 6)
+  lng                      Decimal           @db.Decimal(9, 6)
+  status                   FacilityStatus    @default(ACTIVE)
+  acceptsCassava           Boolean           @default(true)
+  /// Structured purchase requirements (see contracts QualityTerms).
+  qualityCriteria          Json
+  minOrderKg               Decimal           @db.Decimal(14, 3)
+  maxPickupDistanceKm      Int
+  indicativePriceKoboPerKg BigInt?
+  defaultToleranceBps      Int               @default(500)
+  defaultPaymentTermsDays  Int               @default(7)
+  rejectionHandling        RejectionHandling @default(RETURNED_AT_PROCESSOR_COST)
+  cancellationTerms        String
+  isDemo                   Boolean           @default(false)
+  createdAt                DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime          @updatedAt @db.Timestamptz(3)
+  version                  Int               @default(1)
+
+  lines            ProcessingLine[]
+  slots            ProcessingSlot[]
+  offers           Offer[]
+  bookings         Booking[]
+  receivingRecords ReceivingRecord[]
+  invitations      OfferInvitation[]
+
+  @@index([organisationId])
+  @@map("facilities")
+}
+
+model ProcessingLine {
+  id         String            @id @default(uuid(7)) @db.Uuid
+  facilityId String            @db.Uuid
+  facility   Facility          @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+  name       String
+  product    ProcessingProduct
+  status     LineStatus        @default(ACTIVE)
+  createdAt  DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime          @updatedAt @db.Timestamptz(3)
+  version    Int               @default(1)
+
+  slots             ProcessingSlot[]
+  processingRecords ProcessingRecord[]
+
+  @@unique([facilityId, name])
+  @@map("processing_lines")
+}
+
+model ProcessingSlot {
+  id                   String         @id @default(uuid(7)) @db.Uuid
+  lineId               String         @db.Uuid
+  line                 ProcessingLine @relation(fields: [lineId], references: [id], onDelete: Restrict)
+  facilityId           String         @db.Uuid
+  facility             Facility       @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+  startsAt             DateTime       @db.Timestamptz(3)
+  endsAt               DateTime       @db.Timestamptz(3)
+  /// Physical machine capacity for the window.
+  processingCapacityKg Decimal        @db.Decimal(14, 3)
+  /// Quantity the processor is willing and able to purchase in the window.
+  purchaseLimitKg      Decimal        @db.Decimal(14, 3)
+  status               SlotStatus     @default(DRAFT)
+  publishedAt          DateTime?      @db.Timestamptz(3)
+  closedReason         String?
+  notes                String?
+  createdByUserId      String         @db.Uuid
+  isDemo               Boolean        @default(false)
+  createdAt            DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime       @updatedAt @db.Timestamptz(3)
+  version              Int            @default(1)
+
+  reservations  Reservation[]
+  adjustments   CapacityAdjustment[]
+  offerVersions OfferVersion[]
+  bookings      Booking[]
+
+  @@index([facilityId, startsAt])
+  @@index([status, startsAt])
+  @@map("processing_slots")
+}
+
+model CapacityAdjustment {
+  id                  String         @id @default(uuid(7)) @db.Uuid
+  slotId              String         @db.Uuid
+  slot                ProcessingSlot @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  actorUserId         String         @db.Uuid
+  prevProcessingKg    Decimal        @db.Decimal(14, 3)
+  newProcessingKg     Decimal        @db.Decimal(14, 3)
+  prevPurchaseLimitKg Decimal        @db.Decimal(14, 3)
+  newPurchaseLimitKg  Decimal        @db.Decimal(14, 3)
+  reason              String
+  createdAt           DateTime       @default(now()) @db.Timestamptz(3)
+
+  @@index([slotId])
+  @@map("capacity_adjustments")
+}
+
+// ───────────────────────────── Harvests & offers ─────────────────────────────
+
+model HarvestRequest {
+  id                  String               @id @default(uuid(7)) @db.Uuid
+  reference           String               @unique
+  farmerProfileId     String               @db.Uuid
+  farmerProfile       FarmerProfile        @relation(fields: [farmerProfileId], references: [id], onDelete: Restrict)
+  farmLocationId      String               @db.Uuid
+  farmLocation        FarmLocation         @relation(fields: [farmLocationId], references: [id], onDelete: Restrict)
+  createdByUserId     String               @db.Uuid
+  actingDelegationId  String?              @db.Uuid
+  status              HarvestRequestStatus @default(DRAFT)
+  estimatedQuantityKg Decimal              @db.Decimal(14, 3)
+  /// Quantity currently offered for sale; allocations may never exceed it.
+  eligibleQuantityKg  Decimal              @db.Decimal(14, 3)
+  earliestHarvestDate DateTime             @db.Date
+  latestHarvestDate   DateTime             @db.Date
+  variety             String?
+  cropAgeMonths       Int?
+  notes               String?
+  minPriceKoboPerKg   BigInt?
+  transportPreference TransportPreference  @default(PROCESSOR_PAYS)
+  maxDistanceKm       Int?
+  /// Client-generated id of an offline draft; makes draft sync idempotent.
+  clientDraftId       String?              @unique
+  publishedAt         DateTime?            @db.Timestamptz(3)
+  closedAt            DateTime?            @db.Timestamptz(3)
+  closeReason         String?
+  isDemo              Boolean              @default(false)
+  createdAt           DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime             @updatedAt @db.Timestamptz(3)
+  version             Int                  @default(1)
+
+  lots        HarvestLot[]
+  offers      Offer[]
+  bookings    Booking[]
+  invitations OfferInvitation[]
+
+  @@index([status, earliestHarvestDate])
+  @@index([farmerProfileId])
+  @@map("harvest_requests")
+}
+
+model OfferInvitation {
+  id               String         @id @default(uuid(7)) @db.Uuid
+  harvestRequestId String         @db.Uuid
+  harvestRequest   HarvestRequest @relation(fields: [harvestRequestId], references: [id], onDelete: Restrict)
+  facilityId       String         @db.Uuid
+  facility         Facility       @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+  invitedByUserId  String         @db.Uuid
+  createdAt        DateTime       @default(now()) @db.Timestamptz(3)
+
+  @@unique([harvestRequestId, facilityId])
+  @@map("offer_invitations")
+}
+
+model HarvestLot {
+  id                  String           @id @default(uuid(7)) @db.Uuid
+  harvestRequestId    String           @db.Uuid
+  harvestRequest      HarvestRequest   @relation(fields: [harvestRequestId], references: [id], onDelete: Restrict)
+  bookingId           String           @unique @db.Uuid
+  booking             Booking          @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  quantityKg          Decimal          @db.Decimal(14, 3)
+  status              HarvestLotStatus @default(ALLOCATED)
+  plannedHarvestDate  DateTime         @db.Date
+  harvestStartedAt    DateTime?        @db.Timestamptz(3)
+  readyForPickupAt    DateTime?        @db.Timestamptz(3)
+  reportedHarvestedKg Decimal?         @db.Decimal(14, 3)
+  collectedAt         DateTime?        @db.Timestamptz(3)
+  deliveredAt         DateTime?        @db.Timestamptz(3)
+  releasedAt          DateTime?        @db.Timestamptz(3)
+  releaseReason       String?
+  createdAt           DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime         @updatedAt @db.Timestamptz(3)
+  version             Int              @default(1)
+
+  @@index([harvestRequestId, status])
+  @@map("harvest_lots")
+}
+
+model Offer {
+  id               String         @id @default(uuid(7)) @db.Uuid
+  harvestRequestId String         @db.Uuid
+  harvestRequest   HarvestRequest @relation(fields: [harvestRequestId], references: [id], onDelete: Restrict)
+  processorOrgId   String         @db.Uuid
+  processorOrg     Organisation   @relation(fields: [processorOrgId], references: [id], onDelete: Restrict)
+  facilityId       String         @db.Uuid
+  facility         Facility       @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+  status           OfferStatus    @default(OPEN)
+  currentVersionNo Int            @default(1)
+  expiresAt        DateTime       @db.Timestamptz(3)
+  createdByUserId  String         @db.Uuid
+  decidedAt        DateTime?      @db.Timestamptz(3)
+  decidedByUserId  String?        @db.Uuid
+  decisionReason   String?
+  isDemo           Boolean        @default(false)
+  createdAt        DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime       @updatedAt @db.Timestamptz(3)
+  version          Int            @default(1)
+
+  versions    OfferVersion[]
+  reservation Reservation?
+  booking     Booking?
+
+  @@index([harvestRequestId, status])
+  @@index([processorOrgId, status])
+  @@map("offers")
+}
+
+model OfferVersion {
+  id                  String            @id @default(uuid(7)) @db.Uuid
+  offerId             String            @db.Uuid
+  offer               Offer             @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  versionNo           Int
+  proposedBy          ProposerParty
+  proposedByUserId    String            @db.Uuid
+  actingForFarmerId   String?           @db.Uuid
+  delegationId        String?           @db.Uuid
+  slotId              String            @db.Uuid
+  slot                ProcessingSlot    @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  quantityKg          Decimal           @db.Decimal(14, 3)
+  priceKoboPerKg      BigInt
+  plannedHarvestDate  DateTime          @db.Date
+  pickupWindowStart   DateTime          @db.Timestamptz(3)
+  pickupWindowEnd     DateTime          @db.Timestamptz(3)
+  deliveryWindowStart DateTime          @db.Timestamptz(3)
+  deliveryWindowEnd   DateTime          @db.Timestamptz(3)
+  qualityTerms        Json
+  toleranceBps        Int
+  paymentTermsDays    Int
+  freightPayer        FreightPayer      @default(PROCESSOR)
+  rejectionHandling   RejectionHandling
+  cancellationTerms   String
+  note                String?
+  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
+
+  @@unique([offerId, versionNo])
+  @@map("offer_versions")
+}
+
+model Reservation {
+  id            String            @id @default(uuid(7)) @db.Uuid
+  slotId        String            @db.Uuid
+  slot          ProcessingSlot    @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  offerId       String            @unique @db.Uuid
+  offer         Offer             @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  bookingId     String?           @unique @db.Uuid
+  booking       Booking?          @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  quantityKg    Decimal           @db.Decimal(14, 3)
+  status        ReservationStatus @default(HELD)
+  expiresAt     DateTime?         @db.Timestamptz(3)
+  heldAt        DateTime          @default(now()) @db.Timestamptz(3)
+  confirmedAt   DateTime?         @db.Timestamptz(3)
+  consumedAt    DateTime?         @db.Timestamptz(3)
+  releasedAt    DateTime?         @db.Timestamptz(3)
+  releaseReason String?
+  updatedAt     DateTime          @updatedAt @db.Timestamptz(3)
+  version       Int               @default(1)
+
+  @@index([slotId, status])
+  @@map("reservations")
+}
+
+// ───────────────────────────── Bookings ─────────────────────────────
+
+model Booking {
+  id                    String         @id @default(uuid(7)) @db.Uuid
+  reference             String         @unique
+  harvestRequestId      String         @db.Uuid
+  harvestRequest        HarvestRequest @relation(fields: [harvestRequestId], references: [id], onDelete: Restrict)
+  farmerProfileId       String         @db.Uuid
+  farmerProfile         FarmerProfile  @relation(fields: [farmerProfileId], references: [id], onDelete: Restrict)
+  processorOrgId        String         @db.Uuid
+  processorOrg          Organisation   @relation("BookingProcessor", fields: [processorOrgId], references: [id], onDelete: Restrict)
+  facilityId            String         @db.Uuid
+  facility              Facility       @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+  slotId                String         @db.Uuid
+  slot                  ProcessingSlot @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  offerId               String         @unique @db.Uuid
+  offer                 Offer          @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  status                BookingStatus
+  currentTermsVersionNo Int            @default(1)
+  confirmationDeadline  DateTime?      @db.Timestamptz(3)
+  preparedByUserId      String?        @db.Uuid
+  preparedDelegationId  String?        @db.Uuid
+  confirmedAt           DateTime?      @db.Timestamptz(3)
+  activatedAt           DateTime?      @db.Timestamptz(3)
+  completedAt           DateTime?      @db.Timestamptz(3)
+  cancelledAt           DateTime?      @db.Timestamptz(3)
+  cancelledByUserId     String?        @db.Uuid
+  cancelledByParty      BookingParty?
+  cancelReason          String?
+  expiredAt             DateTime?      @db.Timestamptz(3)
+  lastReadiness         Boolean        @default(false)
+  readinessCheckedAt    DateTime?      @db.Timestamptz(3)
+  isDemo                Boolean        @default(false)
+  createdAt             DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime       @updatedAt @db.Timestamptz(3)
+  version               Int            @default(1)
+
+  harvestLot       HarvestLot?
+  reservation      Reservation?
+  termsVersions    BookingTermsVersion[]
+  amendments       BookingAmendment[]
+  confirmations    Confirmation[]
+  readinessEvents  ReadinessEvent[]
+  quotes           TransportQuote[]
+  trips            TripReservation[]
+  shipments        Shipment[]
+  pickupRecords    PickupRecord[]
+  receivingRecord  ReceivingRecord?
+  processingRecord ProcessingRecord?
+  invoices         Invoice[]
+  disputes         Dispute[]
+  incidents        BookingIncident[]
+  messages         BookingMessage[]
+  lossRecords      LossRecord[]
+
+  @@index([farmerProfileId, status])
+  @@index([processorOrgId, status])
+  @@index([slotId])
+  @@index([status, confirmationDeadline])
+  @@map("bookings")
+}
+
+model BookingTermsVersion {
+  id               String            @id @default(uuid(7)) @db.Uuid
+  bookingId        String            @db.Uuid
+  booking          Booking           @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  versionNo        Int
+  reason           TermsChangeReason
+  /// Full immutable snapshot (contracts BookingTermsContent).
+  content          Json
+  contentHash      String
+  quantityKg       Decimal           @db.Decimal(14, 3)
+  priceKoboPerKg   BigInt
+  slotId           String            @db.Uuid
+  freightPayer     FreightPayer
+  freightKobo      BigInt?
+  transportQuoteId String?           @db.Uuid
+  tripId           String?           @db.Uuid
+  platformFeeBps   Int
+  createdByUserId  String?           @db.Uuid
+  createdAt        DateTime          @default(now()) @db.Timestamptz(3)
+
+  amendment     BookingAmendment?
+  confirmations Confirmation[]
+
+  @@unique([bookingId, versionNo])
+  @@map("booking_terms_versions")
+}
+
+model BookingAmendment {
+  id               String              @id @default(uuid(7)) @db.Uuid
+  bookingId        String              @db.Uuid
+  booking          Booking             @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  termsVersionId   String              @unique @db.Uuid
+  termsVersion     BookingTermsVersion @relation(fields: [termsVersionId], references: [id], onDelete: Restrict)
+  baseVersionNo    Int
+  status           AmendmentStatus     @default(PENDING)
+  proposedByUserId String              @db.Uuid
+  proposedByParty  BookingParty
+  reason           String
+  decidedAt        DateTime?           @db.Timestamptz(3)
+  decidedByUserId  String?             @db.Uuid
+  rejectionReason  String?
+  createdAt        DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime            @updatedAt @db.Timestamptz(3)
+  version          Int                 @default(1)
+
+  @@index([bookingId, status])
+  @@map("booking_amendments")
+}
+
+model Confirmation {
+  id                String              @id @default(uuid(7)) @db.Uuid
+  bookingId         String              @db.Uuid
+  booking           Booking             @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  termsVersionId    String              @db.Uuid
+  termsVersion      BookingTermsVersion @relation(fields: [termsVersionId], references: [id], onDelete: Restrict)
+  party             BookingParty
+  method            ConfirmationMethod
+  actorUserId       String?             @db.Uuid
+  actingForFarmerId String?             @db.Uuid
+  delegationId      String?             @db.Uuid
+  organisationId    String?             @db.Uuid
+  carriedFromId     String?             @db.Uuid
+  contentHash       String
+  createdAt         DateTime            @default(now()) @db.Timestamptz(3)
+
+  @@unique([termsVersionId, party])
+  @@index([bookingId])
+  @@map("confirmations")
+}
+
+model ReadinessEvent {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  bookingId     String   @db.Uuid
+  booking       Booking  @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  ready         Boolean
+  failingChecks String[]
+  trigger       String
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([bookingId, createdAt])
+  @@map("readiness_events")
+}
+
+model BookingIncident {
+  id               String         @id @default(uuid(7)) @db.Uuid
+  bookingId        String         @db.Uuid
+  booking          Booking        @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  kind             IncidentKind
+  status           IncidentStatus @default(OPEN)
+  blocking         Boolean        @default(true)
+  description      String
+  openedByUserId   String         @db.Uuid
+  openedByParty    BookingParty
+  recoveryAction   String?
+  resolvedByUserId String?        @db.Uuid
+  resolvedAt       DateTime?      @db.Timestamptz(3)
+  createdAt        DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime       @updatedAt @db.Timestamptz(3)
+  version          Int            @default(1)
+
+  @@index([bookingId, status])
+  @@map("booking_incidents")
+}
+
+model BookingMessage {
+  id                String       @id @default(uuid(7)) @db.Uuid
+  bookingId         String       @db.Uuid
+  booking           Booking      @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  authorUserId      String       @db.Uuid
+  authorParty       BookingParty
+  actingForFarmerId String?      @db.Uuid
+  body              String
+  createdAt         DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@index([bookingId, createdAt])
+  @@map("booking_messages")
+}
+
+// ───────────────────────────── Transport ─────────────────────────────
+
+model Vehicle {
+  id                String        @id @default(uuid(7)) @db.Uuid
+  organisationId    String        @db.Uuid
+  organisation      Organisation  @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  registrationPlate String        @unique
+  type              VehicleType
+  capacityKg        Decimal       @db.Decimal(14, 3)
+  description       String?
+  status            VehicleStatus @default(ACTIVE)
+  isDemo            Boolean       @default(false)
+  createdAt         DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime      @updatedAt @db.Timestamptz(3)
+  version           Int           @default(1)
+
+  availability TransportAvailability[]
+  quotes       TransportQuote[]
+  trips        TripReservation[]
+
+  @@index([organisationId])
+  @@map("vehicles")
+}
+
+model Driver {
+  id             String       @id @default(uuid(7)) @db.Uuid
+  organisationId String       @db.Uuid
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  userId         String       @db.Uuid
+  user           User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  displayName    String
+  phone          String?
+  /// Self-reported licence number; not verified by HarvestSlot.
+  licenceNumber  String?
+  status         DriverStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
+  version        Int          @default(1)
+
+  quotes TransportQuote[]
+  trips  TripReservation[]
+
+  @@unique([organisationId, userId])
+  @@map("drivers")
+}
+
+model TransportServiceArea {
+  id             String       @id @default(uuid(7)) @db.Uuid
+  organisationId String       @db.Uuid
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  lga            String
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@unique([organisationId, lga])
+  @@map("transport_service_areas")
+}
+
+model TransportAvailability {
+  id              String       @id @default(uuid(7)) @db.Uuid
+  organisationId  String       @db.Uuid
+  organisation    Organisation @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  vehicleId       String       @db.Uuid
+  vehicle         Vehicle      @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  startsAt        DateTime     @db.Timestamptz(3)
+  endsAt          DateTime     @db.Timestamptz(3)
+  note            String?
+  createdByUserId String       @db.Uuid
+  createdAt       DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@index([vehicleId, startsAt])
+  @@map("transport_availability")
+}
+
+model TransportQuote {
+  id                  String       @id @default(uuid(7)) @db.Uuid
+  bookingId           String       @db.Uuid
+  booking             Booking      @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  transporterOrgId    String       @db.Uuid
+  transporterOrg      Organisation @relation(fields: [transporterOrgId], references: [id], onDelete: Restrict)
+  vehicleId           String       @db.Uuid
+  vehicle             Vehicle      @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  driverId            String?      @db.Uuid
+  driver              Driver?      @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  status              QuoteStatus  @default(SUBMITTED)
+  pickupWindowStart   DateTime     @db.Timestamptz(3)
+  pickupWindowEnd     DateTime     @db.Timestamptz(3)
+  deliveryWindowStart DateTime     @db.Timestamptz(3)
+  deliveryWindowEnd   DateTime     @db.Timestamptz(3)
+  priceKobo           BigInt
+  freightPayer        FreightPayer
+  includedServices    String[]
+  cancellationTerms   String
+  validUntil          DateTime     @db.Timestamptz(3)
+  submittedByUserId   String       @db.Uuid
+  decidedAt           DateTime?    @db.Timestamptz(3)
+  decidedByUserId     String?      @db.Uuid
+  decisionReason      String?
+  isDemo              Boolean      @default(false)
+  createdAt           DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime     @updatedAt @db.Timestamptz(3)
+  version             Int          @default(1)
+
+  trip TripReservation?
+
+  @@index([bookingId, status])
+  @@index([transporterOrgId, status])
+  @@map("transport_quotes")
+}
+
+model TripReservation {
+  id                String         @id @default(uuid(7)) @db.Uuid
+  bookingId         String         @db.Uuid
+  booking           Booking        @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  quoteId           String         @unique @db.Uuid
+  quote             TransportQuote @relation(fields: [quoteId], references: [id], onDelete: Restrict)
+  transporterOrgId  String         @db.Uuid
+  vehicleId         String         @db.Uuid
+  vehicle           Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  driverId          String?        @db.Uuid
+  driver            Driver?        @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  startsAt          DateTime       @db.Timestamptz(3)
+  endsAt            DateTime       @db.Timestamptz(3)
+  bufferMinutes     Int
+  /// Occupied block used for conflict checks: [startsAt, endsAt + turnaround buffer).
+  blockStartsAt     DateTime       @db.Timestamptz(3)
+  blockEndsAt       DateTime       @db.Timestamptz(3)
+  status            TripStatus     @default(HELD)
+  expiresAt         DateTime?      @db.Timestamptz(3)
+  confirmedAt       DateTime?      @db.Timestamptz(3)
+  cancelledAt       DateTime?      @db.Timestamptz(3)
+  cancelledByUserId String?        @db.Uuid
+  cancelReason      String?
+  createdAt         DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime       @updatedAt @db.Timestamptz(3)
+  version           Int            @default(1)
+
+  shipment Shipment?
+
+  @@index([vehicleId, status])
+  @@index([driverId, status])
+  @@map("trip_reservations")
+}
+
+model Shipment {
+  id                        String          @id @default(uuid(7)) @db.Uuid
+  bookingId                 String          @db.Uuid
+  booking                   Booking         @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  tripId                    String          @unique @db.Uuid
+  trip                      TripReservation @relation(fields: [tripId], references: [id], onDelete: Restrict)
+  transporterOrgId          String          @db.Uuid
+  vehicleId                 String          @db.Uuid
+  driverId                  String          @db.Uuid
+  status                    ShipmentStatus  @default(ASSIGNED)
+  enRouteAt                 DateTime?       @db.Timestamptz(3)
+  arrivedPickupAt           DateTime?       @db.Timestamptz(3)
+  collectedAt               DateTime?       @db.Timestamptz(3)
+  pickupConfirmedAt         DateTime?       @db.Timestamptz(3)
+  departedAt                DateTime?       @db.Timestamptz(3)
+  arrivedFacilityAt         DateTime?       @db.Timestamptz(3)
+  deliveredAt               DateTime?       @db.Timestamptz(3)
+  deliveryConfirmedByUserId String?         @db.Uuid
+  deliveryMethod            HandoverMethod?
+  cancelledAt               DateTime?       @db.Timestamptz(3)
+  cancelReason              String?
+  createdAt                 DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt                 DateTime        @updatedAt @db.Timestamptz(3)
+  version                   Int             @default(1)
+
+  pickupRecord  PickupRecord?
+  handoverCodes HandoverCode[]
+
+  @@index([bookingId])
+  @@index([driverId, status])
+  @@map("shipments")
+}
+
+model PickupRecord {
+  id                         String          @id @default(uuid(7)) @db.Uuid
+  shipmentId                 String          @unique @db.Uuid
+  shipment                   Shipment        @relation(fields: [shipmentId], references: [id], onDelete: Restrict)
+  bookingId                  String          @db.Uuid
+  booking                    Booking         @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  reportedQuantityKg         Decimal         @db.Decimal(14, 3)
+  recordedByUserId           String          @db.Uuid
+  recordedAt                 DateTime        @default(now()) @db.Timestamptz(3)
+  lat                        Decimal?        @db.Decimal(9, 6)
+  lng                        Decimal?        @db.Decimal(9, 6)
+  accuracyM                  Int?
+  locationSource             LocationSource?
+  note                       String?
+  confirmationMethod         HandoverMethod?
+  confirmedAt                DateTime?       @db.Timestamptz(3)
+  confirmedByUserId          String?         @db.Uuid
+  confirmedActingForFarmerId String?         @db.Uuid
+  confirmedDelegationId      String?         @db.Uuid
+  farmerReportedQuantityKg   Decimal?        @db.Decimal(14, 3)
+  exceptionReason            String?
+  exceptionRequestedAt       DateTime?       @db.Timestamptz(3)
+  exceptionApprovedByUserId  String?         @db.Uuid
+  updatedAt                  DateTime        @updatedAt @db.Timestamptz(3)
+  version                    Int             @default(1)
+
+  @@map("pickup_records")
+}
+
+model HandoverCode {
+  id             String          @id @default(uuid(7)) @db.Uuid
+  shipmentId     String          @db.Uuid
+  shipment       Shipment        @relation(fields: [shipmentId], references: [id], onDelete: Restrict)
+  purpose        HandoverPurpose
+  codeHash       String
+  expiresAt      DateTime        @db.Timestamptz(3)
+  attempts       Int             @default(0)
+  maxAttempts    Int             @default(5)
+  consumedAt     DateTime?       @db.Timestamptz(3)
+  issuedToUserId String?         @db.Uuid
+  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
+
+  @@index([shipmentId, purpose])
+  @@map("handover_codes")
+}
+
+// ───────────────────────────── Receiving & processing ─────────────────────────────
+
+model ReceivingRecord {
+  id                        String                   @id @default(uuid(7)) @db.Uuid
+  bookingId                 String                   @unique @db.Uuid
+  booking                   Booking                  @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  facilityId                String                   @db.Uuid
+  facility                  Facility                 @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+  status                    ReceivingStatus          @default(DRAFT)
+  grossKg                   Decimal                  @db.Decimal(14, 3)
+  tareKg                    Decimal                  @db.Decimal(14, 3)
+  netKg                     Decimal                  @db.Decimal(14, 3)
+  weighingMethod            WeighingMethod
+  scaleReference            String?
+  weightVerification        EvidenceVerification     @default(SELF_REPORTED)
+  recordedByUserId          String                   @db.Uuid
+  recordedAt                DateTime                 @default(now()) @db.Timestamptz(3)
+  decisionSubmittedAt       DateTime?                @db.Timestamptz(3)
+  decisionSubmittedByUserId String?                  @db.Uuid
+  reviewDeadline            DateTime?                @db.Timestamptz(3)
+  farmerDecision            FarmerReceivingDecision?
+  farmerDecidedAt           DateTime?                @db.Timestamptz(3)
+  farmerDecidedByUserId     String?                  @db.Uuid
+  farmerDelegationId        String?                  @db.Uuid
+  farmerNote                String?
+  finalisedAt               DateTime?                @db.Timestamptz(3)
+  escalatedAt               DateTime?                @db.Timestamptz(3)
+  note                      String?
+  updatedAt                 DateTime                 @updatedAt @db.Timestamptz(3)
+  version                   Int                      @default(1)
+
+  weightEvidence    WeightEvidence[]
+  qualityAssessment QualityAssessment?
+
+  @@index([facilityId, status])
+  @@map("receiving_records")
+}
+
+model WeightEvidence {
+  id                String               @id @default(uuid(7)) @db.Uuid
+  receivingRecordId String               @db.Uuid
+  receivingRecord   ReceivingRecord      @relation(fields: [receivingRecordId], references: [id], onDelete: Restrict)
+  kind              WeightEvidenceKind
+  attachmentId      String?              @db.Uuid
+  suppliedByUserId  String               @db.Uuid
+  suppliedByParty   BookingParty
+  verification      EvidenceVerification @default(SELF_REPORTED)
+  reference         String?
+  note              String?
+  createdAt         DateTime             @default(now()) @db.Timestamptz(3)
+
+  @@map("weight_evidence")
+}
+
+model QualityAssessment {
+  id                  String              @id @default(uuid(7)) @db.Uuid
+  receivingRecordId   String              @unique @db.Uuid
+  receivingRecord     ReceivingRecord     @relation(fields: [receivingRecordId], references: [id], onDelete: Restrict)
+  assessedByUserId    String              @db.Uuid
+  acceptedKg          Decimal             @db.Decimal(14, 3)
+  rejectedKg          Decimal             @db.Decimal(14, 3)
+  rejectionReasons    RejectionReason[]
+  rejectionNote       String?
+  rejectedDisposition RejectedDisposition @default(NONE)
+  criteriaResults     Json
+  hoursSinceHarvest   Decimal?            @db.Decimal(8, 2)
+  note                String?
+  createdAt           DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime            @updatedAt @db.Timestamptz(3)
+  version             Int                 @default(1)
+
+  @@map("quality_assessments")
+}
+
+model ProcessingRecord {
+  id                String             @id @default(uuid(7)) @db.Uuid
+  bookingId         String             @unique @db.Uuid
+  booking           Booking            @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  lineId            String             @db.Uuid
+  line              ProcessingLine     @relation(fields: [lineId], references: [id], onDelete: Restrict)
+  status            ProcessingStatus   @default(NOT_STARTED)
+  inputKg           Decimal?           @db.Decimal(14, 3)
+  startedAt         DateTime?          @db.Timestamptz(3)
+  startedByUserId   String?            @db.Uuid
+  completedAt       DateTime?          @db.Timestamptz(3)
+  completedByUserId String?            @db.Uuid
+  outputProduct     ProcessingProduct?
+  outputKg          Decimal?           @db.Decimal(14, 3)
+  note              String?
+  createdAt         DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime           @updatedAt @db.Timestamptz(3)
+  version           Int                @default(1)
+
+  @@map("processing_records")
+}
+
+model LossRecord {
+  id               String     @id @default(uuid(7)) @db.Uuid
+  bookingId        String     @db.Uuid
+  booking          Booking    @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  stage            LossStage
+  quantityKg       Decimal    @db.Decimal(14, 3)
+  method           LossMethod
+  reason           String
+  recordedByUserId String     @db.Uuid
+  createdAt        DateTime   @default(now()) @db.Timestamptz(3)
+
+  @@index([bookingId])
+  @@map("loss_records")
+}
+
+// ───────────────────────────── Invoices & payments ─────────────────────────────
+
+model Invoice {
+  id                String        @id @default(uuid(7)) @db.Uuid
+  number            String        @unique
+  kind              InvoiceKind
+  bookingId         String        @db.Uuid
+  booking           Booking       @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  payerType         PartyType
+  payerOrgId        String?       @db.Uuid
+  payerFarmerId     String?       @db.Uuid
+  payeeType         PartyType
+  payeeOrgId        String?       @db.Uuid
+  payeeFarmerId     String?       @db.Uuid
+  currency          String        @default("NGN")
+  subtotalKobo      BigInt
+  adjustmentsKobo   BigInt        @default(0)
+  totalKobo         BigInt
+  confirmedPaidKobo BigInt        @default(0)
+  status            InvoiceStatus @default(ISSUED)
+  issuedAt          DateTime      @default(now()) @db.Timestamptz(3)
+  dueAt             DateTime      @db.Timestamptz(3)
+  termsVersionId    String?       @db.Uuid
+  receivingRecordId String?       @db.Uuid
+  lastReminderAt    DateTime?     @db.Timestamptz(3)
+  isDemo            Boolean       @default(false)
+  createdAt         DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime      @updatedAt @db.Timestamptz(3)
+  version           Int           @default(1)
+
+  lines       InvoiceLine[]
+  adjustments Adjustment[]
+  payments    PaymentAttempt[]
+  refunds     RefundRecord[]
+  disputes    Dispute[]
+
+  @@unique([bookingId, kind])
+  @@index([payerOrgId, status])
+  @@index([payeeOrgId, status])
+  @@index([payeeFarmerId, status])
+  @@index([payerFarmerId, status])
+  @@map("invoices")
+}
+
+model InvoiceLine {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  invoiceId     String   @db.Uuid
+  invoice       Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  description   String
+  quantityKg    Decimal? @db.Decimal(14, 3)
+  unitPriceKobo BigInt?
+  amountKobo    BigInt
+  sortOrder     Int      @default(0)
+
+  @@map("invoice_lines")
+}
+
+model Adjustment {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  invoiceId       String   @db.Uuid
+  invoice         Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  /// Signed: positive increases what the payer owes.
+  amountKobo      BigInt
+  reason          String
+  disputeId       String?  @db.Uuid
+  resolutionId    String?  @db.Uuid
+  createdByUserId String   @db.Uuid
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([invoiceId])
+  @@map("adjustments")
+}
+
+model PaymentAttempt {
+  id                        String               @id @default(uuid(7)) @db.Uuid
+  invoiceId                 String               @db.Uuid
+  invoice                   Invoice              @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  method                    PaymentMethod
+  amountKobo                BigInt
+  currency                  String               @default("NGN")
+  /// Payer-supplied bank/cash reference.
+  payerReference            String?
+  /// Server-generated provider reference (Paystack / simulator).
+  providerReference         String?              @unique
+  paidOn                    DateTime?            @db.Timestamptz(3)
+  status                    PaymentAttemptStatus
+  verificationLevel         VerificationLevel
+  providerEnvironment       String?
+  providerStatus            String?
+  providerPaidAt            DateTime?            @db.Timestamptz(3)
+  providerVerifiedAt        DateTime?            @db.Timestamptz(3)
+  checkoutUrl               String?
+  reportedByUserId          String?              @db.Uuid
+  reportedActingForFarmerId String?              @db.Uuid
+  note                      String?
+  isDemo                    Boolean              @default(false)
+  createdAt                 DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt                 DateTime             @updatedAt @db.Timestamptz(3)
+  version                   Int                  @default(1)
+
+  evidence             PaymentEvidence[]
+  receiptConfirmations ReceiptConfirmation[]
+  refunds              RefundRecord[]
+
+  @@index([invoiceId, status])
+  @@map("payment_attempts")
+}
+
+model PaymentEvidence {
+  id               String         @id @default(uuid(7)) @db.Uuid
+  paymentAttemptId String         @db.Uuid
+  paymentAttempt   PaymentAttempt @relation(fields: [paymentAttemptId], references: [id], onDelete: Restrict)
+  attachmentId     String         @db.Uuid
+  uploadedByUserId String         @db.Uuid
+  note             String?
+  createdAt        DateTime       @default(now()) @db.Timestamptz(3)
+
+  @@map("payment_evidence")
+}
+
+model ReceiptConfirmation {
+  id                 String          @id @default(uuid(7)) @db.Uuid
+  paymentAttemptId   String          @db.Uuid
+  paymentAttempt     PaymentAttempt  @relation(fields: [paymentAttemptId], references: [id], onDelete: Restrict)
+  decision           ReceiptDecision
+  amountReceivedKobo BigInt?
+  decidedByUserId    String          @db.Uuid
+  actingForFarmerId  String?         @db.Uuid
+  delegationId       String?         @db.Uuid
+  note               String?
+  createdAt          DateTime        @default(now()) @db.Timestamptz(3)
+
+  @@unique([paymentAttemptId])
+  @@map("receipt_confirmations")
+}
+
+model RefundRecord {
+  id                String          @id @default(uuid(7)) @db.Uuid
+  invoiceId         String          @db.Uuid
+  invoice           Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  paymentAttemptId  String?         @db.Uuid
+  paymentAttempt    PaymentAttempt? @relation(fields: [paymentAttemptId], references: [id], onDelete: Restrict)
+  amountKobo        BigInt
+  reason            String
+  status            RefundStatus    @default(REPORTED)
+  providerReference String?
+  reportedByUserId  String          @db.Uuid
+  confirmedByUserId String?         @db.Uuid
+  confirmedAt       DateTime?       @db.Timestamptz(3)
+  createdAt         DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime        @updatedAt @db.Timestamptz(3)
+
+  @@index([invoiceId])
+  @@map("refund_records")
+}
+
+// ───────────────────────────── Disputes ─────────────────────────────
+
+model Dispute {
+  id                   String          @id @default(uuid(7)) @db.Uuid
+  reference            String          @unique
+  bookingId            String          @db.Uuid
+  booking              Booking         @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  invoiceId            String?         @db.Uuid
+  invoice              Invoice?        @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  receivingRecordId    String?         @db.Uuid
+  category             DisputeCategory
+  status               DisputeStatus   @default(OPEN)
+  openedByUserId       String          @db.Uuid
+  openedByParty        BookingParty
+  respondentParty      BookingParty
+  actingForFarmerId    String?         @db.Uuid
+  delegationId         String?         @db.Uuid
+  amountInQuestionKobo BigInt?
+  quantityInQuestionKg Decimal?        @db.Decimal(14, 3)
+  description          String
+  responseDeadline     DateTime        @db.Timestamptz(3)
+  resolvedAt           DateTime?       @db.Timestamptz(3)
+  isDemo               Boolean         @default(false)
+  createdAt            DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime        @updatedAt @db.Timestamptz(3)
+  version              Int             @default(1)
+
+  messages   DisputeMessage[]
+  events     DisputeEvent[]
+  resolution Resolution?
+
+  @@index([bookingId])
+  @@index([status, responseDeadline])
+  @@map("disputes")
+}
+
+model DisputeMessage {
+  id                     String       @id @default(uuid(7)) @db.Uuid
+  disputeId              String       @db.Uuid
+  dispute                Dispute      @relation(fields: [disputeId], references: [id], onDelete: Restrict)
+  authorUserId           String       @db.Uuid
+  authorParty            BookingParty
+  actingForFarmerId      String?      @db.Uuid
+  body                   String
+  proposedAdjustmentKobo BigInt?
+  settlementAcceptedAt   DateTime?    @db.Timestamptz(3)
+  settlementAcceptedById String?      @db.Uuid
+  createdAt              DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@index([disputeId, createdAt])
+  @@map("dispute_messages")
+}
+
+model DisputeEvent {
+  id          String         @id @default(uuid(7)) @db.Uuid
+  disputeId   String         @db.Uuid
+  dispute     Dispute        @relation(fields: [disputeId], references: [id], onDelete: Restrict)
+  fromStatus  DisputeStatus?
+  toStatus    DisputeStatus
+  actorUserId String?        @db.Uuid
+  note        String?
+  createdAt   DateTime       @default(now()) @db.Timestamptz(3)
+
+  @@index([disputeId, createdAt])
+  @@map("dispute_events")
+}
+
+model Resolution {
+  id                String         @id @default(uuid(7)) @db.Uuid
+  disputeId         String         @unique @db.Uuid
+  dispute           Dispute        @relation(fields: [disputeId], references: [id], onDelete: Restrict)
+  kind              ResolutionKind
+  outcome           String
+  rationale         String
+  adjustmentKobo    BigInt?
+  revisedAcceptedKg Decimal?       @db.Decimal(14, 3)
+  decidedByUserId   String         @db.Uuid
+  agreedByUserIds   String[]       @default([])
+  createdAt         DateTime       @default(now()) @db.Timestamptz(3)
+
+  @@map("resolutions")
+}
+
+// ───────────────────────────── Platform infrastructure ─────────────────────────────
+
+model Attachment {
+  id               String               @id @default(uuid(7)) @db.Uuid
+  ownerUserId      String               @db.Uuid
+  organisationId   String?              @db.Uuid
+  farmerProfileId  String?              @db.Uuid
+  bookingId        String?              @db.Uuid
+  disputeId        String?              @db.Uuid
+  harvestRequestId String?              @db.Uuid
+  linkedEntityId   String?              @db.Uuid
+  purpose          AttachmentPurpose
+  objectKey        String               @unique
+  originalFilename String
+  contentType      String
+  sizeBytes        Int
+  sha256           String
+  scanStatus       ScanStatus           @default(PENDING)
+  reviewStatus     DocumentReviewStatus @default(UNREVIEWED)
+  reviewedByUserId String?              @db.Uuid
+  reviewNote       String?
+  /// Evidence metadata (capture time, original dimensions, GPS if consented). Never served in the file.
+  metadata         Json                 @default("{}")
+  isDemo           Boolean              @default(false)
+  createdAt        DateTime             @default(now()) @db.Timestamptz(3)
+
+  @@index([bookingId])
+  @@index([organisationId])
+  @@index([disputeId])
+  @@map("attachments")
+}
+
+model Notification {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  userId    String    @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String
+  link      String?
+  bookingId String?   @db.Uuid
+  dedupeKey String?   @unique
+  readAt    DateTime? @db.Timestamptz(3)
+  isDemo    Boolean   @default(false)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+
+  deliveries DeliveryAttempt[]
+
+  @@index([userId, readAt, createdAt])
+  @@map("notifications")
+}
+
+model DeliveryAttempt {
+  id                String              @id @default(uuid(7)) @db.Uuid
+  notificationId    String              @db.Uuid
+  notification      Notification        @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  channel           NotificationChannel
+  status            DeliveryStatus      @default(QUEUED)
+  destinationMasked String?
+  provider          String?
+  providerMessageId String?
+  error             String?
+  attemptNo         Int                 @default(0)
+  nextAttemptAt     DateTime?           @db.Timestamptz(3)
+  sentAt            DateTime?           @db.Timestamptz(3)
+  /// Rendered content kept only for locally captured development mail.
+  capturedSubject   String?
+  capturedBody      String?
+  createdAt         DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime            @updatedAt @db.Timestamptz(3)
+
+  @@unique([notificationId, channel])
+  @@index([status, nextAttemptAt])
+  @@map("delivery_attempts")
+}
+
+model OutboxEvent {
+  id            String       @id @default(uuid(7)) @db.Uuid
+  type          String
+  aggregateType String
+  aggregateId   String
+  payload       Json
+  dedupeKey     String?      @unique
+  status        OutboxStatus @default(PENDING)
+  attempts      Int          @default(0)
+  maxAttempts   Int          @default(8)
+  nextAttemptAt DateTime     @default(now()) @db.Timestamptz(3)
+  lockedAt      DateTime?    @db.Timestamptz(3)
+  lockedBy      String?
+  processedAt   DateTime?    @db.Timestamptz(3)
+  lastError     String?
+  createdAt     DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@index([status, nextAttemptAt])
+  @@map("outbox_events")
+}
+
+model AuditEvent {
+  id                String   @id @default(uuid(7)) @db.Uuid
+  actorUserId       String?  @db.Uuid
+  actorParty        String?
+  actingForFarmerId String?  @db.Uuid
+  delegationId      String?  @db.Uuid
+  organisationId    String?  @db.Uuid
+  action            String
+  entityType        String
+  entityId          String
+  reason            String?
+  data              Json?
+  requestId         String?
+  ip                String?
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([entityType, entityId])
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_events")
+}
+
+model IdempotencyRecord {
+  id             String           @id @default(uuid(7)) @db.Uuid
+  actorUserId    String           @db.Uuid
+  operation      String
+  key            String
+  requestHash    String
+  state          IdempotencyState @default(IN_PROGRESS)
+  responseStatus Int?
+  responseBody   Json?
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  expiresAt      DateTime         @db.Timestamptz(3)
+
+  @@unique([actorUserId, operation, key])
+  @@index([expiresAt])
+  @@map("idempotency_records")
+}
+
+model IntegrationWebhookEvent {
+  id              String        @id @default(uuid(7)) @db.Uuid
+  provider        String
+  /// Provider event identity (e.g. event + reference + status) used to deduplicate redeliveries.
+  dedupeKey       String
+  eventType       String
+  environment     String
+  signatureValid  Boolean
+  payload         Json
+  rawBodySha256   String
+  status          WebhookStatus @default(RECEIVED)
+  attempts        Int           @default(0)
+  processingError String?
+  receivedAt      DateTime      @default(now()) @db.Timestamptz(3)
+  processedAt     DateTime?     @db.Timestamptz(3)
+
+  @@unique([provider, dedupeKey])
+  @@index([status, receivedAt])
+  @@map("integration_webhook_events")
+}
+
+model PlatformSetting {
+  key             String   @id
+  value           Json
+  reason          String?
+  updatedByUserId String?  @db.Uuid
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("platform_settings")
+}
+
+model SupportedLocation {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  state     String
+  lga       String
+  active    Boolean  @default(true)
+  centerLat Decimal  @db.Decimal(8, 5)
+  centerLng Decimal  @db.Decimal(8, 5)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([state, lga])
+  @@map("supported_locations")
+}
+
+model ConsentRecord {
+  id               String         @id @default(uuid(7)) @db.Uuid
+  userId           String?        @db.Uuid
+  user             User?          @relation("ConsentSubjectUser", fields: [userId], references: [id], onDelete: Restrict)
+  farmerProfileId  String?        @db.Uuid
+  farmerProfile    FarmerProfile? @relation("ConsentSubjectFarmer", fields: [farmerProfileId], references: [id], onDelete: Restrict)
+  type             ConsentType
+  documentVersion  String
+  granted          Boolean
+  method           ConsentMethod
+  recordedByUserId String?        @db.Uuid
+  createdAt        DateTime       @default(now()) @db.Timestamptz(3)
+
+  @@index([userId, type])
+  @@index([farmerProfileId, type])
+  @@map("consent_records")
+}
+
+model DataRequest {
+  id                 String            @id @default(uuid(7)) @db.Uuid
+  userId             String            @db.Uuid
+  user               User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  type               DataRequestType
+  status             DataRequestStatus @default(RECEIVED)
+  note               String?
+  resultAttachmentId String?           @db.Uuid
+  processedByUserId  String?           @db.Uuid
+  outcomeNote        String?
+  createdAt          DateTime          @default(now()) @db.Timestamptz(3)
+  completedAt        DateTime?         @db.Timestamptz(3)
+
+  @@index([status])
+  @@map("data_requests")
+}
+
+model VoiceDraft {
+  id              String           @id @default(uuid(7)) @db.Uuid
+  userId          String           @db.Uuid
+  farmerProfileId String           @db.Uuid
+  attachmentId    String           @db.Uuid
+  status          VoiceDraftStatus @default(PROCESSING)
+  language        String
+  transcript      String?
+  extracted       Json?
+  provider        String
+  error           String?
+  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@index([userId, createdAt])
+  @@map("voice_drafts")
+}

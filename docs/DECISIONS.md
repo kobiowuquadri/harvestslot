@@ -1,0 +1,22 @@
+# Decisions log
+
+Reversible decisions made during the build, with the reason. Newest last.
+
+| # | Date | Decision | Reason |
+|---|---|---|---|
+| 1 | 2026-10-23 | **Fresh scaffold.** The repository contained only the build specification. | Nothing to extend. |
+| 2 | 2026-10-23 | **TypeScript 6.0.x**, not 7.0. | TS 7 is the native (Go) compiler without the JS compiler API; `typescript-eslint` supports `<6.1` and `@nestjs/cli`/`@nestjs/swagger` depend on TS 6. |
+| 3 | 2026-10-23 | **NestJS 12, Prisma 7.10, Next.js 16.4, React 19.3, Zod 4, Tailwind 4, Vitest 5, Playwright 1.64.** Whole repo is **ESM** (`"type": "module"`, `module: nodenext`). | Current supported majors; Nest 12 and Prisma 7 ship as ESM. Prisma 8 is still RC. |
+| 4 | 2026-10-23 | **No `nestjs-zod`.** A small in-repo Zod pipe validates requests and Zod 4's `z.toJSONSchema()` feeds OpenAPI via `@nestjs/swagger`. | `nestjs-zod@5.5` peer-depends on Nest ≤ 11. Shared Zod schemas stay the single source of truth for web forms, API validation and OpenAPI. |
+| 5 | 2026-10-23 | **Compiled internal packages** (`tsc -b` project references) rather than TS-source packages. Nest CLI not used; the API is built with `tsc`. | Node cannot execute TS from linked workspace packages reliably; project references give correct build order and decorator metadata without a bundler. |
+| 6 | 2026-10-23 | **Embedded PostgreSQL** (`embedded-postgres`, real PostgreSQL 18 binaries) for local development and integration tests on hosts without Docker; Docker Compose remains the documented primary environment. | This build machine has no Docker/WSL. Integration tests must use a real PostgreSQL, not mocks. |
+| 7 | 2026-10-23 | Worker schedules and jobs use **BullMQ 6** with `QUEUE_BACKEND=redis` (Docker/production default) or BullMQ's official **PostgreSQL backend** (`QUEUE_BACKEND=postgres`, schema `bullmq`) on hosts without Redis. Delivery retries/backoff/dead-letter state lives in PostgreSQL (`outbox_events`, `delivery_attempts`). | PostgreSQL is the authority; Redis is never required for correctness, and the same BullMQ code runs on both backends. |
+| 8 | 2026-10-23 | Development fallbacks: `STORAGE_DRIVER=filesystem`, `MAIL_TRANSPORT=dev-capture`, `PAYMENT_PROVIDER=simulated`. All are rejected by production environment validation and labelled in the UI and integration-status endpoint. | Lets the full workflow run on a host without MinIO/Mailpit/Paystack credentials, honestly labelled. |
+| 9 | 2026-10-23 | **Sessions**: opaque 256-bit tokens, SHA-256 hashed in `sessions`, HttpOnly cookie, idle + absolute expiry, per-session revocation; implemented with `node:crypto` following the Copenhagen Book/Lucia guidance (Lucia itself is deprecated). Passwords: `@node-rs/argon2` (Argon2id). TOTP: `@oslojs/otp`. | Maintained primitives; express-session cannot list/revoke a user's sessions by device cleanly. |
+| 10 | 2026-10-23 | Offers hold **slot capacity**; **supply** is allocated (harvest lot) when terms are accepted. | Lets several processors offer on the same request so farmers can compare, while acceptance atomically prevents over-allocation. Offers that no longer fit remaining supply lapse and release their holds. |
+| 11 | 2026-10-23 | Booking `DRAFT` = an offer acceptance prepared by a cooperative representative holding only `ASSIST_DATA_ENTRY`; it needs farmer-side approval. | Gives the specified DRAFT state a concrete purpose and implements the assist-vs-approve separation. |
+| 12 | 2026-10-23 | Invoices are issued for the processor-accepted (undisputed) quantity when the receiving decision is final **or** disputed; dispute outcomes add audited adjustments. | Farmer can be paid the undisputed amount without waiting for the dispute. |
+| 13 | 2026-10-23 | Org-scoped API routes carry `orgId` in the path and the server verifies membership on every request; no server-side "active org" in the session. | Prevents cross-tab context confusion; the browser never supplies authority, only a reference that is checked. |
+| 14 | 2026-10-23 | shadcn/ui-style primitives live in `apps/web/src/components/ui` (no `packages/ui`). | Single consumer; shadcn components are copied source. |
+| 15 | 2026-10-23 | SMS adapter targets **Termii** (Nigerian provider). | Common Nigerian SMS gateway with a simple REST API. Not exercised without credentials. |
+| 16 | 2026-10-23 | Reverse proxy for the documented deployment: **Caddy** (automatic TLS). | Smallest correct configuration for one public origin on a VPS. |

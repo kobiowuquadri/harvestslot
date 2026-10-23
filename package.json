@@ -1,0 +1,47 @@
+{
+  "name": "harvestslot",
+  "private": true,
+  "version": "0.1.0",
+  "description": "HarvestSlot \u00e2\u20ac\u201d harvest with a confirmed plan. Cassava harvest coordination for Oyo State.",
+  "type": "module",
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d postgres redis minio minio-init mailpit",
+    "infra:down": "docker compose -f infra/docker-compose.yml down",
+    "infra:local": "node infra/local/local-infra.mjs",
+    "db:generate": "pnpm --filter @harvestslot/db generate",
+    "db:migrate": "pnpm --filter @harvestslot/db migrate:deploy",
+    "db:migrate:create": "pnpm --filter @harvestslot/db migrate:create",
+    "db:seed": "pnpm --filter @harvestslot/db seed",
+    "db:reset": "pnpm --filter @harvestslot/db reset",
+    "admin:create": "pnpm --filter @harvestslot/api admin:create",
+    "build:packages": "pnpm --filter \"./packages/**\" -r build",
+    "dev": "pnpm build:packages && concurrently -k -n pkgs,api,worker,web -c gray,green,yellow,cyan \"tsc -b packages/core packages/contracts packages/config packages/db --watch --preserveWatchOutput\" \"pnpm --filter @harvestslot/api dev\" \"pnpm --filter @harvestslot/worker dev\" \"pnpm --filter @harvestslot/web dev\"",
+    "build": "pnpm -r build",
+    "start": "concurrently -k -n api,worker,web \"pnpm --filter @harvestslot/api start\" \"pnpm --filter @harvestslot/worker start\" \"pnpm --filter @harvestslot/web start\"",
+    "lint": "eslint .",
+    "typecheck": "pnpm build:packages && pnpm -r typecheck",
+    "test": "pnpm build:packages && pnpm -r --filter \"!@harvestslot/web\" test && pnpm --filter @harvestslot/web test",
+    "test:integration": "pnpm build:packages && pnpm --filter @harvestslot/api test:integration",
+    "test:e2e": "pnpm --filter @harvestslot/e2e test",
+    "test:load": "node tests/load/booking-race.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.19.2",
+    "concurrently": "10.0.6",
+    "embedded-postgres": "18.4.0-beta.17",
+    "eslint": "10.13.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.13.0",
+    "pg": "8.23.1",
+    "prettier": "3.9.10",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.0"
+  }
+}
