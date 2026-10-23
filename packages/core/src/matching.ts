@@ -243,12 +243,12 @@ export function rankMatches(
       },
       {
         key: 'reliability',
-        label: 'Track record',
+        label: 'Payment track record',
         weight: opts.weights.reliability,
         score: onTimeRate,
         explanation: enoughHistory
-          ? `${Math.round((onTimeRate ?? 0) * 100)}% of ${c.reliability.completed} completed HarvestSlot deliveries were received on time.`
-          : `Not enough history (${c.reliability.completed} completed booking(s)); not scored.`,
+          ? `${Math.round((onTimeRate ?? 0) * 100)}% of ${c.reliability.completed} produce invoices were confirmed paid by their due date.`
+          : `Not enough history (${c.reliability.completed} settled invoice(s) on HarvestSlot); not scored.`,
       },
     ];
     const known = factors.filter((f) => f.score !== null && f.weight > 0);
@@ -270,7 +270,7 @@ export function rankMatches(
       factors,
       explanation,
       estimatedProduceAmountKobo: price === null ? null : produceAmountKobo(fitG, price),
-      reliabilityLabel: enoughHistory ? `${Math.round((onTimeRate ?? 0) * 100)}% on time (${c.reliability.completed} bookings)` : 'Not enough history',
+      reliabilityLabel: enoughHistory ? `${Math.round((onTimeRate ?? 0) * 100)}% paid on time (${c.reliability.completed} invoices)` : 'Not enough history',
       onTimeRate,
     };
   });

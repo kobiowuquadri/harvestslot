@@ -3,13 +3,13 @@
 
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 
--- ───────────── Reference sequences (human-friendly numbers) ─────────────
+-- ------------- Reference sequences (human-friendly numbers) -------------
 CREATE SEQUENCE IF NOT EXISTS harvest_ref_seq START 1001;
 CREATE SEQUENCE IF NOT EXISTS booking_ref_seq START 1001;
 CREATE SEQUENCE IF NOT EXISTS invoice_number_seq START 1001;
 CREATE SEQUENCE IF NOT EXISTS dispute_ref_seq START 1001;
 
--- ───────────── Range and consistency checks ─────────────
+-- ------------- Range and consistency checks -------------
 ALTER TABLE farm_locations
   ADD CONSTRAINT farm_locations_lat_range CHECK ("exactLat" IS NULL OR "exactLat" BETWEEN -90 AND 90),
   ADD CONSTRAINT farm_locations_lng_range CHECK ("exactLng" IS NULL OR "exactLng" BETWEEN -180 AND 180),
@@ -166,7 +166,7 @@ CREATE TRIGGER quality_assessments_totals
   BEFORE INSERT OR UPDATE ON quality_assessments
   FOR EACH ROW EXECUTE FUNCTION hs_check_quality_totals();
 
--- ───────────── Partial unique indexes ─────────────
+-- ------------- Partial unique indexes -------------
 CREATE UNIQUE INDEX delegation_one_active_per_pair
   ON delegation_consents ("cooperativeId", "farmerProfileId") WHERE "revokedAt" IS NULL;
 CREATE UNIQUE INDEX amendment_one_pending_per_booking
@@ -182,7 +182,7 @@ CREATE UNIQUE INDEX handover_one_open_code
 CREATE UNIQUE INDEX coop_membership_active
   ON cooperative_memberships ("farmerProfileId", "cooperativeId") WHERE status = 'ACTIVE';
 
--- ───────────── Immutability (append-only history) ─────────────
+-- ------------- Immutability (append-only history) -------------
 CREATE OR REPLACE FUNCTION hs_forbid_change() RETURNS trigger AS $$
 BEGIN
   RAISE EXCEPTION '% on % is not allowed: this record is append-only history', TG_OP, TG_TABLE_NAME

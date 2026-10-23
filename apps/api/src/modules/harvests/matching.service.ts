@@ -1,0 +1,185 @@
+import { Inject, Injectable } from '@nestjs/common';
+import {
+  distanceLabel,
+  explainInfeasibility,
+  kobo as koboOrNull,
+  rankMatches,
+  slotUsageMany,
+  type MatchCandidateInput,
+  type MatchRequestInput,
+  type Policies,
+} from '@harvestslot/core';
+import { gramsToKgString, lagosStartOfDay, qualityTermsSchema, toGrams, type MatchResponse } from '@harvestslot/contracts';
+import type { Db } from '@harvestslot/db';
+import { PrismaService } from '../../common/prisma.service.js';
+import { ENV, type Env } from '../../common/tokens.js';
+
+const HORIZON_DAYS = 75;
+
+export interface RequestFacts {
+  id: string;
+  remainingG: bigint;
+  earliestHarvestDate: string;
+  latestHarvestDate: string;
+  exact: { lat: number; lng: number } | null;
+  approx: { lat: number; lng: number } | null;
+  maxDistanceKm: number | null;
+  minPriceKoboPerKg: bigint | null;
+  variety: string | null;
+  isDemo: boolean;
+}
+
+/** Loads candidate slots and computes deterministic, explainable matches. A match never reserves anything. */
+@Injectable()
+export class MatchingService {
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(ENV) private readonly env: Env,
+  ) {}
+
+  /** Produce-invoice payment punctuality per processor (only fully paid invoices with a confirmed payment). */
+  private async reliability(db: Db, orgIds: string[], isDemo: boolean): Promise<Map<string, { completed: number; onTime: number }>> {
+    const out = new Map<string, { completed: number; onTime: number }>();
+    if (!orgIds.length) return out;
+    const rows = await db.$queryRaw<{ orgId: string; settled: bigint; onTime: bigint }[]>`
+      SELECT i."payerOrgId" AS "orgId",
+             count(*)::bigint AS settled,
+             count(*) FILTER (WHERE last_confirm <= i."dueAt")::bigint AS "onTime"
+        FROM invoices i
+        JOIN LATERAL (
+          SELECT max(rc."createdAt") AS last_confirm
+            FROM payment_attempts p JOIN receipt_confirmations rc ON rc."paymentAttemptId" = p.id AND rc.decision = 'CONFIRMED'
+           WHERE p."invoiceId" = i.id
+        ) pay ON true
+       WHERE i.kind = 'PRODUCE' AND i.status = 'PAID' AND i."isDemo" = ${isDemo}
+         AND i."payerOrgId" = ANY(${orgIds}::uuid[])
+       GROUP BY i."payerOrgId"`;
+    for (const r of rows) out.set(r.orgId, { completed: Number(r.settled), onTime: Number(r.onTime) });
+    return out;
+  }
+
+  async candidates(db: Db, now: Date, opts: { orgId?: string; from: Date; to: Date; isDemo: boolean }): Promise<MatchCandidateInput[]> {
+    const slots = await db.processingSlot.findMany({
+      where: {
+        status: 'PUBLISHED',
+        startsAt: { gt: now, lt: opts.to },
+        endsAt: { gt: opts.from },
+        isDemo: opts.isDemo,
+        ...(opts.orgId ? { facility: { organisationId: opts.orgId } } : {}),
+      },
+      include: { line: true, facility: { include: { organisation: { select: { id: true, name: true, status: true } } } } },
+      orderBy: { startsAt: 'asc' },
+      take: 2000,
+    });
+    const usage = await slotUsageMany(db, slots.map((s) => s.id), now);
+    const reliability = await this.reliability(db, Array.from(new Set(slots.map((s) => s.facility.organisationId))), opts.isDemo);
+    return slots.map((s) => ({
+      facility: {
+        id: s.facilityId,
+        name: s.facility.name,
+        lga: s.facility.lga,
+        point: { lat: Number(s.facility.lat), lng: Number(s.facility.lng) },
+        status: s.facility.status,
+        acceptsCassava: s.facility.acceptsCassava,
+        maxPickupDistanceKm: s.facility.maxPickupDistanceKm,
+        minOrderG: toGrams(s.facility.minOrderKg),
+        indicativePriceKoboPerKg: s.facility.indicativePriceKoboPerKg,
+        qualityCriteria: qualityTermsSchema.parse(s.facility.qualityCriteria),
+      },
+      org: { id: s.facility.organisation.id, name: s.facility.organisation.name, status: s.facility.organisation.status },
+      slot: { id: s.id, startsAt: s.startsAt, endsAt: s.endsAt, status: s.status, lineName: s.line.name, lineStatus: s.line.status, product: s.line.product },
+      usage: usage.get(s.id)!,
+      reliability: reliability.get(s.facility.organisationId) ?? { completed: 0, onTime: 0 },
+      invited: false,
+    }));
+  }
+
+  window(r: { earliestHarvestDate: string; latestHarvestDate: string }): { from: Date; to: Date } {
+    return {
+      from: lagosStartOfDay(r.earliestHarvestDate),
+      to: new Date(lagosStartOfDay(r.latestHarvestDate).getTime() + 8 * 86_400_000),
+    };
+  }
+
+  input(r: RequestFacts, useExact: boolean): MatchRequestInput {
+    const point = useExact ? (r.exact ?? r.approx) : r.approx;
+    return {
+      id: r.id,
+      remainingG: r.remainingG,
+      earliestHarvestDate: r.earliestHarvestDate,
+      latestHarvestDate: r.latestHarvestDate,
+      point,
+      pointIsApproximate: !(useExact && r.exact),
+      maxDistanceKm: r.maxDistanceKm,
+      minPriceKoboPerKg: r.minPriceKoboPerKg,
+      variety: r.variety,
+    };
+  }
+
+  async forFarmer(r: RequestFacts, policies: Policies, invitedFacilityIds: Set<string>, now = new Date()): Promise<MatchResponse> {
+    const { from, to } = this.window(r);
+    const horizon = new Date(now.getTime() + HORIZON_DAYS * 86_400_000);
+    const candidates = await this.candidates(this.prisma.db, now, { from, to: to < horizon ? to : horizon, isDemo: r.isDemo });
+    candidates.forEach((c) => (c.invited = invitedFacilityIds.has(c.facility.id)));
+    const input = this.input(r, true);
+    const { matches, rejections } = rankMatches(input, candidates, {
+      now,
+      weights: policies.matchingWeights,
+      roadFactor: this.env.ROAD_DISTANCE_FACTOR,
+      reliabilityMinHistory: policies.reliabilityMinHistory,
+    });
+    // One result per facility (its best slot) keeps the comparison readable.
+    const seen = new Set<string>();
+    const best = matches.filter((m) => (seen.has(m.candidate.facility.id) ? false : (seen.add(m.candidate.facility.id), true))).slice(0, 12);
+    return {
+      harvestRequestId: r.id,
+      remainingKg: gramsToKgString(r.remainingG),
+      computedAt: now.toISOString(),
+      disclaimer: 'Matches are recommendations only. Nothing is reserved until a processor sends an offer and you accept it.',
+      results: best.map((m) => ({
+        facilityId: m.candidate.facility.id,
+        facilityName: m.candidate.facility.name,
+        processorOrgId: m.candidate.org.id,
+        processorName: m.candidate.org.name,
+        processorReviewed: m.candidate.org.status === 'APPROVED',
+        lga: m.candidate.facility.lga,
+        slot: {
+          id: m.candidate.slot.id,
+          startsAt: m.candidate.slot.startsAt.toISOString(),
+          endsAt: m.candidate.slot.endsAt.toISOString(),
+          lineName: m.candidate.slot.lineName,
+          product: m.candidate.slot.product as never,
+        },
+        availableKg: gramsToKgString(m.candidate.usage.availableG),
+        fitKg: gramsToKgString(m.fitG),
+        indicativePriceKoboPerKg: koboOrNull(m.candidate.facility.indicativePriceKoboPerKg),
+        distance: {
+          straightLineKm: m.straightLineKm,
+          estimatedRoadKm: m.roadKm,
+          method: 'STRAIGHT_LINE_ESTIMATE',
+          label: distanceLabel(m.straightLineKm, m.roadKm, 'STRAIGHT_LINE_ESTIMATE'),
+        },
+        costs: {
+          estimatedProduceAmountKobo: koboOrNull(m.estimatedProduceAmountKobo),
+          freightPayer: 'PROCESSOR',
+          freightNote: 'By default the processor arranges and pays for transport. Any farmer-paid transport must be shown to you and accepted separately.',
+          estimatedFarmerNetKobo: koboOrNull(m.estimatedProduceAmountKobo),
+        },
+        score: m.score,
+        factors: m.factors,
+        reliability: { completedBookings: m.candidate.reliability.completed, onTimeRate: m.onTimeRate, label: m.reliabilityLabel },
+        explanation: m.explanation,
+        remainingSteps: [
+          'The processor sends you an offer (this match reserves nothing)',
+          'You review and accept the exact terms',
+          'A transport quote is accepted and a driver assigned',
+          'Every party confirms — then your harvest is ready to start',
+        ],
+        qualityCriteria: m.candidate.facility.qualityCriteria,
+        invited: m.candidate.invited,
+        availabilityAsOf: now.toISOString(),
+      })),
+      infeasible: best.length === 0 ? explainInfeasibility(input, rejections, candidates.length) : null,
+    };
+  }
+}
