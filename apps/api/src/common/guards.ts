@@ -105,10 +105,15 @@ function safeOrigin(url: string): string | undefined {
 /** Applies @RateLimit rules plus a coarse per-IP ceiling on all mutations. */
 @Injectable()
 export class RateLimitGuard implements CanActivate {
+  /** Automated test runs (APP_ENV=test, never allowed with NODE_ENV=production) use much higher ceilings. */
+  private readonly scale: number;
   constructor(
     private readonly reflector: Reflector,
     private readonly limiter: RateLimitService,
-  ) {}
+    @Inject(ENV) env: Env,
+  ) {
+    this.scale = env.APP_ENV === 'test' && env.NODE_ENV !== 'production' ? 1000 : 1;
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<AppRequest>();
@@ -119,7 +124,7 @@ export class RateLimitGuard implements CanActivate {
     for (const rule of all) {
       const key = rule.key(req);
       if (!key) continue;
-      const result = await this.limiter.consume(`${rule.name}:${key}`, rule.limit, rule.windowSec);
+      const result = await this.limiter.consume(`${rule.name}:${key}`, rule.limit * this.scale, rule.windowSec);
       if (!result.allowed) {
         throw new DomainError('RATE_LIMITED', `Too many attempts. Try again in ${Math.ceil(result.retryAfterSeconds / 60)} minute(s).`, {
           retryAfterSeconds: result.retryAfterSeconds,

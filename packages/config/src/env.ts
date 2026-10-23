@@ -146,6 +146,10 @@ export const envSchema = z
       issue('REDIS_URL', 'QUEUE_BACKEND=redis requires REDIS_URL');
     }
 
+    if (env.NODE_ENV === 'production' && !['staging', 'production', 'demo'].includes(env.APP_ENV)) {
+      issue('APP_ENV', 'NODE_ENV=production requires APP_ENV=staging, demo or production');
+    }
+
     if (!isProd) return;
     // Production safety rules: refuse to start rather than run with development shortcuts.
     const lower = (s: string) => s.toLowerCase();

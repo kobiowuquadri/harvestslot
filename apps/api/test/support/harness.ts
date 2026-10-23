@@ -241,3 +241,40 @@ export function quoteTerms(bookingId: string, vehicleId: string, slot: { startsA
     validForHours: 24,
   };
 }
+
+export interface Flow {
+  farmer: Awaited<ReturnType<typeof makeFarmer>>;
+  processor: Awaited<ReturnType<typeof makeProcessor>>;
+  transporter: Awaited<ReturnType<typeof makeTransporter>>;
+  harvestId: string;
+  offerId: string;
+  bookingId: string;
+  quoteId?: string;
+  farmerClient: Client;
+  manager: Client;
+  dispatcher: Client;
+}
+
+/** Drives a fresh booking through HTTP up to the requested stage. */
+export async function bookingFlow(t: TestApp, stage: 'AWAITING' | 'QUOTE_ACCEPTED' | 'CONFIRMED', opts: { quantityKg?: string; capacityKg?: string; processor?: Flow['processor']; transporter?: Flow['transporter'] } = {}): Promise<Flow> {
+  const farmer = await makeFarmer(t.db);
+  const processor = opts.processor ?? (await makeProcessor(t.db, { capacityKg: opts.capacityKg ?? '5000' }));
+  const transporter = opts.transporter ?? (await makeTransporter(t.db));
+  const harvest = await makeHarvest(t.db, farmer, opts.quantityKg ?? '2000');
+  const farmerClient = new Client(t.app);
+  await farmerClient.login(farmer.user!.email!);
+  const manager = new Client(t.app);
+  await manager.login(processor.manager.email!);
+  const dispatcher = new Client(t.app);
+  await dispatcher.login(transporter.owner.email!);
+  const offer = expectOk(await manager.post('/offers', { harvestRequestId: harvest.id, ...offerTerms(processor.slot, opts.quantityKg ?? '2000') }, { idem: true }));
+  const accepted = expectOk(await farmerClient.post(`/offers/${offer.id}/accept`, { expectedVersionNo: 1 }, { idem: true }));
+  const flow: Flow = { farmer, processor, transporter, harvestId: harvest.id, offerId: offer.id, bookingId: accepted.bookingId, farmerClient, manager, dispatcher };
+  if (stage === 'AWAITING') return flow;
+  const quote = expectOk(await dispatcher.post(`/organisations/${transporter.org.id}/quotes`, quoteTerms(accepted.bookingId, transporter.vehicles[0]!.id, processor.slot), { idem: true }));
+  expectOk(await manager.post(`/quotes/${quote.id}/accept`, { expectedVersion: quote.version }, { idem: true }));
+  flow.quoteId = quote.id;
+  if (stage === 'QUOTE_ACCEPTED') return flow;
+  expectOk(await dispatcher.post('/assignments/accept', { quoteId: quote.id, driverId: transporter.driver.id }, { idem: true }));
+  return flow;
+}
