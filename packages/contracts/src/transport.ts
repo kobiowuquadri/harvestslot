@@ -137,6 +137,8 @@ export const quoteSchema = z.object({
   /** True when the quote's windows fall outside the agreed booking windows (needs extra approval). */
   changesAgreedWindows: z.boolean(),
   decisionReason: z.string().nullable(),
+  /** Vehicle/driver hold created when the quote was accepted; HELD means the transporter must assign a driver. */
+  trip: z.object({ id: uuid, status: TripStatusE.schema, expiresAt: z.string().nullable() }).nullable(),
   version: z.number(),
   createdAt: z.string(),
 });
@@ -187,6 +189,7 @@ export const confirmPickupSchema = z.object({
 
 export const jobSchema = z.object({
   shipmentId: uuid,
+  tripId: uuid,
   bookingId: uuid,
   bookingReference: z.string(),
   status: ShipmentStatusE.schema,

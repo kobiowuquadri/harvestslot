@@ -6,11 +6,13 @@ import {
   BookingStatusE,
   ConfirmationMethodE,
   FreightPayerE,
+  HandoverMethodE,
   HarvestLotStatusE,
   IncidentKindE,
   ProcessingProductE,
   RejectionHandlingE,
   ReservationStatusE,
+  ShipmentStatusE,
   TermsChangeReasonE,
 } from './enums.js';
 import { qualityTermsSchema } from './facilities.js';
@@ -274,6 +276,21 @@ export const bookingDetailSchema = z.object({
   }),
   facilityLocation: z.object({ lat: z.number(), lng: z.number(), address: z.string().nullable() }),
   contacts: z.array(z.object({ party: BookingPartyE.schema, name: z.string(), phone: z.string().nullable() })),
+  /** Latest transport job for the booking; participants need its id to confirm handovers. */
+  shipment: z
+    .object({
+      id: uuid,
+      tripId: uuid,
+      status: ShipmentStatusE.schema,
+      vehiclePlate: z.string(),
+      driverName: z.string(),
+      collectedKg: z.string().nullable(),
+      pickupConfirmedAt: z.string().nullable(),
+      pickupConfirmationMethod: HandoverMethodE.schema.nullable(),
+      exceptionReason: z.string().nullable(),
+      deliveredAt: z.string().nullable(),
+    })
+    .nullable(),
   cancelled: z.object({ at: z.string(), by: BookingPartyE.schema.nullable(), reason: z.string().nullable() }).nullable(),
   incidents: z.array(
     z.object({

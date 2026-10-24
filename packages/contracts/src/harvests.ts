@@ -211,6 +211,7 @@ export const offerSchema = z.object({
   id: uuid,
   harvestRequestId: uuid,
   harvestReference: z.string(),
+  farmerProfileId: uuid,
   farmerName: z.string(),
   processorOrgId: uuid,
   processorName: z.string(),

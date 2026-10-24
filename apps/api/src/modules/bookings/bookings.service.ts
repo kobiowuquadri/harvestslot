@@ -237,6 +237,13 @@ export class BookingsService {
     const exactAllowed = access.parties.some((p) => p === 'FARMER' || p === 'TRANSPORTER') || (access.parties.includes('PROCESSOR') && ['CONFIRMED', 'ACTIVE', 'COMPLETED'].includes(b.status));
     const trip = b.trips[0];
     const pendingParties = pending ? await this.engine.pendingParties(db as unknown as Tx, pending.termsVersion) : await this.engine.pendingParties(db as unknown as Tx, version);
+    const shipment = await db.shipment.findFirst({ where: { bookingId: id }, orderBy: { createdAt: 'desc' }, include: { pickupRecord: true } });
+    const [shipmentDriver, shipmentVehicle] = shipment
+      ? await Promise.all([
+          db.driver.findUnique({ where: { id: shipment.driverId }, select: { displayName: true } }),
+          db.vehicle.findUnique({ where: { id: shipment.vehicleId }, select: { registrationPlate: true } }),
+        ])
+      : [null, null];
     const contacts: BookingDetail['contacts'] = [
       { party: 'FARMER', name: b.farmerProfile.displayName, phone: ['CONFIRMED', 'ACTIVE'].includes(b.status) ? b.farmerProfile.phone : null },
       { party: 'PROCESSOR', name: b.processorOrg.name, phone: b.processorOrg.contactPhone },
@@ -288,6 +295,20 @@ export class BookingsService {
       },
       facilityLocation: { lat: Number(b.facility.lat), lng: Number(b.facility.lng), address: b.facility.address },
       contacts,
+      shipment: shipment
+        ? {
+            id: shipment.id,
+            tripId: shipment.tripId,
+            status: shipment.status,
+            vehiclePlate: shipmentVehicle?.registrationPlate ?? '',
+            driverName: shipmentDriver?.displayName ?? '',
+            collectedKg: shipment.pickupRecord ? kg(shipment.pickupRecord.reportedQuantityKg) : null,
+            pickupConfirmedAt: iso(shipment.pickupConfirmedAt),
+            pickupConfirmationMethod: shipment.pickupRecord?.confirmationMethod ?? null,
+            exceptionReason: shipment.pickupRecord?.exceptionReason ?? null,
+            deliveredAt: iso(shipment.deliveredAt),
+          }
+        : null,
       cancelled: b.cancelledAt ? { at: b.cancelledAt.toISOString(), by: b.cancelledByParty, reason: b.cancelReason } : null,
       incidents: b.incidents.map((i) => ({ id: i.id, kind: i.kind, status: i.status, blocking: i.blocking, description: i.description, recoveryAction: i.recoveryAction, createdAt: i.createdAt.toISOString() })),
       timeline: await this.timeline(id),

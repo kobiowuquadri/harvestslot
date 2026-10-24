@@ -23,7 +23,8 @@ export const kgString = z
   .refine((v) => Number(v) <= MAX_QUANTITY_KG, 'Quantity is unrealistically large');
 
 /** Strictly positive kilograms. */
-export const positiveKgString = kgString.refine((v) => kgToGrams(v) > 0n, 'Quantity must be greater than zero');
+// Zod keeps running checks after a failed regex, so this must not assume the pattern matched.
+export const positiveKgString = kgString.refine((v) => !KG_PATTERN.test(v) || kgToGrams(v) > 0n, 'Quantity must be greater than zero');
 
 /** Integer kobo, non-negative, within JS safe-integer range. */
 export const koboInt = z

@@ -99,6 +99,7 @@ export class OffersService {
       id: o.id,
       harvestRequestId: o.harvestRequestId,
       harvestReference: o.harvestRequest.reference,
+      farmerProfileId: o.harvestRequest.farmerProfileId,
       farmerName: o.harvestRequest.farmerProfile.displayName,
       processorOrgId: o.processorOrgId,
       processorName: o.processorOrg.name,

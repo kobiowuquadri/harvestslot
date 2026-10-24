@@ -96,19 +96,19 @@ export class AuthService {
             displayName: input.displayName,
             phone: input.phone ?? null,
             email: input.email ?? null,
-            lga: input.lga,
+            lga: input.lga!,
             community: input.community ?? null,
             claimStatus: 'SELF_REGISTERED',
             contactConsentAt: input.contactConsentEmail || input.contactConsentSms ? new Date() : null,
             createdByUserId: user.id,
           },
         });
-      } else {
+      } else if (input.accountType !== 'STAFF') {
         const org = await tx.organisation.create({
           data: {
             type: input.accountType,
             name: input.organisationName!,
-            lga: input.lga,
+            lga: input.lga!,
             registrationNumber: input.registrationNumber ?? null,
             contactEmail: input.email ?? null,
             contactPhone: input.phone ?? null,

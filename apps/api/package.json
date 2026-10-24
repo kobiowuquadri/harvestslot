@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b",
-    "dev": "tsc -b --watch --preserveWatchOutput & node --watch --enable-source-maps dist/main.js",
+    "dev": "tsc -b && concurrently -k -n tsc,run \"tsc -b --watch --preserveWatchOutput\" \"node --watch --enable-source-maps dist/main.js\"",
     "start": "node --enable-source-maps dist/main.js",
     "admin:create": "node dist/cli/create-admin.js",
     "openapi:export": "node dist/cli/export-openapi.js",

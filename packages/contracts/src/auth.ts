@@ -29,7 +29,8 @@ export const password = z
   .refine((v) => !COMMON_PASSWORDS.has(v.toLowerCase()), 'This password is too common')
   .refine((v) => new Set(v).size >= 4, 'Use a less repetitive password');
 
-export const accountTypeSchema = z.enum(['FARMER', 'PROCESSOR', 'TRANSPORTER', 'COOPERATIVE']);
+/** STAFF creates a plain account for someone invited to join an organisation (driver, officer…). */
+export const accountTypeSchema = z.enum(['FARMER', 'PROCESSOR', 'TRANSPORTER', 'COOPERATIVE', 'STAFF']);
 export type AccountType = z.infer<typeof accountTypeSchema>;
 
 export const registerSchema = z
@@ -39,7 +40,7 @@ export const registerSchema = z
     email: emailAddress.optional(),
     phone: phoneNumber.optional(),
     password,
-    lga: lgaName,
+    lga: lgaName.optional(),
     community: optionalText(120),
     organisationName: optionalText(160),
     registrationNumber: optionalText(60),
@@ -49,10 +50,11 @@ export const registerSchema = z
     contactConsentEmail: z.boolean().default(true),
   })
   .refine((v) => v.email || v.phone, { message: 'Provide an email address or a phone number', path: ['email'] })
-  .refine((v) => v.accountType === 'FARMER' || (v.organisationName && v.organisationName.length >= 2), {
+  .refine((v) => ['FARMER', 'STAFF'].includes(v.accountType) || (v.organisationName && v.organisationName.length >= 2), {
     message: 'Organisation name is required',
     path: ['organisationName'],
-  });
+  })
+  .refine((v) => v.accountType === 'STAFF' || v.lga, { message: 'Choose your local government area', path: ['lga'] });
 export type RegisterInput = z.infer<typeof registerSchema>;
 
 export const loginSchema = z.object({

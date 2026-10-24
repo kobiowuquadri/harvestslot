@@ -9,12 +9,14 @@ import {
   kgString,
   kgToGrams,
   normaliseKg,
+  positiveKgString,
   produceAmountKobo,
   roundHalfUpDiv,
   toGrams,
   toleranceGrams,
   tonnesToKgString,
 } from '../src/units.js';
+import { createHarvestSchema } from '../src/harvests.js';
 
 describe('roundHalfUpDiv (the single rounding rule)', () => {
   it('rounds .5 up and below .5 down', () => {
@@ -107,5 +109,25 @@ describe('money', () => {
     expect(formatNaira(5n)).toBe('₦0.05');
     expect(formatNaira(-12_345n)).toBe('−₦123.45');
     expect(formatNaira(900_719_925_474_099n)).toBe('₦9,007,199,254,740.99');
+  });
+});
+
+describe('quantity validation never throws on malformed input', () => {
+  it('reports a validation issue instead of throwing', () => {
+    for (const bad of ['', 'abc', '1,000', '-5', '1.2345', '  ']) {
+      const r = positiveKgString.safeParse(bad);
+      expect(r.success).toBe(false);
+      expect(r.error?.issues[0]?.message).toMatch(/kilograms/);
+    }
+    expect(positiveKgString.safeParse('0').error?.issues[0]?.message).toBe('Quantity must be greater than zero');
+    expect(positiveKgString.safeParse('2000').success).toBe(true);
+  });
+
+  it('harvest creation reports field issues for an empty form', () => {
+    const r = createHarvestSchema.safeParse({ farmLocationId: '01a16a30-7479-764c-81e8-b93b7242cbce', estimatedQuantityKg: '', earliestHarvestDate: '', latestHarvestDate: '', transportPreference: 'PROCESSOR_PAYS' });
+    expect(r.success).toBe(false);
+    const paths = r.error!.issues.map((i) => i.path.join('.'));
+    expect(paths).toContain('estimatedQuantityKg');
+    expect(paths).not.toContain('farmLocationId');
   });
 });

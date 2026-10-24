@@ -83,6 +83,7 @@ export class ShipmentsService {
     }
     return {
       shipmentId: s.id,
+      tripId: s.tripId,
       bookingId: s.bookingId,
       bookingReference: s.booking.reference,
       status: s.status,

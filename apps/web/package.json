@@ -8,7 +8,9 @@
     "build": "next build",
     "start": "next start --port 3000",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "contrast": "node scripts/contrast.mjs",
+    "icons": "node scripts/make-icons.mjs"
   },
   "dependencies": {
     "@harvestslot/contracts": "workspace:*",

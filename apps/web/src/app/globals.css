@@ -1,0 +1,88 @@
+@import 'tailwindcss';
+
+/*
+ * HarvestSlot design tokens. Contrast of every text/background pairing used in components is
+ * checked by `pnpm --filter @harvestslot/web contrast` (WCAG 2.2 AA: 4.5:1 body text, 3:1 large text
+ * and UI boundaries). Amber is an accent: text on amber always uses the dark amber-ink colour.
+ */
+@theme {
+  --font-sans: Inter, Manrope, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+
+  --color-forest-950: #0b231b;
+  --color-forest: #143e31;
+  --color-forest-800: #1a4b3c;
+  --color-leaf: #2f6b4e;
+  --color-leaf-600: #2a5f45;
+  --color-leaf-100: #d6e8dd;
+  --color-leaf-50: #ecf4ef;
+
+  --color-canvas: #f7f8f4;
+  --color-surface: #ffffff;
+  --color-ink: #17211c;
+  --color-muted: #525e57;
+  --color-line: #d9dfd5;
+  --color-line-strong: #8a968f;
+
+  --color-amber: #e8b56b;
+  --color-amber-100: #f6e2c2;
+  --color-amber-50: #fbf3e6;
+  --color-amber-ink: #5c3a00;
+
+  --color-danger: #b42318;
+  --color-danger-50: #fdeceb;
+  --color-info: #1d5a85;
+  --color-info-50: #e8f1f8;
+
+  --radius-card: 0.75rem;
+  --shadow-card: 0 1px 2px rgb(16 33 26 / 0.06), 0 1px 3px rgb(16 33 26 / 0.04);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  /* Visible keyboard focus everywhere; never removed without a replacement. */
+  /* Two-tone ring: forest outline (11.9:1 on white) + amber halo (6.4:1 on the forest sidebar). */
+  :focus-visible {
+    outline: 2px solid var(--color-forest);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 5px var(--color-amber);
+    border-radius: 4px;
+  }
+  ::selection {
+    background: var(--color-amber-100);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0.5rem;
+    z-index: 100;
+    background: var(--color-forest);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+  }
+  .skip-link:focus {
+    left: 0.5rem;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}

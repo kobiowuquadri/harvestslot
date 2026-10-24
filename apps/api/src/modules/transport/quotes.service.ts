@@ -37,6 +37,7 @@ const quoteInclude = {
   transporterOrg: { select: { name: true, status: true } },
   vehicle: true,
   driver: true,
+  trip: { select: { id: true, status: true, expiresAt: true } },
 } as const;
 type QuoteRow = Prisma.TransportQuoteGetPayload<{ include: typeof quoteInclude }>;
 
@@ -78,6 +79,7 @@ export class QuotesService {
       validUntil: q.validUntil.toISOString(),
       changesAgreedWindows: changes,
       decisionReason: q.decisionReason,
+      trip: q.trip ? { id: q.trip.id, status: q.trip.status, expiresAt: q.trip.expiresAt?.toISOString() ?? null } : null,
       version: q.version,
       createdAt: q.createdAt.toISOString(),
     };
