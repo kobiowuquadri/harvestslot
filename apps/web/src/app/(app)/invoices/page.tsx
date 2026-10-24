@@ -5,7 +5,7 @@ import type { InvoiceDto } from '@harvestslot/contracts';
 import { InvoiceRows } from '@/components/domain/lists';
 import { EmptyState, PageHeader, QueryView } from '@/components/domain/states';
 import { Select } from '@/components/ui/form';
-import { Alert, Tabs, TabsList, TabsTrigger } from '@/components/ui/primitives';
+import { Alert, Segmented } from '@/components/ui/primitives';
 import { useApi, useFarmerContext } from '@/lib/hooks';
 import { useSession } from '@/lib/session';
 
@@ -25,14 +25,17 @@ export default function InvoicesPage() {
         <Alert tone="info">Processors pay you directly (bank transfer or cash). When money arrives, confirm it here so the processor’s record is complete. HarvestSlot never holds your money.</Alert>
       ) : null}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Tabs value={status} onValueChange={(v) => setStatus(v as typeof status)}>
-          <TabsList>
-            <TabsTrigger value="ALL">All</TabsTrigger>
-            <TabsTrigger value="OPEN">Unpaid</TabsTrigger>
-            <TabsTrigger value="OVERDUE">Overdue</TabsTrigger>
-            <TabsTrigger value="PAID">Paid</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <Segmented
+          label="Payment status"
+          value={status}
+          onChange={setStatus}
+          options={[
+            { value: 'ALL', label: 'All' },
+            { value: 'OPEN', label: 'Unpaid' },
+            { value: 'OVERDUE', label: 'Overdue' },
+            { value: 'PAID', label: 'Paid' },
+          ]}
+        />
         <Select aria-label="Direction" value={role} onChange={(e) => setRole(e.target.value as typeof role)} className="sm:w-56">
           <option value="any">Paying and receiving</option>
           <option value="payer">We pay</option>

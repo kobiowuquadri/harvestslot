@@ -3,7 +3,7 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react';
 import { Dialog as DialogPrimitive, DropdownMenu as DM, Tabs as TabsPrimitive } from 'radix-ui';
-import type { ComponentProps, HTMLAttributes, ReactNode } from 'react';
+import { useRef, type ComponentProps, type HTMLAttributes, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 // ───────────── Card ─────────────
@@ -71,10 +71,22 @@ export const Dialog = DialogPrimitive.Root;
 export const DialogTrigger = DialogPrimitive.Trigger;
 export const DialogClose = DialogPrimitive.Close;
 export function DialogContent({ title, description, children, className, wide }: { title: ReactNode; description?: ReactNode; children: ReactNode; className?: string; wide?: boolean }) {
+  // Many dialogs are opened by an ordinary button rather than DialogTrigger; return keyboard focus
+  // to whatever opened the dialog when it closes.
+  const returnFocus = useRef<HTMLElement | null>(null);
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-forest-950/50" />
       <DialogPrimitive.Content
+        onOpenAutoFocus={() => {
+          returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        }}
+        onCloseAutoFocus={(e) => {
+          if (returnFocus.current?.isConnected) {
+            e.preventDefault();
+            returnFocus.current.focus();
+          }
+        }}
         className={cn(
           'fixed inset-x-0 bottom-0 z-50 max-h-[92vh] overflow-y-auto rounded-t-2xl bg-surface p-5 shadow-xl sm:inset-auto sm:left-1/2 sm:top-1/2 sm:w-full sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl',
           wide ? 'sm:max-w-2xl' : 'sm:max-w-lg',
@@ -128,6 +140,26 @@ export function TabsTrigger({ className, ...props }: ComponentProps<typeof TabsP
   );
 }
 export const TabsContent = (props: ComponentProps<typeof TabsPrimitive.Content>) => <TabsPrimitive.Content className="pt-4 focus-visible:outline-none" {...props} />;
+
+// ───────────── Segmented filter ─────────────
+/** A group of toggle buttons for filtering a list (not tabs: there are no separate panels). */
+export function Segmented<T extends string>({ label, value, onChange, options }: { label: string; value: T; onChange: (v: T) => void; options: Array<{ value: T; label: ReactNode }> }) {
+  return (
+    <div role="group" aria-label={label} className="inline-flex flex-wrap gap-1 rounded-lg border border-line bg-surface p-1">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          aria-pressed={value === o.value}
+          onClick={() => onChange(o.value)}
+          className={cn('rounded-md px-3 py-1.5 text-sm font-medium', value === o.value ? 'bg-forest text-white' : 'text-muted hover:bg-leaf-50')}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 // ───────────── Misc ─────────────
 export function Skeleton({ className }: { className?: string }) {

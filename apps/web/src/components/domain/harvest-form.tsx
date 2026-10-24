@@ -114,6 +114,7 @@ export function HarvestForm({
   const [busy, setBusy] = useState<null | 'draft' | 'publish' | 'local'>(null);
   const [draftId] = useState(() => initialDraftId ?? newIdempotencyKey());
   const [addingLocation, setAddingLocation] = useState(false);
+  const [savedLocally, setSavedLocally] = useState(false);
   const set = (k: keyof HarvestFormValues) => (e: { target: { value: string } }) => setV((p) => ({ ...p, [k]: e.target.value }));
   const locations = profile.locations.filter((l) => !l.archived);
 
@@ -138,7 +139,9 @@ export function HarvestForm({
     setBusy('local');
     await saveDraft({ id: draftId, userId: me.user.id, farmerProfileId: ctx.farmerProfileId, serverId: existing?.id, serverVersion: existing?.version, values: v as unknown as Record<string, unknown> });
     setBusy(null);
-    router.push(withFarmer('/farmer/harvests?saved=device', ctx));
+    // Offline, another page may not load — confirm in place instead of navigating.
+    if (navigator.onLine) router.push(withFarmer('/farmer/harvests?saved=device', ctx));
+    else setSavedLocally(true);
   };
 
   const submit = async (publish: boolean) => {
@@ -179,6 +182,14 @@ export function HarvestForm({
 
   const err = (k: string) => errors[k];
   const est = Number(v.estimatedQuantityKg);
+
+  if (savedLocally) {
+    return (
+      <Alert tone="success" title="Saved on this phone">
+        It has not been sent yet. When you are back online, open Harvests and choose “Send now”.
+      </Alert>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">

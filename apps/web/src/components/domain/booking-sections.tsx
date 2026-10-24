@@ -83,11 +83,19 @@ export function ConfirmPanel({ b }: { b: BookingDetail }) {
   });
   const canConfirm = b.allowedActions.includes('confirmTerms');
   const canApproveDraft = b.allowedActions.includes('approveDraft');
-  if (!canConfirm && !canApproveDraft && !b.pendingAmendment && b.status !== 'AWAITING_CONFIRMATIONS') return null;
+  if (!canConfirm && !canApproveDraft && !b.pendingAmendment && !['DRAFT', 'AWAITING_CONFIRMATIONS'].includes(b.status)) return null;
   return (
     <Card className={canConfirm || canApproveDraft ? 'border-forest ring-1 ring-forest' : ''}>
       <CardHeader>
-        <CardTitle>{b.pendingAmendment ? `Proposed change (version ${target.versionNo})` : b.status === 'DRAFT' ? 'Prepared by your cooperative — your approval is needed' : `Confirmations for version ${target.versionNo}`}</CardTitle>
+        <CardTitle>
+          {b.pendingAmendment
+            ? `Proposed change (version ${target.versionNo})`
+            : b.status === 'DRAFT'
+              ? canApproveDraft
+                ? 'Prepared by your cooperative — your approval is needed'
+                : 'Prepared — waiting for the farmer to approve'
+              : `Confirmations for version ${target.versionNo}`}
+        </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {b.pendingAmendment ? (
@@ -100,6 +108,9 @@ export function ConfirmPanel({ b }: { b: BookingDetail }) {
           <p className="text-sm text-amber-ink">
             The capacity hold expires <When at={b.confirmationDeadline} relative />. If confirmations are not complete by then, the booking expires and nothing is reserved.
           </p>
+        ) : null}
+        {b.status === 'DRAFT' && !canApproveDraft ? (
+          <p className="text-sm text-muted">Nothing is agreed until the farmer (or a representative they allowed to approve sales) approves it. The capacity hold expires if nobody does.</p>
         ) : null}
         {canApproveDraft ? (
           <div className="flex flex-wrap gap-2">
@@ -246,9 +257,6 @@ export function TransportPanel({ b }: { b: BookingDetail }) {
               </span>
             ) : null}
           </div>
-        ) : null}
-        {b.shipment && viewer === 'processor' && b.allowedActions.includes('manageTransport') && ['ASSIGNED', 'EN_ROUTE_TO_PICKUP', 'ARRIVED_AT_PICKUP'].includes(b.shipment.status) ? (
-          <ReasonActionDialog trigger="Cancel this transport" triggerSize="sm" title="Cancel the transport assignment?" description="The vehicle and driver are released. You can then accept a replacement quote; the farmer only re-confirms if their pickup changes." confirmLabel="Cancel transport" path={`/trips/${b.shipment.tripId}/cancel`} invalidate={[...bookingKeys(b.id)]} success="Transport cancelled — ask for a replacement" />
         ) : null}
         {open.length ? (
           <ul className="flex flex-col gap-2">
