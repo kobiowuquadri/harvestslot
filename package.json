@@ -24,7 +24,7 @@
     "start": "concurrently -k -n api,worker,web \"pnpm --filter @harvestslot/api start\" \"pnpm --filter @harvestslot/worker start\" \"pnpm --filter @harvestslot/web start\"",
     "lint": "eslint .",
     "typecheck": "pnpm build:packages && pnpm -r typecheck",
-    "test": "pnpm build:packages && pnpm -r --filter \"!@harvestslot/web\" test && pnpm --filter @harvestslot/web test",
+    "test": "pnpm build:packages && pnpm -r --filter \"!@harvestslot/web\" --filter \"!@harvestslot/e2e\" test && pnpm --filter @harvestslot/web test",
     "test:integration": "pnpm build:packages && pnpm --filter @harvestslot/api test:integration",
     "test:e2e": "pnpm --filter @harvestslot/e2e test",
     "test:load": "node tests/load/booking-race.mjs",

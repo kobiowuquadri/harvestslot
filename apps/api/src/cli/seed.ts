@@ -410,8 +410,8 @@ async function main() {
   const runToPickup = async (bookingId: string, S: number, farmerKey: string, driver: string, opts: { actorKey?: string; until: 'HARVEST' | 'EN_ROUTE' | 'DELIVERED' } ) => {
     const fa = farmerSideActor(farmerKey, opts.actorKey);
     at(new Date(S - 20 * HOUR));
-    let b = await bookings.detail(fa, bookingId);
-    b = await bookings.startHarvest(fa, bookingId, b.version);
+    const b = await bookings.detail(fa, bookingId);
+    await bookings.startHarvest(fa, bookingId, b.version);
     at(new Date(S - 17 * HOUR));
     await bookings.readyForPickup(fa, bookingId, { reportedHarvestedKg: b.current.content.quantityKg });
     if (opts.until === 'HARVEST') return null;
@@ -423,7 +423,7 @@ async function main() {
     at(new Date(S - 15 * HOUR));
     job = await shipments.milestone(driverActor, shipment.id, 'arrivePickup', { expectedVersion: job.version, gps: { point: { lat: 7.5, lng: 3.9 }, accuracyM: 25, source: 'DEVICE_GPS' } });
     at(new Date(S - 14.5 * HOUR));
-    job = await shipments.recordCollection(driverActor, shipment.id, { expectedVersion: job.version, quantityKg: b.current.content.quantityKg, evidenceAttachmentIds: [], note: 'Loaded in 40 bags (demo)' });
+    await shipments.recordCollection(driverActor, shipment.id, { expectedVersion: job.version, quantityKg: b.current.content.quantityKg, evidenceAttachmentIds: [], note: 'Loaded in 40 bags (demo)' });
     at(new Date(S - 14.4 * HOUR));
     await shipments.confirmPickup(fa, shipment.id, { agree: true });
     const s2 = await prisma.shipment.findUniqueOrThrow({ where: { id: shipment.id } });
@@ -440,9 +440,9 @@ async function main() {
     const bk = await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } });
     const actor = people[receivingActor[bk.processorOrgId]!]!.actor;
     at(new Date(S + 1 * HOUR));
-    let rec = await receiving.recordWeighing(actor, bookingId, { grossKg: gross, tareKg: tare, weighingMethod: 'WEIGHBRIDGE', scaleReference: `WB-DEMO-${Math.floor(1000 + Math.random() * 8999)}` });
+    await receiving.recordWeighing(actor, bookingId, { grossKg: gross, tareKg: tare, weighingMethod: 'WEIGHBRIDGE', scaleReference: `WB-DEMO-${Math.floor(1000 + Math.random() * 8999)}` });
     await receiving.addEvidence(actor, bookingId, { kind: 'WEIGHBRIDGE_TICKET', reference: 'Ticket recorded on paper (demo; no photo attached)' });
-    rec = (await receiving.get(actor, bookingId))!;
+    const rec = (await receiving.get(actor, bookingId))!;
     at(new Date(S + 1.5 * HOUR));
     return receiving.submitDecision(actor, bookingId, {
       expectedVersion: rec.version,
@@ -590,8 +590,8 @@ async function main() {
     const startAt = ago(3).getTime();
     at(new Date(startAt));
     const fa = farmers.f2!.actor!;
-    let b = await bookings.detail(fa, bookingId);
-    b = await bookings.startHarvest(fa, bookingId, b.version);
+    const b = await bookings.detail(fa, bookingId);
+    await bookings.startHarvest(fa, bookingId, b.version);
     at(ago(1));
     await bookings.readyForPickup(fa, bookingId, { reportedHarvestedKg: '1800' });
     const shipment = await prisma.shipment.findFirstOrThrow({ where: { bookingId, status: { not: 'CANCELLED' } } });

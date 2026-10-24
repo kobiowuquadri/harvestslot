@@ -119,7 +119,7 @@ export class AdminController {
     const { filename, csv } = await this.admin.export(actor, q);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(`﻿${csv}`);
+    res.send(`\uFEFF${csv}`); // byte-order mark so spreadsheet apps read UTF-8
   }
 
   @Get('data-requests')

@@ -1,0 +1,129 @@
+# Deployment — one Ubuntu VPS with TLS
+
+This is one concrete, supported path: a single Ubuntu 24.04 LTS server running Docker Compose with Caddy (automatic HTTPS), separate **web**, **API** and **worker** containers, PostgreSQL and Redis with persistent volumes, and an external S3-compatible bucket for private files.
+
+> **Status:** the Dockerfile, Compose files, Caddyfile and scripts in `infra/` were written for this path but **have not been run** — the build machine has no Docker. The CI workflow's `images` job builds the images and validates the Compose files on its first run. Treat the first deployment as a staging rehearsal.
+
+Nothing in this guide buys services or publishes anything; you choose and pay for the server, domain, bucket and email provider.
+
+## 1. What you need
+
+| Item | Notes |
+|---|---|
+| Server | Ubuntu 24.04, 2 vCPU / 4 GB RAM / 40 GB SSD is a reasonable start. Open ports 22, 80, 443 only. |
+| Domain | An `A`/`AAAA` record (e.g. `harvestslot.example.org`) pointing at the server. |
+| Object storage | Any S3-compatible bucket (private, no public policy) and an access key limited to that bucket. |
+| Email | An SMTP account able to send from your domain (SPF/DKIM configured). Required in production. |
+| Optional | Termii API key (SMS), Paystack account (service-fee invoices), ClamAV container (scanning). |
+
+## 2. Prepare the server
+
+```bash
+sudo apt update && sudo apt -y upgrade
+sudo apt -y install ca-certificates curl git ufw unattended-upgrades
+# Docker Engine + Compose plugin (official repository)
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker "$USER"   # log out and back in
+sudo ufw allow OpenSSH && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp && sudo ufw allow 443/udp && sudo ufw enable
+sudo mkdir -p /opt/harvestslot && sudo chown "$USER" /opt/harvestslot
+git clone <your repository URL> /opt/harvestslot
+cd /opt/harvestslot
+```
+
+## 3. Configure
+
+```bash
+cp infra/production/env.production.example infra/production/.env.production
+chmod 600 infra/production/.env.production
+openssl rand -hex 32        # → SESSION_SECRET
+openssl rand -base64 32     # → DATA_ENCRYPTION_KEY
+openssl rand -base64 24     # → POSTGRES_PASSWORD (use it in DATABASE_URL too)
+nano infra/production/.env.production
+```
+
+Fill in every `REPLACE…` value. Keep `PAYSTACK_MODE=test` with `sk_test_…` keys until the Paystack account is verified and you have tested a fee payment end to end. Leave `DEMO_MODE=false` and `DEV_TOOLS_ENABLED=false`: the API refuses to start in production otherwise, and also refuses insecure cookies, an http base URL, localhost origins, filesystem storage, mail capture and the payment simulator.
+
+## 4. Build and start
+
+```bash
+cd /opt/harvestslot
+export COMPOSE="docker compose -f infra/production/docker-compose.yml --env-file infra/production/.env.production"
+$COMPOSE build                 # api, worker and web images (≈ 5–10 min the first time)
+$COMPOSE up -d postgres redis
+$COMPOSE run --rm migrate      # applies committed migrations (prisma migrate deploy)
+$COMPOSE up -d                 # api, worker, web, caddy
+$COMPOSE ps                    # all services healthy
+curl -fsS https://harvestslot.example.org/api/v1/health/ready
+```
+
+Caddy obtains the TLS certificate on first request (port 80 must be reachable). Then create the first administrator — the password is read from the environment so it never appears in the shell history:
+
+```bash
+read -rs HS_ADMIN_PASSWORD && export HS_ADMIN_PASSWORD
+$COMPOSE run --rm -e HS_ADMIN_PASSWORD api node dist/cli/create-admin.js --email ops@your-domain --name "Operations"
+unset HS_ADMIN_PASSWORD
+```
+
+Sign in, set up two-factor authentication (required for admin endpoints in production), then review organisations as they register. **Never run `db:seed` in production**; the seed refuses any environment other than local/demo/test.
+
+## 5. Paystack webhook (when enabling online fee payments)
+
+In the Paystack dashboard set the webhook URL to `https://<domain>/api/v1/webhooks/paystack` and the callback to `https://<domain>/payments/return`. Webhooks are verified with HMAC-SHA512 over the raw body using the secret key; events are stored, de-duplicated and reconciled by the worker. Before switching `PAYSTACK_MODE=live`, make a test-mode payment and confirm it appears under *Admin → Messages & webhooks* and marks the fee invoice paid.
+
+## 6. Releasing a new version
+
+```bash
+cd /opt/harvestslot && git fetch && git checkout <tag>
+export HS_VERSION=<tag>                              # images are tagged per release
+$COMPOSE build
+$COMPOSE run --rm migrate                             # migrations first; they are additive
+$COMPOSE up -d --no-deps api worker web               # API and worker stop gracefully (30 s / 60 s)
+$COMPOSE ps && curl -fsS https://<domain>/api/v1/health/ready
+```
+
+The worker drains in-flight jobs on `SIGTERM`; outbox events not yet delivered stay in PostgreSQL and are picked up by the new worker. Holds and expiries are evaluated on every read/write, so a short worker gap never over-allocates capacity.
+
+### Rollback limitations
+
+* Images are tagged per release, so `HS_VERSION=<previous> $COMPOSE up -d --no-deps api worker web` restores the previous code.
+* **Database migrations are not automatically reversible.** Migrations are written to be additive (new columns/tables, no destructive changes in the same release that stops using them), so the previous version normally keeps working against the newer schema. If a migration must be undone, restore the pre-release backup (section 7) — which loses data written since.
+* Take a backup immediately before every release that includes a migration.
+
+## 7. Backups and restore drill
+
+```bash
+mkdir -p infra/production/backups
+crontab -e
+# 15 2 * * * /opt/harvestslot/infra/production/backup.sh >> /var/log/harvestslot-backup.log 2>&1
+```
+
+`backup.sh` writes a compressed `pg_dump` (custom format) to `infra/production/backups/` and keeps 14 days. **Copy backups off the server** (for example `rclone sync` to a different provider) — a backup on the same disk does not survive losing the server. Object storage needs its own versioning/replication setting at the provider.
+
+Restore drill (monthly, and after schema changes), in a disposable container that never touches production:
+
+```bash
+infra/production/restore-test.sh infra/production/backups/harvestslot-<stamp>.dump
+```
+
+It restores the dump into a throw-away PostgreSQL 18 container and prints row counts for migrations, bookings, invoices and audit events. Record the date and result. To restore for real: stop `api worker web`, `pg_restore --clean --if-exists` into the production database, start them again, and run the readiness re-check by restarting the worker.
+
+## 8. Monitoring
+
+* **Health**: `GET /api/v1/health/live` (process) and `/api/v1/health/ready` (database) for an external uptime monitor; the worker exposes `/health` on port 4100 inside the network; containers have Docker health checks.
+* **Operations**: *Admin → Overview* shows organisations awaiting review, open disputes, overdue receiving reviews, open incidents, dead outbox events, failed deliveries, payment mismatches and pending privacy requests. *Admin → Integrations* shows which services are working, simulated or awaiting credentials.
+* **Logs**: JSON to stdout (`$COMPOSE logs -f api worker`), rotated by Docker (20 MB × 5). Secrets and tokens are redacted.
+* **Disk**: watch PostgreSQL volume and backup sizes (`df -h`, `docker system df`).
+
+## 9. Hardening checklist
+
+- [ ] SSH keys only (`PasswordAuthentication no`), unattended security upgrades on.
+- [ ] `.env.production` mode 600, never committed; secrets rotated if exposed (rotating `SESSION_SECRET` signs everyone out; rotating `DATA_ENCRYPTION_KEY` requires re-enrolling 2FA).
+- [ ] Bucket private, key scoped to the bucket, versioning on.
+- [ ] Administrator accounts use 2FA; review *Admin → Users* periodically.
+- [ ] Privacy notice and terms templates completed and legally reviewed.
+- [ ] Backups copied off-site and a restore drill recorded.
+
+## Local alternatives
+
+* `infra/docker-compose.yml` runs PostgreSQL, Redis, MinIO (private bucket), Mailpit and optional ClamAV for development, and with `--profile apps` the three application containers.
+* Without Docker (as on the build machine): `pnpm infra:local` starts a real PostgreSQL 18 via `embedded-postgres`, with `QUEUE_BACKEND=postgres`, `STORAGE_DRIVER=filesystem`, `MAIL_TRANSPORT=dev-capture` and the payment simulator — all labelled and refused in production. See README.

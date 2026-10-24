@@ -23,6 +23,9 @@ describe('core booking slice: request → offer → acceptance → transport →
     const dispatcher = new Client(t.app);
     await dispatcher.login(transporter.owner.email!);
 
+    // Other test files leave many identical fixture processors in this database; a better price
+    // makes this one rank among the top results that matching returns.
+    await t.db.facility.update({ where: { id: processor.facility.id }, data: { indicativePriceKoboPerKg: 40_000n } });
     // Matching explains processors without reserving anything.
     const matches = expectOk(await farmerClient.get(`/harvests/${harvest.id}/matches`));
     expect(matches.results.some((r: { facilityId: string }) => r.facilityId === processor.facility.id)).toBe(true);

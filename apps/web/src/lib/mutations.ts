@@ -3,7 +3,7 @@
 import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { useInsertionEffect, useRef } from 'react';
 import { toast } from 'sonner';
-import { ApiError, api, newIdempotencyKey, type RequestOptions } from './api';
+import { api, newIdempotencyKey, type ApiError, type RequestOptions } from './api';
 
 interface ActionOptions<TVars, TResult> {
   /** Builds the request from the variables. */

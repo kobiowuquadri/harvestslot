@@ -32,7 +32,8 @@
                       "FARMER",
                       "PROCESSOR",
                       "TRANSPORTER",
-                      "COOPERATIVE"
+                      "COOPERATIVE",
+                      "STAFF"
                     ]
                   },
                   "displayName": {
@@ -96,7 +97,6 @@
                   "accountType",
                   "displayName",
                   "password",
-                  "lga",
                   "acceptTerms",
                   "acceptPrivacy"
                 ]

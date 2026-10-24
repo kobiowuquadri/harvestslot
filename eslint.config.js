@@ -55,8 +55,13 @@ export default tseslint.config(
     },
   },
   {
-    files: ['**/*.mjs', 'infra/**/*.js', 'tests/**/*.mjs', 'packages/db/prisma/**/*.ts', '**/scripts/**/*.{ts,mjs}'],
+    files: ['**/*.mjs', 'infra/**/*.js', 'tests/**/*.mjs', 'packages/db/prisma/**/*.ts', '**/scripts/**/*.{ts,mjs}', 'apps/api/src/cli/**/*.ts'],
     rules: { 'no-console': 'off' },
+  },
+  {
+    // Test helpers read arbitrary JSON response bodies.
+    files: ['apps/*/test/**/*.ts', 'packages/*/test/**/*.ts', 'e2e/**/*.ts'],
+    rules: { '@typescript-eslint/no-explicit-any': 'off' },
   },
   {
     files: ['**/test/**/*.ts', '**/*.test.ts', '**/*.spec.ts', 'e2e/**/*.ts'],

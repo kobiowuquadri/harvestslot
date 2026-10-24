@@ -9,7 +9,7 @@ import { BookingCards, HarvestCards, InvoiceRows, OfferCards } from '@/component
 import { EmptyState, PageHeader, QueryView } from '@/components/domain/states';
 import { Kg, Window } from '@/components/domain/display';
 import { Button } from '@/components/ui/button';
-import { Alert, Card, CardContent, CardHeader, CardTitle } from '@/components/ui/primitives';
+import { Alert } from '@/components/ui/primitives';
 import { useT } from '@/i18n';
 import { listDrafts, type HarvestDraft } from '@/lib/drafts';
 import { can, useApi } from '@/lib/hooks';

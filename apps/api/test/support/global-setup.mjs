@@ -43,7 +43,15 @@ export default async function setup(project) {
   project.provide('databaseUrl', databaseUrl);
 
   return async () => {
-    if (server) await server.stop();
+    if (server) {
+      try {
+        await server.stop();
+      } catch (error) {
+        // On Windows the stopped server's temp directory can stay locked for a moment (EBUSY);
+        // the cluster is already shut down and the directory lives in the OS temp folder.
+        if (error?.code !== 'EBUSY' && error?.code !== 'EPERM') throw error;
+      }
+    }
     if (dataDir) {
       try {
         rmSync(dataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });

@@ -18,8 +18,8 @@ import {
   type RejectedDisposition,
   type RejectionReason,
 } from '@harvestslot/contracts';
-import { z } from 'zod';
-import { processingSchema } from '@harvestslot/contracts';
+import type { z } from 'zod';
+import type { processingSchema } from '@harvestslot/contracts';
 import { Kg, Money, StatusBadge, When } from '@/components/domain/display';
 import { PageHeader, QueryView } from '@/components/domain/states';
 import { Button } from '@/components/ui/button';

@@ -1,0 +1,143 @@
+# Local development and full-stack containers.
+#
+#   pnpm infra:up                                   infrastructure only; run the apps on the host (pnpm dev)
+#   docker compose -f infra/docker-compose.yml --profile apps up -d --build
+#                                                   everything in containers (web on http://localhost:3000)
+#   docker compose -f infra/docker-compose.yml --profile scan up -d clamav
+#                                                   optional virus scanning for uploads (CLAMAV_HOST=localhost)
+#
+# Credentials below are local development defaults. Never reuse them anywhere reachable from a network.
+name: harvestslot
+
+x-app-env: &app-env
+  NODE_ENV: production
+  APP_ENV: local
+  PUBLIC_BASE_URL: http://localhost:3000
+  ALLOWED_ORIGINS: http://localhost:3000
+  DATABASE_URL: postgresql://harvestslot:harvestslot@postgres:5432/harvestslot
+  QUEUE_BACKEND: redis
+  REDIS_URL: redis://redis:6379
+  SESSION_SECRET: local-docker-session-secret-change-me-0123456789abcdef
+  DATA_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+  COOKIE_SECURE: 'false'
+  ADMIN_REQUIRE_MFA: 'false'
+  STORAGE_DRIVER: s3
+  S3_ENDPOINT: http://minio:9000
+  S3_BUCKET: harvestslot-private
+  S3_ACCESS_KEY_ID: harvestslot
+  S3_SECRET_ACCESS_KEY: harvestslot-minio-dev
+  S3_FORCE_PATH_STYLE: 'true'
+  MAIL_TRANSPORT: smtp
+  SMTP_HOST: mailpit
+  SMTP_PORT: '1025'
+  MAIL_FROM: HarvestSlot <no-reply@harvestslot.local>
+  PAYMENT_PROVIDER: simulated
+  PAYMENT_SIMULATOR_SECRET: local-docker-simulator-secret-0123456789
+  DEMO_MODE: 'true'
+  DEV_TOOLS_ENABLED: 'true'
+
+services:
+  postgres:
+    image: postgres:18-bookworm
+    environment:
+      POSTGRES_USER: harvestslot
+      POSTGRES_PASSWORD: harvestslot
+      POSTGRES_DB: harvestslot
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C.UTF-8
+    ports: ['127.0.0.1:5432:5432']
+    volumes: [postgres-data:/var/lib/postgresql]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U harvestslot -d harvestslot']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    command: ['redis-server', '--appendonly', 'yes']
+    ports: ['127.0.0.1:6379:6379']
+    volumes: [redis-data:/data]
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: ['server', '/data', '--console-address', ':9001']
+    environment:
+      MINIO_ROOT_USER: harvestslot
+      MINIO_ROOT_PASSWORD: harvestslot-minio-dev
+    ports: ['127.0.0.1:9000:9000', '127.0.0.1:9001:9001']
+    volumes: [minio-data:/data]
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://localhost:9000/minio/health/live']
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  # Creates the private bucket once; it never gets a public policy.
+  minio-init:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    depends_on:
+      minio: { condition: service_healthy }
+    entrypoint: ['/bin/sh', '-c']
+    command: ['mc alias set local http://minio:9000 harvestslot harvestslot-minio-dev && mc mb --ignore-existing local/harvestslot-private && mc anonymous set none local/harvestslot-private']
+    restart: 'no'
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports: ['127.0.0.1:1025:1025', '127.0.0.1:8025:8025']
+
+  clamav:
+    image: clamav/clamav:1.4
+    profiles: [scan]
+    ports: ['127.0.0.1:3310:3310']
+
+  # ── Application containers (profile "apps") ──
+  migrate:
+    profiles: [apps]
+    build: { context: .., target: api }
+    environment: *app-env
+    working_dir: /repo/packages/db
+    command: ['sh', '-c', 'node node_modules/prisma/build/index.js migrate deploy']
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: 'no'
+
+  api:
+    profiles: [apps]
+    build: { context: .., target: api }
+    environment:
+      <<: *app-env
+      TRUST_PROXY: 'true'
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      minio-init: { condition: service_completed_successfully }
+    ports: ['127.0.0.1:4000:4000']
+    stop_grace_period: 30s
+
+  worker:
+    profiles: [apps]
+    build: { context: .., target: worker }
+    environment: *app-env
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    stop_grace_period: 30s
+
+  web:
+    profiles: [apps]
+    build:
+      context: ..
+      target: web
+      args: { API_INTERNAL_URL: http://api:4000 }
+    depends_on: [api]
+    ports: ['127.0.0.1:3000:3000']
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:

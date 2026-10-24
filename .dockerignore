@@ -1,0 +1,17 @@
+**/node_modules
+**/dist
+**/.next
+**/*.tsbuildinfo
+**/coverage
+**/test-results
+**/playwright-report
+.git
+.github
+.local
+.local-infra.log
+.env
+.env.*
+!.env.example
+docs/openapi.json
+HarvestSlot_Claude_Build_Prompt.md
+packages/db/src/generated

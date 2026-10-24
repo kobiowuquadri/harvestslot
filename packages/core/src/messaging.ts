@@ -50,7 +50,7 @@ export function captureLocally(channel: 'EMAIL' | 'SMS', to: string, subject: st
 }
 
 export function listCapturedMessages(limit = 50): CapturedMessage[] {
-  let files: string[] = [];
+  let files: string[];
   try {
     files = readdirSync(devMailboxDir()).filter((f) => f.endsWith('.json'));
   } catch {

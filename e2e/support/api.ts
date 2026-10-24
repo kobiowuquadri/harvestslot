@@ -253,8 +253,8 @@ export async function confirmedBooking(opts: { processor?: Processor; transporte
 /** Continues a confirmed booking through harvest, collection, handover and delivery (via the API). */
 export async function deliveredBooking() {
   const f = await confirmedBooking();
-  let b = await f.farmer.api.get(`/bookings/${f.bookingId}`);
-  b = await f.farmer.api.post(`/bookings/${f.bookingId}/start-harvest`, { expectedVersion: b.version });
+  const b = await f.farmer.api.get(`/bookings/${f.bookingId}`);
+  await f.farmer.api.post(`/bookings/${f.bookingId}/start-harvest`, { expectedVersion: b.version });
   await f.farmer.api.post(`/bookings/${f.bookingId}/ready-for-pickup`, { reportedHarvestedKg: '2000' });
   const driver = await Api.create();
   await driver.login(f.transporter.driver.email);

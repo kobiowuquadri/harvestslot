@@ -18,3 +18,7 @@ e2e/.auth/
 Thumbs.db
 .vscode/*
 !.vscode/extensions.json
+
+# Production secrets and backups (never commit)
+infra/production/.env.production
+infra/production/backups/

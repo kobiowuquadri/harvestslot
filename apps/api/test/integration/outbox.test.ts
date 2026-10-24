@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '@harvestslot/config';
 import { deliverNotification, drainOutbox, notify, type Messaging, type OutboxHandler } from '@harvestslot/core';
 import { makeUser, startApp, type TestApp } from '../support/harness.js';
@@ -27,6 +27,12 @@ function flakyMessaging(state: { failing: boolean; sent: string[] }): Messaging 
 }
 
 describe('transactional outbox', () => {
+  // Other test files share this database and leave their own events queued; settle them so each
+  // drain here sees only the event under test.
+  beforeEach(async () => {
+    await t.db.outboxEvent.updateMany({ where: { status: { in: ['PENDING', 'FAILED', 'PROCESSING'] } }, data: { status: 'DONE', processedAt: new Date(), lockedAt: null, lockedBy: null } });
+  });
+
   it('survives a provider failure, retries with backoff, and never sends twice', async () => {
     const user = await makeUser(t.db, 'notified');
     await t.db.consentRecord.create({ data: { userId: user.id, type: 'CONTACT_EMAIL', documentVersion: 'test', granted: true, method: 'FARMER_IN_APP' } });

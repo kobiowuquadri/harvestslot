@@ -1,0 +1,37 @@
+# HarvestSlot reverse proxy: automatic HTTPS (Let's Encrypt), API and web on one origin.
+# HS_DOMAIN and ACME_EMAIL come from the environment (see env.production.example).
+{
+	email {$ACME_EMAIL}
+}
+
+{$HS_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# Uploads are limited by the API as well; this stops oversized bodies at the edge.
+	request_body {
+		max_size 12MB
+	}
+
+	handle /api/* {
+		reverse_proxy api:4000 {
+			# Server-sent events (live booking updates) must not be buffered.
+			flush_interval -1
+		}
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

@@ -30,6 +30,9 @@ const csp = [
 ].join('; ');
 
 const nextConfig: NextConfig = {
+  // The container image runs the self-contained server (`node apps/web/server.js`).
+  output: process.env.NEXT_OUTPUT === 'standalone' ? 'standalone' : undefined,
+  outputFileTracingRoot: resolve(process.cwd(), '../..'),
   reactStrictMode: true,
   poweredByHeader: false,
   transpilePackages: ['@harvestslot/contracts'],

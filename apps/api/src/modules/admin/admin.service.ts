@@ -25,21 +25,11 @@ import {
   type Actor,
 } from '@harvestslot/core';
 import type { Prisma } from '@harvestslot/db';
+import { toCsv } from '../../common/csv.js';
 import { PrismaService } from '../../common/prisma.service.js';
 import { SessionService } from '../../common/sessions.service.js';
 import { iso } from '../../common/serialize.js';
 import { ENV, STORAGE, type Env, type ObjectStorage } from '../../common/tokens.js';
-
-/** Spreadsheet formula injection guard: cells starting with = + - @ tab or CR are prefixed with a quote. */
-export function csvCell(value: unknown): string {
-  let s = value === null || value === undefined ? '' : typeof value === 'bigint' ? value.toString() : value instanceof Date ? value.toISOString() : String(value);
-  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
-  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-export function toCsv(header: string[], rows: unknown[][]): string {
-  return [header.map(csvCell).join(','), ...rows.map((r) => r.map(csvCell).join(','))].join('\r\n');
-}
 
 @Injectable()
 export class AdminService {
@@ -295,8 +285,8 @@ export class AdminService {
     const to = q.to ? new Date(`${q.to}T23:59:59+01:00`) : new Date();
     const range = { gte: from, lte: to };
     const db = this.prisma.db;
-    let header: string[] = [];
-    let rows: unknown[][] = [];
+    let header: string[];
+    let rows: unknown[][];
     if (q.dataset === 'bookings') {
       const bs = await db.booking.findMany({ where: { isDemo, createdAt: range }, include: { farmerProfile: true, processorOrg: true, facility: true, termsVersions: true }, orderBy: { createdAt: 'asc' } });
       header = ['reference', 'status', 'farmer', 'processor', 'facility', 'quantity_kg', 'price_kobo_per_kg', 'freight_payer', 'freight_kobo', 'created_at', 'confirmed_at', 'completed_at', 'cancelled_at', 'cancel_reason'];

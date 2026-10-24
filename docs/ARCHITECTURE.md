@@ -64,7 +64,7 @@ Each module owns its controllers and services. Cross-module calls go through exp
 ## 6. Background work
 
 * **Transactional outbox**: business transactions write `outbox_events`. The worker claims rows with `FOR UPDATE SKIP LOCKED`, delivers, records `delivery_attempts`, retries with exponential backoff, dead-letters after a limit, and deduplicates by `dedupe_key`.
-* **Schedules**: with `REDIS_URL` set, BullMQ repeatable jobs trigger the sweeps (one runner per schedule across workers). Without Redis the worker runs the same functions on in-process timers and reports that mode in integration health.
+* **Schedules**: BullMQ job schedulers trigger the sweeps (one runner per schedule across workers) on Redis (`QUEUE_BACKEND=redis`) or on BullMQ's PostgreSQL backend (`QUEUE_BACKEND=postgres`, schema `bullmq`) for hosts without Redis. The worker exposes `/health` on `WORKER_HEALTH_PORT` (default 4100).
 
 ## 7. Integrations and honesty rules
 
@@ -75,19 +75,19 @@ Each module owns its controllers and services. Cross-module calls go through exp
 | Payments (fee invoices) | Paystack initialise → hosted checkout → signed webhook → server-side verify → idempotent reconciliation | Local simulator (visibly labelled, refused in production) exercising the same reconciliation code |
 | Object storage | S3 API (MinIO locally) | `filesystem` driver for development only |
 | Malware scanning | ClamAV `clamd` INSTREAM | Files marked `NOT_SCANNED`; sensitive files are only served as downloads |
-| Maps | MapLibre GL with configurable style URL | List view; distances labelled *straight-line* |
-| Routing | OSRM-compatible adapter | Straight-line distance with an explicitly labelled conservative road-distance factor |
-| AI voice-to-draft | Feature-flagged, off by default | Hidden; manual form is the complete path |
+| Maps | Not implemented as an embedded map. Exact pickup points (shown only to authorised participants) open in OpenStreetMap. | List views; distances labelled *straight-line* |
+| Routing | **Not implemented** in this release (`ROUTING_PROVIDER` is reserved) | Straight-line distance with an explicitly labelled conservative road-distance factor |
+| AI voice-to-draft | **Not implemented** (data model and a disabled flag only) | Manual step-by-step form is the complete path |
 
 `GET /api/v1/integrations/status` reports each capability as `configured`, `simulated` or `unconfigured` without revealing secrets.
 
 ## 8. Front end
 
-* Next.js App Router, React 19, Tailwind CSS v4 tokens (forest green `#143E31`, secondary `#2F6B4E`, background `#F7F8F4`, amber `#E8B56B` used with dark text), shadcn/ui-style accessible primitives on Radix.
+* Next.js 16 App Router (client-rendered authenticated screens; `proxy.ts` gives signed-out visitors a soft redirect), React 19, Tailwind CSS v4 tokens (forest green `#143E31`, secondary `#2F6B4E`, background `#F7F8F4`, amber `#E8B56B` used with dark text), shadcn/ui-style accessible primitives on Radix.
 * TanStack Query for authenticated server state; React Hook Form + Zod (shared schemas) for forms.
-* Farmers/transporters get mobile bottom navigation; processor/cooperative/admin get desktop side navigation.
+* Every workspace gets a bottom bar (four most-used destinations + “More”) on phones and a side navigation from 768 px up; screens are built mobile-first and checked at 360 px, 820 px and 1366 px.
 * PWA: manifest, icons, app-shell service worker; offline harvest-request drafts in IndexedDB scoped to the account, with expiry, cleared on logout, synced with idempotency keys and version checks.
-* English is complete; Yoruba strings carry an explicit review status and fall back to English.
+* English is complete. Yoruba covers navigation and common labels only, marked “needs fluent review”; the UI says so and falls back to English for everything else.
 
 ## 9. Deployment
 

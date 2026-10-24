@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { OYO_LGAS, registerSchema, type RegisterInput } from '@harvestslot/contracts';
 import { Button } from '@/components/ui/button';
 import { Checkbox, Field, Input, RadioCards, Select } from '@/components/ui/form';
@@ -23,8 +23,8 @@ function RegisterForm() {
     resolver: zodResolver(registerSchema) as never,
     defaultValues: { accountType: params.get('type') === 'STAFF' ? 'STAFF' : 'FARMER', contactConsentEmail: true, contactConsentSms: false } as Partial<RegisterInput>,
   });
-  const { register, handleSubmit, watch, control, setError, formState } = form;
-  const type = watch('accountType');
+  const { register, handleSubmit, control, setError, formState } = form;
+  const type = useWatch({ control, name: 'accountType' });
   const lgas = config?.supportedLgas?.length ? config.supportedLgas : [...OYO_LGAS];
 
   const onSubmit = handleSubmit(async (values) => {

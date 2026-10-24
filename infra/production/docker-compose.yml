@@ -1,0 +1,98 @@
+# Production stack for one Ubuntu VPS (see docs/DEPLOYMENT.md).
+#   cp infra/production/env.production.example infra/production/.env.production   # fill in real values
+#   docker compose -f infra/production/docker-compose.yml --env-file infra/production/.env.production build
+#   docker compose -f infra/production/docker-compose.yml --env-file infra/production/.env.production up -d
+# Object storage is any S3-compatible service configured in the env file (no MinIO here).
+name: harvestslot-prod
+
+x-app: &app
+  env_file: [.env.production]
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: 20m, max-file: '5' }
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports: ['80:80', '443:443', '443:443/udp']
+    environment:
+      HS_DOMAIN: ${HS_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [web, api]
+
+  postgres:
+    image: postgres:18-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C.UTF-8
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./backups:/backups
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 10s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
+    volumes: [redis-data:/data]
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 30
+
+  # One-shot: applies committed migrations before the new API/worker version starts.
+  migrate:
+    <<: *app
+    build: { context: ../.., target: api }
+    image: harvestslot-api:${HS_VERSION:-latest}
+    working_dir: /repo/packages/db
+    command: ['sh', '-c', 'node node_modules/prisma/build/index.js migrate deploy']
+    restart: 'no'
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api:
+    <<: *app
+    image: harvestslot-api:${HS_VERSION:-latest}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    stop_grace_period: 30s
+
+  worker:
+    <<: *app
+    build: { context: ../.., target: worker }
+    image: harvestslot-worker:${HS_VERSION:-latest}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    stop_grace_period: 60s
+
+  web:
+    <<: *app
+    build:
+      context: ../..
+      target: web
+      args: { API_INTERNAL_URL: http://api:4000 }
+    image: harvestslot-web:${HS_VERSION:-latest}
+    depends_on: [api]
+
+volumes:
+  postgres-data:
+  redis-data:
+  caddy-data:
+  caddy-config:
