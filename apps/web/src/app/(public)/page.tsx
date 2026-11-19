@@ -16,7 +16,6 @@ import {
 import { Photo } from '@/components/domain/photo';
 import { Button } from '@/components/ui/button';
 import { photos } from '@/content/photos';
-import { DemoEntry } from './demo-entry';
 
 const roles = [
   { icon: Sprout, title: 'Sell cassava', body: 'Add your harvest, choose a buyer, agree who collects and when — then harvest.' },
@@ -141,7 +140,6 @@ export default function LandingPage() {
             <HeroCardRight />
           </div>
         </div>
-        <DemoEntry />
 
         {/* In place of a partner strip: who the platform serves (no partnerships are claimed). */}
         <div className="border-t border-line/80 bg-canvas">
