@@ -22,3 +22,6 @@ Thumbs.db
 # Production secrets and backups (never commit)
 infra/production/.env.production
 infra/production/backups/
+
+# Office lock files
+~$*
