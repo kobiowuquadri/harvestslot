@@ -59,7 +59,7 @@ export function AnalyticsView({ path }: { path: string }) {
                       {v?.value === null || v === undefined ? (
                         <p className="text-sm text-amber-ink">{v?.emptyReason ?? 'Not enough data'}</p>
                       ) : (
-                        <p className="text-2xl font-semibold tabular text-forest">{formatValue(v.value, d.unit)}</p>
+                        <p className="text-2xl font-semibold tabular text-ink">{formatValue(v.value, d.unit)}</p>
                       )}
                       {v?.breakdown?.length ? (
                         <ul className="text-xs text-muted">

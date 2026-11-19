@@ -9,6 +9,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { HarvestDto } from '@harvestslot/contracts';
 import { useOnline } from '@/components/domain/banners';
 import { FarmerGate } from '@/components/domain/farmer-gate';
+import { harvestPayload, normaliseDraftValues, quantityKg } from '@/components/domain/harvest-form';
 import { HarvestCards } from '@/components/domain/lists';
 import { EmptyState, PageHeader, QueryView } from '@/components/domain/states';
 import { Button } from '@/components/ui/button';
@@ -33,30 +34,14 @@ function DeviceDrafts({ ctx }: { ctx: FarmerContext }) {
   const send = async (d: HarvestDraft) => {
     setBusy(d.id);
     try {
-      const v = d.values as Record<string, string>;
-      const minPrice = v.minPriceNaira ? Math.round(Number(v.minPriceNaira) * 100) : undefined;
       const saved = await api<HarvestDto>(`/farmers/${d.farmerProfileId}/harvests`, {
         method: 'POST',
         // The draft id is both the idempotency key and clientDraftId: re-sending cannot duplicate it.
         idempotencyKey: d.id,
-        body: {
-          clientDraftId: d.id,
-          publish: false,
-          farmLocationId: v.farmLocationId,
-          estimatedQuantityKg: v.estimatedQuantityKg,
-          eligibleQuantityKg: v.eligibleQuantityKg || undefined,
-          earliestHarvestDate: v.earliestHarvestDate,
-          latestHarvestDate: v.latestHarvestDate,
-          variety: v.variety || undefined,
-          cropAgeMonths: v.cropAgeMonths ? Number(v.cropAgeMonths) : undefined,
-          notes: v.notes || undefined,
-          minPriceKoboPerKg: minPrice,
-          transportPreference: v.transportPreference,
-          maxDistanceKm: v.maxDistanceKm ? Number(v.maxDistanceKm) : undefined,
-        },
+        body: { ...harvestPayload(normaliseDraftValues(d.values)), clientDraftId: d.id, publish: false },
       });
       await deleteDraft(d.id);
-      toast.success(`Sent as draft ${saved.reference}. Review and publish it.`);
+      toast.success(`Sent as draft ${saved.reference}. Open it and choose “Find buyers”.`);
       await qc.invalidateQueries({ queryKey: ['harvests'] });
       reload();
     } catch (e) {
@@ -76,11 +61,12 @@ function DeviceDrafts({ ctx }: { ctx: FarmerContext }) {
       <CardContent className="flex flex-col gap-3">
         <p className="text-sm text-muted">These have not reached HarvestSlot yet. Drafts are removed from this phone after 14 days or when you sign out.</p>
         {drafts.map((d) => {
-          const v = d.values as Record<string, string>;
+          const v = normaliseDraftValues(d.values);
+          const kg = quantityKg(v);
           return (
             <div key={d.id} className="flex flex-col gap-2 rounded-lg border border-line p-3 sm:flex-row sm:items-center">
               <div className="flex-1 text-sm">
-                <p className="font-medium">{v.estimatedQuantityKg ? `${v.estimatedQuantityKg} kg` : 'Quantity not entered'} · {v.earliestHarvestDate || 'dates not set'}</p>
+                <p className="font-medium">{kg ? `${Number(kg)} kg` : 'Quantity not entered'} · {v.readyDate || 'date not set'}</p>
                 <p className="text-xs text-muted">Saved {new Date(d.savedAt).toLocaleString('en-NG')}</p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -116,13 +102,13 @@ function HarvestList({ ctx }: { ctx: FarmerContext }) {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Harvest requests"
-        description="Each request tells processors how much cassava you can sell and when."
+        title="Your harvests"
+        description="Each harvest tells buyers how much cassava you can sell, where, and when."
         actions={
           farmerCan(ctx, 'harvest.edit') ? (
             <Button asChild size="lg">
               <Link href={withFarmer('/farmer/harvests/new', ctx)}>
-                <Plus className="size-5" aria-hidden /> New harvest request
+                <Plus className="size-5" aria-hidden /> Add my harvest
               </Link>
             </Button>
           ) : null
@@ -130,7 +116,7 @@ function HarvestList({ ctx }: { ctx: FarmerContext }) {
       />
       {params.get('saved') === 'device' ? <Alert tone="info" title="Kept on this phone">Send it when you are online — it is listed below.</Alert> : null}
       <DeviceDrafts ctx={ctx} />
-      <QueryView query={q} isEmpty={(d) => d.length === 0} empty={<EmptyState title="No harvest requests yet">Create one to see which processors have capacity for your cassava.</EmptyState>}>
+      <QueryView query={q} isEmpty={(d) => d.length === 0} empty={<EmptyState title="No harvests yet">Add your harvest to see which buyers can take it.</EmptyState>}>
         {(items) => <HarvestCards items={items} hrefFor={(h) => withFarmer(`/farmer/harvests/${h.id}`, ctx)} />}
       </QueryView>
     </div>

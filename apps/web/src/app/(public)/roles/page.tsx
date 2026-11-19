@@ -1,77 +1,79 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { CheckCircle2 } from 'lucide-react';
+import { PageIntro } from '@/components/domain/marketing';
+import { Photo } from '@/components/domain/photo';
+import { photos } from '@/content/photos';
 
 export const metadata: Metadata = { title: 'Who HarvestSlot is for' };
 
 const roles = [
   {
     id: 'farmers',
-    title: 'Farmers',
+    title: 'Farmers — selling cassava',
     points: [
-      'Register with a phone number or email. You can also be registered by your cooperative and claim your own account later.',
-      'Add your farm pickup points. Exact locations are only shown to the processor and transporter on a confirmed booking.',
-      'Post expected harvests, compare offers, accept exact terms, and see when you are ready to harvest.',
-      'Confirm pickup handovers, review weighing and quality decisions, and confirm payments when the money arrives.',
-      'Decide what your cooperative may do for you, and revoke it at any time.',
+      'Create an account with your name and a phone number or email. Your farm is asked for when you add a harvest.',
+      'Add a harvest: where, roughly how much, and when it will be ready. Buyers see only the area until you agree a plan.',
+      'See buyers that fit and send a request. Review an offer on one screen and accept or decline.',
+      'Your confirmed plan says who collects (or where you deliver), when, and for how much — and what happens next.',
+      'See the final amount for the weight accepted, report a problem if something is wrong, and confirm when the money arrives.',
     ],
   },
   {
     id: 'processors',
-    title: 'Processors',
+    title: 'Processors — buying cassava',
     points: [
-      'Register your organisation and submit documents for review by HarvestSlot administrators.',
-      'Model each facility and processing line; publish slots with both machine capacity and the quantity you are willing to buy.',
-      'Make offers from your harvest inbox; each offer holds capacity until it expires. Capacity can never be reduced below what is committed.',
-      'Assign staff roles: managers make commercial decisions, receiving officers record weights and quality, finance officers record payments.',
-      'Pay farmers and transporters directly and record each payment for the recipient to confirm.',
-    ],
-  },
-  {
-    id: 'transporters',
-    title: 'Transporters and drivers',
-    points: [
-      'Register vehicles with their capacity, add drivers, publish your service areas and when each vehicle is available.',
-      'Quote on jobs with a specific vehicle. A vehicle and a driver can only hold one overlapping job, including turnaround time.',
-      'Drivers see only their assigned jobs, record arrival, loading and delivery, and use one-time handover codes from the farmer and the facility.',
-    ],
-  },
-  {
-    id: 'cooperatives',
-    title: 'Cooperatives',
-    points: [
-      'Register members who do not yet have phones or accounts, with their recorded consent (a witness or a signed form).',
-      'Act for members only within the permissions they give: helping with data entry is separate from approving a sale.',
-      'Every action shows who acted and for whom. Members can claim their own account and review or revoke permissions.',
+      'Create an account with your name and business name. HarvestSlot reviews new businesses before their buying slots go live.',
+      'Publish buying slots: how much you can receive, where, and on which dates. Your facility is asked for the first time.',
+      'Review farmers’ requests and send offers prefilled from the request and slot. Choose “We’ll collect” or “The farmer delivers”; undecided offers stay as drafts.',
+      'Accepted offers appear in your bookings. From the booking, record the weight you accept and the payment you make.',
+      'Staff (receiving and finance officers) join through an invitation from your business.',
     ],
   },
 ];
 
+const rolePhotos = { farmers: photos.farmerHoldingCassava, processors: photos.cassavaTubers } as const;
+
 export default function RolesPage() {
   return (
-    <div className="mx-auto max-w-4xl px-4 py-12">
-      <h1 className="text-3xl font-semibold text-forest">Who HarvestSlot is for</h1>
-      <nav aria-label="Roles" className="mt-4 flex flex-wrap gap-2 text-sm">
-        {roles.map((r) => (
-          <a key={r.id} href={`#${r.id}`} className="rounded-full border border-line bg-surface px-3 py-1.5 hover:border-leaf">
-            {r.title}
-          </a>
-        ))}
+    <>
+      <PageIntro eyebrow="Who it’s for" title="Every role in the cassava chain, on one plan">
+        Farmers sell, processors buy. Each side confirms its own part — and sees what the other still has to do.
+      </PageIntro>
+      <nav aria-label="Roles" className="sticky top-16 z-30 border-b border-line/70 bg-surface/90 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-4 py-2 max-sm:scroll-fade-x sm:px-6">
+          {roles.map((r) => (
+            <a key={r.id} href={`#${r.id}`} className="whitespace-nowrap rounded-full px-3.5 py-1.5 font-display text-[13.5px] font-medium text-muted hover:bg-canvas hover:text-ink">
+              {r.title}
+            </a>
+          ))}
+        </div>
       </nav>
-      <div className="mt-8 flex flex-col gap-6">
-        {roles.map((r) => (
-          <section key={r.id} id={r.id} className="scroll-mt-20 rounded-xl border border-line bg-surface p-6">
-            <h2 className="text-xl font-semibold text-forest">{r.title}</h2>
-            <ul className="mt-3 flex list-disc flex-col gap-2 pl-5 text-sm text-muted">
-              {r.points.map((p) => (
-                <li key={p}>{p}</li>
-              ))}
-            </ul>
+      <div className="mx-auto flex max-w-5xl flex-col gap-16 px-4 py-16 sm:px-6">
+        {roles.map((r, i) => (
+          <section key={r.id} id={r.id} aria-labelledby={`${r.id}-title`} className="grid scroll-mt-32 grid-cols-1 items-center gap-8 md:grid-cols-2 md:gap-12">
+            <div className={`aspect-[4/3] overflow-hidden rounded-[24px] bg-line shadow-[var(--shadow-raised)] ${i % 2 ? 'md:order-2' : ''}`}>
+              <Photo photo={rolePhotos[r.id as keyof typeof rolePhotos]} mono sizes="(min-width: 768px) 460px, 100vw" />
+            </div>
+            <div>
+              <h2 id={`${r.id}-title`} className="font-display text-2xl font-semibold tracking-tight text-ink">
+                {r.title}
+              </h2>
+              <ul className="mt-5 flex flex-col gap-3">
+                {r.points.map((pt) => (
+                  <li key={pt} className="flex gap-3 text-[15px] leading-relaxed text-muted">
+                    <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-forest" aria-hidden />
+                    <span>{pt}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </section>
         ))}
+        <p className="text-center text-sm text-muted">
+          Ready to start? <Link href="/register" className="font-medium text-forest underline underline-offset-2">Create an account</Link>
+        </p>
       </div>
-      <p className="mt-8 text-sm">
-        <Link href="/register" className="font-medium text-leaf underline">Create an account</Link> — choose your role during registration.
-      </p>
-    </div>
+    </>
   );
 }

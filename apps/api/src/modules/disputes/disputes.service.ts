@@ -11,6 +11,7 @@ import {
   resolveDisputeSchema,
   toGrams,
   type BookingParty,
+  type BookingTermsContent,
   type DisputeDto,
 } from '@harvestslot/contracts';
 import {
@@ -56,6 +57,12 @@ export class DisputesService {
   private viewerParty(access: BookingAccess): BookingParty {
     return (access.parties.find((p) => p !== 'ADMIN') ?? 'ADMIN') as BookingParty;
   }
+  /** The cassava reached the buyer: a handover booking once receiving is recorded, older bookings once the shipment was delivered. */
+  private async handedOver(tx: Tx, b: { id: string; currentTermsVersionNo: number; shipments: Array<{ status: string }> }): Promise<boolean> {
+    const v = await tx.bookingTermsVersion.findUniqueOrThrow({ where: { bookingId_versionNo: { bookingId: b.id, versionNo: b.currentTermsVersionNo } } });
+    return Boolean((v.content as unknown as BookingTermsContent).handover) || b.shipments.some((s) => s.status === 'DELIVERED');
+  }
+
 
   private async dto(d: DisputeRow, actor: Actor, access: BookingAccess): Promise<DisputeDto> {
     const ids = [d.openedByUserId, ...d.messages.map((m) => m.authorUserId), ...d.events.map((e) => e.actorUserId), d.resolution?.decidedByUserId].filter((x): x is string => !!x);
@@ -374,7 +381,7 @@ export class DisputesService {
       await tx.receivingRecord.update({ where: { id: rec.id }, data: { status: transition(RECEIVING_MACHINE, rec.status, 'resolve'), finalisedAt: now, version: { increment: 1 } } });
       if (rec.qualityAssessment) await issueReceivingInvoices(tx, d.bookingId, rec.qualityAssessment.acceptedKg.toString(), now);
       const b = await tx.booking.findUniqueOrThrow({ where: { id: d.bookingId }, include: { shipments: true } });
-      if (b.status === 'ACTIVE' && b.shipments.some((s) => s.status === 'DELIVERED')) {
+      if (b.status === 'ACTIVE' && (await this.handedOver(tx, b))) {
         await tx.booking.update({ where: { id: b.id }, data: { status: transition(BOOKING_MACHINE, b.status, 'complete'), completedAt: now, version: { increment: 1 } } });
       }
     }
@@ -404,7 +411,7 @@ export class DisputesService {
         // Withdrawing a receiving dispute means the farmer accepts the decision.
         await tx.receivingRecord.update({ where: { id: rec.id }, data: { status: 'FINAL', finalisedAt: new Date(), version: { increment: 1 } } });
         const b = await tx.booking.findUniqueOrThrow({ where: { id: d.bookingId }, include: { shipments: true } });
-        if (b.status === 'ACTIVE' && b.shipments.some((s) => s.status === 'DELIVERED')) {
+        if (b.status === 'ACTIVE' && (await this.handedOver(tx, b))) {
           await tx.booking.update({ where: { id: b.id }, data: { status: 'COMPLETED', completedAt: new Date(), version: { increment: 1 } } });
         }
       }

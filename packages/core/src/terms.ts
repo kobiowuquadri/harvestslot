@@ -39,6 +39,7 @@ export function materialProjection(party: BookingParty, c: BookingTermsContent):
         rejectionHandling: c.rejectionHandling,
         freightPayer: c.freightPayer,
         farmerFreightKobo: c.freightPayer === 'FARMER' ? (c.transport?.priceKobo ?? null) : null,
+        handover: c.handover ?? null,
         // Transport inside the agreed pickup window changes nothing for the farmer.
         transportPickup: c.transport && !within(c.transport.pickupWindow, c.pickupWindow) ? c.transport.pickupWindow : 'WITHIN_AGREED_WINDOW',
       };
@@ -55,6 +56,7 @@ export function materialProjection(party: BookingParty, c: BookingTermsContent):
         rejectionHandling: c.rejectionHandling,
         freightPayer: c.freightPayer,
         processorFreightKobo: c.freightPayer === 'PROCESSOR' ? (c.transport?.priceKobo ?? null) : null,
+        handover: c.handover ? { arrangement: c.handover.arrangement, place: c.handover.place, window: c.handover.window } : null,
         platformFee: c.platformFee,
         transportDelivery: c.transport && !within(c.transport.deliveryWindow, c.deliveryWindow) ? c.transport.deliveryWindow : 'WITHIN_AGREED_WINDOW',
       };
@@ -94,6 +96,7 @@ const FIELD_LABELS: Record<string, string> = {
   rejectionHandling: 'Rejected cassava handling',
   freightPayer: 'Who pays transport',
   transport: 'Transport',
+  handover: 'How the cassava gets there',
   platformFee: 'Platform fee',
   slot: 'Processing slot',
   harvest: 'Harvest date / pickup location',

@@ -36,7 +36,7 @@ export function DemoBanner() {
   const { t } = useT();
   if (!config?.demoMode && !me?.user.isDemo) return null;
   return (
-    <div className="flex items-center gap-2 bg-amber px-4 py-1.5 text-xs font-medium text-amber-ink">
+    <div className="flex items-center justify-center gap-2 bg-amber-100 px-4 py-1.5 text-xs font-medium text-amber-ink">
       <FlaskConical className="size-4 shrink-0" aria-hidden />
       {t('common.demo')}
     </div>
@@ -46,7 +46,7 @@ export function DemoBanner() {
 /** Shown on every screen where a cooperative representative acts for a farmer. */
 export function ActingForBanner({ farmerName, cooperativeName, scopes }: { farmerName: string; cooperativeName: string; scopes: DelegationScope[] | string[] }) {
   return (
-    <div className="mb-4 flex flex-col gap-1 rounded-lg border border-info/30 bg-info-50 p-3 text-sm text-info sm:flex-row sm:items-center sm:gap-3">
+    <div className="mb-5 flex flex-col gap-1 rounded-xl border border-info/20 bg-info-50 p-3.5 text-sm text-info sm:flex-row sm:items-center sm:gap-3">
       <span className="inline-flex items-center gap-2 font-semibold">
         <Users className="size-4" aria-hidden /> Acting for {farmerName}
       </span>

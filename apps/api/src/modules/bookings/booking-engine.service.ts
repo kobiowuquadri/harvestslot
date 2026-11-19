@@ -12,6 +12,8 @@ import {
   type BookingParty,
   type BookingTermsContent,
   type ConfirmationMethod,
+  type HandoverArrangement,
+  type HandoverTerms,
 } from '@harvestslot/contracts';
 import {
   audit,
@@ -23,6 +25,7 @@ import {
   lockRows,
   materialChanged,
   notify,
+  planSentence,
   recomputeReadiness,
   requestAllocation,
   requiredParties,
@@ -57,6 +60,36 @@ type OfferForTerms = Prisma.OfferGetPayload<{
 }>;
 type OfferVersionForTerms = Prisma.OfferVersionGetPayload<{ include: { slot: { include: { line: true } } } }>;
 
+/** "Adunni's farm, Akinyele" — adds the LGA unless the label already names it. */
+export function placeLabel(label: string, lga: string | null): string {
+  return lga && !label.toLowerCase().includes(lga.toLowerCase()) ? `${label}, ${lga}` : label;
+}
+
+/**
+ * Handover terms for a booking: the farm when the buyer collects, the facility when the farmer delivers.
+ * The window is the pickup window for collection and the delivery window for delivery.
+ */
+export function handoverFor(
+  arrangement: HandoverArrangement,
+  place: { farm: { label: string; lga: string; community: string | null; directions: string | null }; facility: { name: string; lga: string; address: string | null } },
+  window: { start: string; end: string },
+  farmerDeliveryCostKobo: number | null,
+): HandoverTerms {
+  return arrangement === 'COLLECT_FROM_FARM'
+    ? {
+        arrangement,
+        place: { label: placeLabel(place.farm.label, place.farm.lga), lga: place.farm.lga, detail: place.farm.directions ?? place.farm.community ?? null },
+        window,
+        farmerDeliveryCostKobo: null,
+      }
+    : {
+        arrangement,
+        place: { label: placeLabel(place.facility.name, place.facility.lga), lga: place.facility.lga, detail: place.facility.address },
+        window,
+        farmerDeliveryCostKobo,
+      };
+}
+
 /**
  * Transactional booking operations. All entry points take a transaction that already holds the
  * booking graph locks (see `lockGraph`) so state checks and writes are atomic.
@@ -83,6 +116,16 @@ export class BookingEngine {
     const qtyG = toGrams(v.quantityKg);
     const produce = produceAmountKobo(qtyG, v.priceKoboPerKg);
     const feeBps = policies.platformFeeEnabled ? policies.platformFeeBps : 0;
+    const pickupWindow = { start: v.pickupWindowStart.toISOString(), end: v.pickupWindowEnd.toISOString() };
+    const deliveryWindow = { start: v.deliveryWindowStart.toISOString(), end: v.deliveryWindowEnd.toISOString() };
+    const handover = v.handoverArrangement
+      ? handoverFor(
+          v.handoverArrangement,
+          { farm: offer.harvestRequest.farmLocation, facility: offer.facility },
+          v.handoverArrangement === 'COLLECT_FROM_FARM' ? pickupWindow : deliveryWindow,
+          v.farmerDeliveryCostKobo !== null ? koboToNumber(v.farmerDeliveryCostKobo) : null,
+        )
+      : undefined;
     const content: BookingTermsContent = {
       schemaVersion: 1,
       bookingReference: reference,
@@ -103,14 +146,15 @@ export class BookingEngine {
       estimatedProduceAmountKobo: koboToNumber(produce),
       toleranceBps: v.toleranceBps,
       qualityTerms: qualityTermsSchema.parse(v.qualityTerms),
-      pickupWindow: { start: v.pickupWindowStart.toISOString(), end: v.pickupWindowEnd.toISOString() },
-      deliveryWindow: { start: v.deliveryWindowStart.toISOString(), end: v.deliveryWindowEnd.toISOString() },
+      pickupWindow,
+      deliveryWindow,
       paymentTermsDays: v.paymentTermsDays,
       invoiceDueRule: `The produce invoice is issued for the accepted quantity when the receiving decision is final (or disputed for the undisputed part) and is due ${v.paymentTermsDays} day(s) later.`,
       cancellationTerms: v.cancellationTerms,
       rejectionHandling: v.rejectionHandling,
       freightPayer: v.freightPayer,
       transport: null,
+      ...(handover ? { handover } : {}),
       platformFee: { enabled: feeBps > 0, bps: feeBps, payer: 'PROCESSOR', estimatedKobo: koboToNumber(bpsOfKobo(produce, feeBps)) },
     };
     return bookingTermsContentSchema.parse(content);
@@ -340,7 +384,8 @@ export class BookingEngine {
     const booking = await tx.booking.findUniqueOrThrow({ where: { id: bookingId }, include: { reservation: true } });
     if (booking.status !== 'AWAITING_CONFIRMATIONS') return false;
     const { version, content } = await this.currentTerms(tx, bookingId);
-    if (!content.transport) return false;
+    // Complete terms: an agreed handover (or, for older bookings, accepted transport).
+    if (!content.transport && !content.handover) return false;
     if ((await this.pendingParties(tx, version)).length > 0) return false;
     if (await tx.bookingAmendment.findFirst({ where: { bookingId, status: 'PENDING' } })) return false;
     const r = booking.reservation;
@@ -359,7 +404,7 @@ export class BookingEngine {
       type: 'booking.confirmed',
       category: 'bookings',
       title: `${booking.reference} is confirmed`,
-      body: `Buyer, processing capacity and transport are agreed for ${formatKg(content.quantityKg)}.`,
+      body: content.handover ? planSentence(content) : `Buyer, processing capacity and transport are agreed for ${formatKg(content.quantityKg)}.`,
       link: `/bookings/${bookingId}`,
       bookingId,
       dedupeKey: `booking-confirmed:${bookingId}`,

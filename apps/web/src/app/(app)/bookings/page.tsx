@@ -35,8 +35,8 @@ export default function BookingsPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={view === 'cooperative' ? 'Member bookings' : view === 'admin' ? 'All bookings' : 'Bookings'}
-        description="A booking moves from offer accepted → everyone confirmed → harvest → delivery → receiving → payment."
+        title={view === 'cooperative' ? 'Member bookings' : view === 'admin' ? 'All bookings' : view === 'farmer' ? 'My plans' : 'Bookings'}
+        description={view === 'farmer' ? 'Each plan says who buys your cassava, how much, and when and where it should be ready — and what happens next.' : 'Agreed purchases: from the plan, to the weight you accept, to the payment the farmer confirms.'}
         actions={
           <Select aria-label="Filter by status" value={status} onChange={(e) => setStatus(e.target.value as BookingStatus | '')} className="w-56">
             <option value="">All statuses</option>
@@ -48,7 +48,7 @@ export default function BookingsPage() {
           </Select>
         }
       />
-      {q.isLoading ? <LoadingState /> : q.isError ? <ErrorState error={q.error} onRetry={() => void q.refetch()} /> : items.length === 0 ? <EmptyState title="No bookings">Bookings appear here once an offer is accepted.</EmptyState> : <BookingCards items={items} perspective={perspective} />}
+      {q.isLoading ? <LoadingState /> : q.isError ? <ErrorState error={q.error} onRetry={() => void q.refetch()} /> : items.length === 0 ? <EmptyState title="Nothing agreed yet">A plan appears here as soon as an offer is accepted.</EmptyState> : <BookingCards items={items} perspective={perspective} />}
       {q.hasNextPage ? (
         <Button variant="outline" onClick={() => void q.fetchNextPage()} loading={q.isFetchingNextPage} className="self-center">
           Load more

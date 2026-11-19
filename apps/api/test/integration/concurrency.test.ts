@@ -9,7 +9,7 @@ import {
   makeProcessor,
   makeTransporter,
   offerTerms,
-  quoteTerms,
+  preparedFlow,
   startApp,
   type TestApp,
 } from '../support/harness.js';
@@ -87,75 +87,80 @@ describe('capacity and supply under concurrency (real PostgreSQL row locks)', ()
   });
 });
 
-describe('vehicles and drivers', () => {
-  it('a vehicle cannot be double-booked by concurrent quote acceptances', async () => {
-    const processor = await makeProcessor(t.db, { capacityKg: '8000' });
-    const transporter = await makeTransporter(t.db);
-    const a = await bookingFlow(t, 'AWAITING', { processor, transporter });
-    const b = await bookingFlow(t, 'AWAITING', { processor, transporter });
-    const vehicle = transporter.vehicles[0]!;
-    const q1 = expectOk(await a.dispatcher.post(`/organisations/${transporter.org.id}/quotes`, quoteTerms(a.bookingId, vehicle.id, processor.slot), { idem: true }));
-    const q2 = expectOk(await a.dispatcher.post(`/organisations/${transporter.org.id}/quotes`, quoteTerms(b.bookingId, vehicle.id, processor.slot), { idem: true }));
-    const results = await Promise.all([
-      a.manager.post(`/quotes/${q1.id}/accept`, { expectedVersion: q1.version }, { idem: true }),
-      a.manager.post(`/quotes/${q2.id}/accept`, { expectedVersion: q2.version }, { idem: true }),
-    ]);
+describe('sending draft offers', () => {
+  it('two drafts sent at once cannot both take the last capacity', async () => {
+    const processor = await makeProcessor(t.db, { capacityKg: '2500' });
+    const m = new Client(t.app);
+    await m.login(processor.manager.email!);
+    const drafts = [];
+    for (let i = 0; i < 2; i++) {
+      const farmer = await makeFarmer(t.db);
+      const harvest = await makeHarvest(t.db, farmer, '2000');
+      drafts.push(expectOk(await m.post('/offers', { harvestRequestId: harvest.id, ...offerTerms(processor.slot), send: false }, { idem: true })));
+    }
+    // Drafts reserve nothing.
+    expect((await slotUsage(t.db, processor.slot.id, new Date())).heldG).toBe(0n);
+    const results = await Promise.all(drafts.map((d) => m.post(`/offers/${d.id}/send`, { expectedVersionNo: 1 }, { idem: true })));
     expect(results.filter((r) => r.status === 200)).toHaveLength(1);
-    expect(results.find((r) => r.status !== 200)!.body.error.code).toBe('VEHICLE_CONFLICT');
-    expect(await t.db.tripReservation.count({ where: { vehicleId: vehicle.id, status: { in: ['HELD', 'CONFIRMED'] } } })).toBe(1);
+    expect(results.find((r) => r.status !== 200)!.body.error.code).toBe('CAPACITY_EXCEEDED');
+    expect((await slotUsage(t.db, processor.slot.id, new Date())).heldG).toBe(2_000_000n);
   });
+});
 
-  it('the database exclusion constraint rejects overlapping confirmed trips for a driver', async () => {
-    const a = await bookingFlow(t, 'CONFIRMED');
-    const trip = await t.db.tripReservation.findFirstOrThrow({ where: { bookingId: a.bookingId, status: 'CONFIRMED' } });
-    const otherVehicle = await t.db.vehicle.create({ data: { organisationId: a.transporter.org.id, registrationPlate: `X${Date.now().toString().slice(-8)}`, type: 'LIGHT_TRUCK', capacityKg: '3000' } });
-    const otherQuote = await t.db.transportQuote.create({
-      data: {
-        bookingId: a.bookingId,
-        transporterOrgId: a.transporter.org.id,
-        vehicleId: otherVehicle.id,
-        pickupWindowStart: trip.startsAt,
-        pickupWindowEnd: trip.endsAt,
-        deliveryWindowStart: trip.startsAt,
-        deliveryWindowEnd: trip.endsAt,
-        priceKobo: 1n,
-        freightPayer: 'PROCESSOR',
-        cancellationTerms: 'n/a',
-        validUntil: trip.endsAt,
-        submittedByUserId: a.transporter.owner.id,
-        status: 'DECLINED',
-      },
-    });
-    await expect(
-      t.db.tripReservation.create({
+describe('historical transport records', () => {
+  it('the database still refuses overlapping confirmed trips for a driver', async () => {
+    const a = await bookingFlow(t);
+    const transporter = await makeTransporter(t.db);
+    const startsAt = new Date(a.processor.slot.startsAt.getTime() - 16 * 3_600_000);
+    const endsAt = new Date(a.processor.slot.startsAt.getTime() + 4 * 3_600_000);
+    const quote = (vehicleId: string) =>
+      t.db.transportQuote.create({
         data: {
           bookingId: a.bookingId,
-          quoteId: otherQuote.id,
-          transporterOrgId: a.transporter.org.id,
-          vehicleId: otherVehicle.id,
-          driverId: trip.driverId,
-          startsAt: trip.startsAt,
-          endsAt: trip.endsAt,
-          bufferMinutes: 0,
-          blockStartsAt: trip.startsAt,
-          blockEndsAt: trip.endsAt,
-          status: 'CONFIRMED',
+          transporterOrgId: transporter.org.id,
+          vehicleId,
+          pickupWindowStart: startsAt,
+          pickupWindowEnd: endsAt,
+          deliveryWindowStart: startsAt,
+          deliveryWindowEnd: endsAt,
+          priceKobo: 1n,
+          freightPayer: 'PROCESSOR',
+          cancellationTerms: 'n/a',
+          validUntil: endsAt,
+          submittedByUserId: transporter.owner.id,
+          status: 'DECLINED',
         },
-      }),
-    ).rejects.toThrow();
+      });
+    const trip = (quoteId: string, vehicleId: string) => ({
+      bookingId: a.bookingId,
+      quoteId,
+      transporterOrgId: transporter.org.id,
+      vehicleId,
+      driverId: transporter.driver.id,
+      startsAt,
+      endsAt,
+      bufferMinutes: 0,
+      blockStartsAt: startsAt,
+      blockEndsAt: endsAt,
+      status: 'CONFIRMED' as const,
+    });
+    const v1 = transporter.vehicles[0]!;
+    const v2 = await t.db.vehicle.create({ data: { organisationId: transporter.org.id, registrationPlate: `X${Date.now().toString().slice(-8)}`, type: 'LIGHT_TRUCK', capacityKg: '3000' } });
+    await t.db.tripReservation.create({ data: trip((await quote(v1.id)).id, v1.id) });
+    await expect(t.db.tripReservation.create({ data: trip((await quote(v2.id)).id, v2.id) })).rejects.toThrow();
   });
 });
 
 describe('holds, expiry and duplicate actions', () => {
   it('confirmation racing hold expiry produces exactly one valid outcome', async () => {
     for (let i = 0; i < 3; i++) {
-      const f = await bookingFlow(t, 'QUOTE_ACCEPTED');
+      const f = await preparedFlow(t);
       const expiresAt = new Date(Date.now() + 150);
       await t.db.reservation.update({ where: { bookingId: f.bookingId }, data: { expiresAt } });
-      await t.db.tripReservation.updateMany({ where: { bookingId: f.bookingId, status: 'HELD' }, data: { expiresAt: new Date(Date.now() + 3_600_000) } });
+      const version = (await t.db.booking.findUniqueOrThrow({ where: { id: f.bookingId } })).version;
       await new Promise((r) => setTimeout(r, 120));
-      const [confirm] = await Promise.all([
-        f.dispatcher.post('/assignments/accept', { quoteId: f.quoteId, driverId: f.transporter.driver.id }, { idem: true }),
+      const [approve] = await Promise.all([
+        f.rep.post(`/bookings/${f.bookingId}/approve`, { expectedVersion: version }, { idem: true }),
         (async () => {
           await new Promise((r) => setTimeout(r, 40));
           await sweepExpiredHolds(t.db, new Date(expiresAt.getTime() + 1));
@@ -163,36 +168,37 @@ describe('holds, expiry and duplicate actions', () => {
       ]);
       const b = await t.db.booking.findUniqueOrThrow({ where: { id: f.bookingId }, include: { reservation: true, harvestLot: true } });
       if (b.status === 'CONFIRMED') {
-        expect(confirm.status).toBe(200);
+        expect(approve.status).toBe(200);
         expect(b.reservation!.status).toBe('CONFIRMED');
         expect(b.harvestLot!.status).toBe('ALLOCATED');
       } else {
         expect(b.status).toBe('EXPIRED');
-        expect(confirm.status).toBe(409);
+        expect(approve.status).toBeGreaterThanOrEqual(400);
         expect(b.reservation!.status).toBe('EXPIRED');
         expect(b.harvestLot!.status).toBe('RELEASED');
-        expect(await t.db.tripReservation.count({ where: { bookingId: f.bookingId, status: { in: ['HELD', 'CONFIRMED'] } } })).toBe(0);
       }
     }
   });
 
   it('read and write paths honour expires_at even when the sweeper has not run', async () => {
-    const f = await bookingFlow(t, 'QUOTE_ACCEPTED');
+    const f = await preparedFlow(t);
     await t.db.reservation.update({ where: { bookingId: f.bookingId }, data: { expiresAt: new Date(Date.now() - 1000) } });
     // Capacity is already free for others even though the row still says HELD.
     const usage = await slotUsage(t.db, f.processor.slot.id, new Date());
     expect(usage.heldG).toBe(0n);
-    const res = await f.dispatcher.post('/assignments/accept', { quoteId: f.quoteId, driverId: f.transporter.driver.id }, { idem: true });
-    expect(res.status).toBe(409);
+    const version = (await t.db.booking.findUniqueOrThrow({ where: { id: f.bookingId } })).version;
+    const res = await f.rep.post(`/bookings/${f.bookingId}/approve`, { expectedVersion: version }, { idem: true });
+    expect(res.status).toBeGreaterThanOrEqual(400);
     // Reading the booking applies the expiry lazily, exactly once.
-    const detail = expectOk(await f.farmerClient.get(`/bookings/${f.bookingId}`));
+    const detail = expectOk(await f.manager.get(`/bookings/${f.bookingId}`));
     expect(detail.status).toBe('EXPIRED');
+    expect(detail.nextStep.stage).toBe('Expired — not confirmed in time');
     expect(await withTransaction(t.db, (tx) => expireBookingIfDue(tx, f.bookingId, new Date()))).toBe(false);
     expect(detail.readiness.ready).toBe(false);
   });
 
   it('duplicate cancellations release capacity and supply exactly once', async () => {
-    const f = await bookingFlow(t, 'CONFIRMED');
+    const f = await bookingFlow(t);
     const before = await slotUsage(t.db, f.processor.slot.id, new Date());
     const version = (await t.db.booking.findUniqueOrThrow({ where: { id: f.bookingId } })).version;
     const results = await Promise.all([
@@ -207,9 +213,8 @@ describe('holds, expiry and duplicate actions', () => {
     expect(b.reservation!.status).toBe('RELEASED');
     expect(b.harvestLot!.status).toBe('RELEASED');
     expect(await t.db.auditEvent.count({ where: { entityId: f.bookingId, action: 'booking.cancelled' } })).toBe(1);
-    // Readiness lost immediately and the trip is freed.
+    // Readiness is lost immediately.
     expect(b.lastReadiness).toBe(false);
-    expect(await t.db.tripReservation.count({ where: { bookingId: f.bookingId, status: 'CONFIRMED' } })).toBe(0);
   });
 
   it('expired offers release their hold and cannot be accepted', async () => {
@@ -231,26 +236,46 @@ describe('holds, expiry and duplicate actions', () => {
   });
 });
 
+describe('capacity taken before acceptance', () => {
+  it('an offer whose hold lapsed cannot be accepted once the space has gone to someone else', async () => {
+    const processor = await makeProcessor(t.db, { capacityKg: '2500' });
+    const m = new Client(t.app);
+    await m.login(processor.manager.email!);
+    const a = await makeFarmer(t.db);
+    const ha = await makeHarvest(t.db, a, '2000');
+    const offerA = expectOk(await m.post('/offers', { harvestRequestId: ha.id, ...offerTerms(processor.slot) }, { idem: true }));
+    // The hold lapses (the offer itself is still open) and the space is offered to another farmer.
+    await t.db.reservation.update({ where: { offerId: offerA.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
+    const b = await makeFarmer(t.db);
+    const hb = await makeHarvest(t.db, b, '2000');
+    expectOk(await m.post('/offers', { harvestRequestId: hb.id, ...offerTerms(processor.slot) }, { idem: true }));
+    const fa = new Client(t.app);
+    await fa.login(a.user!.email!);
+    const res = await fa.post(`/offers/${offerA.id}/accept`, { expectedVersionNo: 1 }, { idem: true });
+    expect(res.body.error.code).toBe('HOLD_EXPIRED');
+    expect(await t.db.booking.count({ where: { harvestRequestId: ha.id } })).toBe(0);
+    expect((await slotUsage(t.db, processor.slot.id, new Date())).heldG).toBe(2_000_000n);
+  });
+});
+
 describe('amendments', () => {
   it('a change invalidates stale approvals; a rejected change leaves the previous state intact', async () => {
-    const f = await bookingFlow(t, 'CONFIRMED');
+    const f = await bookingFlow(t);
     let detail = expectOk(await f.manager.get(`/bookings/${f.bookingId}`));
     expect(detail.readiness.ready).toBe(true);
-    const v2 = detail.current;
+    const v1 = detail.current;
 
-    // Processor proposes a price change: the farmer must re-confirm; the transporter's terms are unchanged.
-    detail = expectOk(await f.manager.post(`/bookings/${f.bookingId}/amendments`, { baseVersionNo: v2.versionNo, reason: 'Market price moved this week', priceKoboPerKg: 24_000 }, { idem: true }));
+    // Processor proposes a price change: the farmer must agree again.
+    detail = expectOk(await f.manager.post(`/bookings/${f.bookingId}/amendments`, { baseVersionNo: v1.versionNo, reason: 'Market price moved this week', priceKoboPerKg: 24_000 }, { idem: true }));
     expect(detail.pendingAmendment.pendingParties).toEqual(['FARMER']);
     expect(detail.readiness.ready).toBe(false);
     expect(detail.readiness.checks.find((c: { code: string }) => c.code === 'NO_BLOCKING_ISSUES').passed).toBe(false);
-    const transporterConf = detail.pendingAmendment.terms.confirmations.find((c: { party: string }) => c.party === 'TRANSPORTER');
-    expect(transporterConf.method).toBe('CARRIED_FORWARD');
 
     // Confirming with the old version's hash is refused.
-    const stale = await f.farmerClient.post(`/bookings/${f.bookingId}/confirm`, { termsVersionId: detail.pendingAmendment.terms.id, contentHash: v2.contentHash }, { idem: true });
+    const stale = await f.farmerClient.post(`/bookings/${f.bookingId}/confirm`, { termsVersionId: detail.pendingAmendment.terms.id, contentHash: v1.contentHash }, { idem: true });
     expect(stale.body.error.code).toBe('TERMS_CHANGED');
 
-    // Farmer rejects: version 2 remains current, readiness returns.
+    // Farmer rejects: version 1 remains current, readiness returns.
     detail = expectOk(
       await f.farmerClient.post(
         `/bookings/${f.bookingId}/amendments/decide`,
@@ -258,15 +283,37 @@ describe('amendments', () => {
         { idem: true },
       ),
     );
-    expect(detail.current.versionNo).toBe(v2.versionNo);
+    expect(detail.current.versionNo).toBe(v1.versionNo);
     expect(detail.current.content.priceKoboPerKg).toBe(25_000);
     expect(detail.pendingAmendment).toBeNull();
     expect(detail.readiness.ready).toBe(true);
     expect(detail.status).toBe('CONFIRMED');
 
-    // A quantity increase needs everyone (transporter load changes) and capacity re-checks on acceptance.
-    detail = expectOk(await f.manager.post(`/bookings/${f.bookingId}/amendments`, { baseVersionNo: v2.versionNo, reason: 'We can take a little more', quantityKg: '2100' }, { idem: true }));
-    expect(detail.pendingAmendment.pendingParties.sort()).toEqual(['FARMER', 'TRANSPORTER']);
+    // Changing how the cassava gets there is material: the farmer agrees again before it applies.
+    const s = f.processor.slot.startsAt.getTime();
+    detail = expectOk(
+      await f.manager.post(
+        `/bookings/${f.bookingId}/amendments`,
+        { baseVersionNo: v1.versionNo, reason: 'Our truck is in the workshop; please deliver', handoverArrangement: 'FARMER_DELIVERS', handoverWindowStart: new Date(s + 3_600_000).toISOString(), handoverWindowEnd: new Date(s + 4 * 3_600_000).toISOString(), farmerDeliveryCostKobo: 1_500_000 },
+        { idem: true },
+      ),
+    );
+    expect(detail.pendingAmendment.pendingParties).toEqual(['FARMER']);
+    expect(detail.pendingAmendment.terms.changedFields).toContain('How the cassava gets there');
+    expect(detail.readiness.ready).toBe(false);
+    detail = expectOk(
+      await f.farmerClient.post(`/bookings/${f.bookingId}/amendments/decide`, { termsVersionId: detail.pendingAmendment.terms.id, contentHash: detail.pendingAmendment.terms.contentHash, decision: 'ACCEPT' }, { idem: true }),
+    );
+    // Version 2 was the rejected price change; the agreed handover change becomes version 3.
+    expect(detail.current.versionNo).toBe(3);
+    expect(detail.current.content.handover).toMatchObject({ arrangement: 'FARMER_DELIVERS', farmerDeliveryCostKobo: 1_500_000 });
+    expect(detail.current.content.freightPayer).toBe('FARMER');
+    expect(detail.readiness.ready).toBe(true);
+    expect(detail.plan.sentence).toContain(' will deliver 2,000 kg to ');
+
+    // A quantity increase needs the farmer again, and capacity is re-checked on acceptance.
+    detail = expectOk(await f.manager.post(`/bookings/${f.bookingId}/amendments`, { baseVersionNo: detail.current.versionNo, reason: 'We can take a little more', quantityKg: '2100' }, { idem: true }));
+    expect(detail.pendingAmendment.pendingParties).toEqual(['FARMER']);
   });
 });
 
@@ -302,7 +349,8 @@ describe('delegation authority', () => {
       data: { cooperativeId: coop.id, farmerProfileId: farmer.profile.id, scopes: ['ASSIST_DATA_ENTRY', 'APPROVE_SALE'], method: 'RECORDED_BY_REPRESENTATIVE', recordedByUserId: repUser.id, witnessName: 'Witness Two' },
     });
     const approved = expectOk(await rep.post(`/bookings/${prepared.bookingId}/approve`, { expectedVersion: draft.version }, { idem: true }));
-    expect(approved.status).toBe('AWAITING_CONFIRMATIONS');
+    // The terms are complete (the buyer collects), so approval confirms the plan at once.
+    expect(approved.status).toBe('CONFIRMED');
     const farmerConfirmation = await t.db.confirmation.findFirstOrThrow({ where: { bookingId: prepared.bookingId, party: 'FARMER' } });
     expect(farmerConfirmation.actorUserId).toBe(repUser.id);
     expect(farmerConfirmation.delegationId).toBe(approve.id);

@@ -56,7 +56,7 @@ function Reply({ d }: { d: DisputeDto }) {
         <Input value={proposal} onChange={(e) => setProposal(e.target.value)} />
       </Field>
       <div className="flex flex-wrap items-center gap-2">
-        <label className="inline-flex cursor-pointer items-center rounded-lg border border-line-strong px-3 py-2 text-sm font-medium hover:bg-leaf-50">
+        <label className="inline-flex cursor-pointer items-center rounded-lg border border-line-strong px-3 py-2 text-sm font-medium hover:bg-canvas">
           {uploading ? 'Uploading…' : 'Attach evidence'}
           <input
             type="file"

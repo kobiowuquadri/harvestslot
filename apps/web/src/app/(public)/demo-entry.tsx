@@ -7,14 +7,10 @@ import type { DemoPersona } from '@harvestslot/contracts';
 import { post } from '@/lib/api';
 import { useSession } from '@/lib/session';
 
+/** The main demo: someone selling cassava, someone buying it, and the administrator who reviews businesses. */
 export const PERSONAS: Array<{ persona: DemoPersona; label: string; home: string }> = [
-  { persona: 'farmer', label: 'Farmer (Adunni)', home: '/app' },
-  { persona: 'processor-manager', label: 'Processor manager', home: '/app' },
-  { persona: 'receiving-officer', label: 'Receiving officer', home: '/processor/receiving' },
-  { persona: 'finance-officer', label: 'Finance officer', home: '/processor/invoices' },
-  { persona: 'transporter', label: 'Transport dispatcher', home: '/transport/opportunities' },
-  { persona: 'driver', label: 'Driver (Tunde)', home: '/transport/jobs' },
-  { persona: 'cooperative', label: 'Cooperative representative', home: '/coop/members' },
+  { persona: 'farmer', label: 'Farmer — selling (Adunni)', home: '/app' },
+  { persona: 'processor-manager', label: 'Buyer — processor (Bola)', home: '/app' },
   { persona: 'admin', label: 'Administrator', home: '/admin' },
 ];
 
@@ -42,16 +38,16 @@ export function DemoEntry({ compact = false }: { compact?: boolean }) {
     }
   };
   return (
-    <div className={compact ? '' : 'mt-8 rounded-xl border border-white/30 bg-white/10 p-4'}>
-      <p className={`text-sm font-semibold ${compact ? 'text-amber-ink' : 'text-white'}`}>Demonstration environment — sign in as a fictional user:</p>
-      <div className="mt-2 flex flex-wrap gap-2">
+    <div className={`rounded-2xl border border-dashed border-amber-ink/25 bg-amber-50 p-4 text-left ${compact ? '' : 'mx-4 mb-12 sm:mx-auto sm:max-w-md'}`}>
+      <p className="text-[13px] font-semibold text-amber-ink">Demonstration environment — sign in as a fictional user</p>
+      <div className="mt-3 flex flex-wrap gap-2">
         {PERSONAS.map((p) => (
           <button
             key={p.persona}
             type="button"
             onClick={() => void enter(p)}
             disabled={busy !== null}
-            className={`rounded-lg px-3 py-2 text-sm font-medium ${compact ? 'border border-amber-ink/30 bg-amber-50 text-amber-ink hover:bg-amber-100' : 'bg-white text-forest hover:bg-leaf-50'} disabled:opacity-60`}
+            className="rounded-full border border-amber-ink/20 bg-surface px-3 py-1.5 text-[13px] font-medium text-ink transition-colors hover:border-amber-ink/45 disabled:opacity-60"
           >
             {busy === p.persona ? 'Signing in…' : p.label}
           </button>

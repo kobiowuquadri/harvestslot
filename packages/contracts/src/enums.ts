@@ -39,7 +39,9 @@ export const LineStatusE = e(['ACTIVE', 'INACTIVE']);
 export const SlotStatusE = e(['DRAFT', 'PUBLISHED', 'CLOSED', 'CANCELLED']);
 export const HarvestRequestStatusE = e(['DRAFT', 'PUBLISHED', 'CLOSED', 'WITHDRAWN']);
 export const TransportPreferenceE = e(['PROCESSOR_PAYS', 'FARMER_MAY_PAY']);
-export const OfferStatusE = e(['OPEN', 'COUNTERED', 'ACCEPTED', 'DECLINED', 'WITHDRAWN', 'EXPIRED', 'LAPSED']);
+export const OfferStatusE = e(['DRAFT', 'OPEN', 'COUNTERED', 'ACCEPTED', 'DECLINED', 'WITHDRAWN', 'EXPIRED', 'LAPSED']);
+/** How the cassava changes hands: the buyer collects at the farm, or the farmer delivers to the facility. */
+export const HandoverArrangementE = e(['COLLECT_FROM_FARM', 'FARMER_DELIVERS']);
 export const ProposerPartyE = e(['PROCESSOR', 'FARMER']);
 export const FreightPayerE = e(['PROCESSOR', 'FARMER']);
 export const RejectionHandlingE = e(['RETURNED_AT_PROCESSOR_COST', 'FARMER_COLLECTS', 'AGREED_DISPOSAL']);
@@ -184,6 +186,7 @@ export type SlotStatus = (typeof SlotStatusE.values)[number];
 export type HarvestRequestStatus = (typeof HarvestRequestStatusE.values)[number];
 export type TransportPreference = (typeof TransportPreferenceE.values)[number];
 export type OfferStatus = (typeof OfferStatusE.values)[number];
+export type HandoverArrangement = (typeof HandoverArrangementE.values)[number];
 export type ProposerParty = (typeof ProposerPartyE.values)[number];
 export type FreightPayer = (typeof FreightPayerE.values)[number];
 export type RejectionHandling = (typeof RejectionHandlingE.values)[number];
@@ -240,6 +243,7 @@ export const ALL_ENUMS = {
   HarvestRequestStatus: HarvestRequestStatusE.values,
   TransportPreference: TransportPreferenceE.values,
   OfferStatus: OfferStatusE.values,
+  HandoverArrangement: HandoverArrangementE.values,
   ProposerParty: ProposerPartyE.values,
   FreightPayer: FreightPayerE.values,
   RejectionHandling: RejectionHandlingE.values,

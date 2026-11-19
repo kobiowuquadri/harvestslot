@@ -18,8 +18,8 @@ import { DateOnly, Kg, Money, Price, When, Window } from './display';
 export function ReadinessChecklist({ readiness }: { readiness: Readiness }) {
   return (
     <section id="readiness" aria-labelledby="readiness-heading" className="flex scroll-mt-20 flex-col gap-3">
-      <div className="flex items-center justify-between gap-2">
-        <h2 id="readiness-heading" className="text-base font-semibold text-forest">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <h2 id="readiness-heading" className="whitespace-nowrap text-base font-semibold text-ink">
           Ready to harvest?
         </h2>
         {readiness.ready ? (

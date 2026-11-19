@@ -3,6 +3,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 import {
   adjustCapacitySchema,
+  buyingSlotSchema,
   closeSlotSchema,
   createSlotSchema,
   createSlotSeriesSchema,
@@ -67,6 +68,13 @@ export class FacilitiesController {
   @ApiOk(z.array(slotSchema))
   slots(@CurrentActor() actor: Actor, @Param('orgId', uuid()) orgId: string, @ZodQuery(slotsQuerySchema) q: z.infer<typeof slotsQuerySchema>) {
     return this.facilities.listSlots(actor, orgId, q);
+  }
+
+  /** One form: where, which dates, how much. Creates the place on first use. */
+  @Post('organisations/:orgId/buying-slots')
+  @ApiOk(slotSchema)
+  createBuyingSlot(@CurrentActor() actor: Actor, @Param('orgId', uuid()) orgId: string, @ZodBody(buyingSlotSchema) body: z.infer<typeof buyingSlotSchema>) {
+    return this.facilities.createBuyingSlot(actor, orgId, body);
   }
 
   @Post('slots')

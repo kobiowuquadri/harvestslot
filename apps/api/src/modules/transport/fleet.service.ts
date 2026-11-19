@@ -216,6 +216,8 @@ export class FleetService {
     for (const b of bookings) {
       const c = b.termsVersions.find((v) => v.versionNo === b.currentTermsVersionNo)!.content as unknown as BookingTermsContent;
       if (new Date(c.pickupWindow.end) <= now) continue;
+      // The buyer collects or the farmer delivers: these bookings need no transporter.
+      if (c.handover) continue;
       const l = b.harvestRequest.farmLocation;
       const approx = l.approxLat !== null && l.approxLng !== null ? { lat: Number(l.approxLat), lng: Number(l.approxLng) } : null;
       const q = b.quotes[0];

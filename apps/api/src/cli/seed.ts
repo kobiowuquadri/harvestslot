@@ -22,8 +22,6 @@ import { FacilitiesService } from '../modules/facilities/facilities.service.js';
 import { HarvestsService } from '../modules/harvests/harvests.service.js';
 import { OffersService } from '../modules/offers/offers.service.js';
 import { BookingsService } from '../modules/bookings/bookings.service.js';
-import { QuotesService } from '../modules/transport/quotes.service.js';
-import { ShipmentsService } from '../modules/transport/shipments.service.js';
 import { ReceivingService } from '../modules/receiving/receiving.service.js';
 import { FinanceService } from '../modules/finance/finance.service.js';
 import { DisputesService } from '../modules/disputes/disputes.service.js';
@@ -76,8 +74,6 @@ async function main() {
   const harvests = app.get(HarvestsService);
   const offers = app.get(OffersService);
   const bookings = app.get(BookingsService);
-  const quotes = app.get(QuotesService);
-  const shipments = app.get(ShipmentsService);
   const receiving = app.get(ReceivingService);
   const finance = app.get(FinanceService);
   const disputes = app.get(DisputesService);
@@ -148,45 +144,7 @@ async function main() {
   await person('p4owner', 'owner@ogbomoso-agro.demo.harvestslot.example', 'Tayo Demo-Agro');
   await member('p4owner', p4.id, ['OWNER']);
 
-  // Transporters
-  const t1 = await org('TRANSPORTER', 'Oke-Ogun Haulage (Demo)', 'Iseyin');
-  await person('dispatcher', DEMO_PERSONAS.transporter, 'Musa Demo-Dispatch');
-  await member('dispatcher', t1.id, ['OWNER', 'DISPATCHER']);
-  const t2 = await org('TRANSPORTER', 'Lagelu Logistics (Demo)', 'Lagelu');
-  await person('t2owner', 'owner@lagelu-logistics.demo.harvestslot.example', 'Chidi Demo-Haulier', { phone: fakePhone(21) });
-  await member('t2owner', t2.id, ['OWNER', 'DISPATCHER', 'DRIVER']);
-  const driverDefs: Array<[string, string, string, string, number]> = [
-    ['tunde', DEMO_PERSONAS.driver, 'Tunde Demo-Driver', t1.id, 11],
-    ['kunle', 'driver.kunle@demo.harvestslot.example', 'Kunle Demo-Driver', t1.id, 12],
-    ['sade', 'driver.sade@demo.harvestslot.example', 'Sade Demo-Driver', t1.id, 13],
-  ];
-  const drivers: Record<string, string> = {};
-  for (const [key, email, name, orgId, n] of driverDefs) {
-    await person(key, email, name, { phone: fakePhone(n) });
-    await member(key, orgId, ['DRIVER']);
-    drivers[key] = (await prisma.driver.create({ data: { organisationId: orgId, userId: people[key]!.id, displayName: name, phone: fakePhone(n), licenceNumber: `DEMO-LIC-${n}` } })).id;
-  }
-  drivers.chidi = (await prisma.driver.create({ data: { organisationId: t2.id, userId: people.t2owner!.id, displayName: 'Chidi Demo-Haulier', phone: fakePhone(21) } })).id;
-  const vehicles: Record<string, string> = {};
-  const vdefs: Array<[string, string, string, string, string]> = [
-    ['v1', t1.id, 'OYO-101-DM', 'MEDIUM_TRUCK', '5000'],
-    ['v2', t1.id, 'OYO-102-DM', 'MEDIUM_TRUCK', '5000'],
-    ['v3', t1.id, 'OYO-103-DM', 'LIGHT_TRUCK', '3000'],
-    ['v4', t1.id, 'OYO-104-DM', 'HEAVY_TRUCK', '10000'],
-    ['v5', t2.id, 'OYO-201-DM', 'LIGHT_TRUCK', '3500'],
-    ['v6', t2.id, 'OYO-202-DM', 'MEDIUM_TRUCK', '6000'],
-  ];
-  for (const [key, orgId, plate, type, cap] of vdefs) {
-    const v = await prisma.vehicle.create({ data: { organisationId: orgId, registrationPlate: plate, type: type as never, capacityKg: cap, description: 'Demo vehicle', isDemo: true } });
-    vehicles[key] = v.id;
-    await prisma.transportAvailability.create({ data: { organisationId: orgId, vehicleId: v.id, startsAt: new Date(setupTime.getTime() - DAY), endsAt: new Date(realNow().getTime() + 30 * DAY), note: 'Available for demo jobs', createdByUserId: orgId === t1.id ? people.dispatcher!.id : people.t2owner!.id } });
-  }
-  for (const lga of ['Akinyele', 'Iseyin', 'Oluyole', 'Ido', 'Lagelu', 'Afijio', 'Saki West', 'Ogbomosho North', 'Oyo West']) {
-    await prisma.transportServiceArea.create({ data: { organisationId: t1.id, lga } });
-  }
-  for (const lga of ['Akinyele', 'Lagelu', 'Egbeda', 'Ona Ara', 'Ibadan North', 'Oluyole', 'Ido']) {
-    await prisma.transportServiceArea.create({ data: { organisationId: t2.id, lga } });
-  }
+  // No transport organisations: in the simplified journey the buyer collects or the farmer delivers.
 
   // Cooperatives
   const c1 = await org('COOPERATIVE', 'Akinyele Cassava Growers Cooperative (Demo)', 'Akinyele');
@@ -321,9 +279,6 @@ async function main() {
   const processorActor: Record<string, string> = { [p1.id]: 'manager', [p2.id]: 'p2owner', [p3.id]: 'p3owner' };
   const receivingActor: Record<string, string> = { [p1.id]: 'receiving', [p2.id]: 'p2owner', [p3.id]: 'p3owner' };
   const financeActor: Record<string, string> = { [p1.id]: 'finance', [p2.id]: 'p2owner', [p3.id]: 'p3owner' };
-  const transporterActor: Record<string, string> = { [t1.id]: 'dispatcher', [t2.id]: 't2owner' };
-  const driverUser: Record<string, string> = { tunde: 'tunde', kunle: 'kunle', sade: 'sade', chidi: 't2owner' };
-  const vehicleOrg: Record<string, string> = { v1: t1.id, v2: t1.id, v3: t1.id, v4: t1.id, v5: t2.id, v6: t2.id };
 
   const harvestFor = async (farmerKey: string, qty: string, earliest: number, latest: number, createdAt: Date, actorKey?: string, publish = true) => {
     at(createdAt);
@@ -343,6 +298,30 @@ async function main() {
     });
   };
 
+  type Handover = 'COLLECT_FROM_FARM' | 'FARMER_DELIVERS';
+  /** An offer on `slotKey`'s day: the cassava changes hands 09:00–13:00 (collection) or 10:00–14:00 (delivery). */
+  const offerFor = async (harvestId: string, slotKey: string, orgId: string, qty: string, price: number, opts: { handover?: Handover; deliveryCost?: number; send?: boolean; validForHours?: number; note?: string; paymentTermsDays?: number } = {}) => {
+    const slot = await slotInfo(slotKey);
+    const S = slot.startsAt.getTime();
+    const handover = opts.handover ?? 'COLLECT_FROM_FARM';
+    const startH = handover === 'COLLECT_FROM_FARM' ? 1 : 2;
+    return offers.create(people[processorActor[orgId]!]!.actor, {
+      harvestRequestId: harvestId,
+      slotId: slot.id,
+      quantityKg: qty,
+      priceKoboPerKg: price,
+      plannedHarvestDate: lagosDateString(new Date(S)),
+      handoverWindowStart: new Date(S + startH * HOUR).toISOString(),
+      handoverWindowEnd: new Date(S + (startH + 4) * HOUR).toISOString(),
+      ...(opts.send === false ? {} : { handoverArrangement: handover }),
+      ...(handover === 'FARMER_DELIVERS' && opts.deliveryCost ? { farmerDeliveryCostKobo: opts.deliveryCost } : {}),
+      ...(opts.paymentTermsDays !== undefined ? { paymentTermsDays: opts.paymentTermsDays } : {}),
+      note: opts.note,
+      send: opts.send ?? true,
+      validForHours: opts.validForHours ?? 48,
+    });
+  };
+
   interface Scenario {
     farmer: string;
     farmerActor?: string; // coop rep acting
@@ -351,111 +330,40 @@ async function main() {
     qty: string;
     price: number;
     times: { offer: Date; accept: Date };
+    handover?: Handover;
+    deliveryCost?: number;
     validForHours?: number;
   }
   const createAndAccept = async (s: Scenario, mode: 'ACCEPT' | 'PREPARE' = 'ACCEPT') => {
     const slot = await slotInfo(s.slot);
     const S = slot.startsAt.getTime();
-    const h = await harvestFor(s.farmer, s.qty, Math.floor((S - realNow().getTime()) / DAY) - 2, Math.floor((S - realNow().getTime()) / DAY) + 2, new Date(s.times.offer.getTime() - 6 * HOUR), s.farmerActor);
-    at(s.times.offer);
+    const days = Math.floor((S - realNow().getTime()) / DAY);
+    const h = await harvestFor(s.farmer, s.qty, days - 2, days + 2, new Date(s.times.offer.getTime() - 6 * HOUR), s.farmerActor);
+    // The farmer asked this buyer for an offer.
     const facility = await prisma.facility.findFirstOrThrow({ where: { organisationId: s.processorOrg } });
-    const o = await offers.create(people[processorActor[s.processorOrg]!]!.actor, {
-      harvestRequestId: h.id,
-      slotId: slot.id,
-      quantityKg: s.qty,
-      priceKoboPerKg: s.price,
-      plannedHarvestDate: lagosDateString(new Date(S - 20 * HOUR)),
-      pickupWindowStart: new Date(S - 16 * HOUR).toISOString(),
-      pickupWindowEnd: new Date(S - 12 * HOUR).toISOString(),
-      deliveryWindowStart: new Date(S).toISOString(),
-      deliveryWindowEnd: new Date(S + 4 * HOUR).toISOString(),
-      qualityTerms: qualityTermsSchema.parse(facility.qualityCriteria),
-      toleranceBps: 500,
-      paymentTermsDays: 7,
-      freightPayer: 'PROCESSOR',
-      rejectionHandling: 'RETURNED_AT_PROCESSOR_COST',
-      cancellationTerms: facility.cancellationTerms,
-      validForHours: s.validForHours ?? 48,
-    });
+    at(new Date(s.times.offer.getTime() - 3 * HOUR));
+    await harvests.invite(s.farmerActor ? people[s.farmerActor]!.actor : farmers[s.farmer]!.actor!, h.id, facility.id);
+    at(s.times.offer);
+    const o = await offerFor(h.id, s.slot, s.processorOrg, s.qty, s.price, { handover: s.handover, deliveryCost: s.deliveryCost, validForHours: s.validForHours });
     at(s.times.accept);
     const farmerSide = s.farmerActor ? people[s.farmerActor]!.actor : farmers[s.farmer]!.actor!;
-    const res = await offers.accept(farmerSide, o.id, { expectedVersionNo: 1 }, mode);
+    const res = await offers.accept(farmerSide, o.id, { expectedVersionNo: o.currentVersionNo }, mode);
     return { bookingId: res.bookingId, S, harvestId: h.id, offerId: o.id };
   };
-  const arrangeTransport = async (bookingId: string, S: number, vehicle: string, driver: string, price: number, t: { quote: Date; accept?: Date; assign?: Date }) => {
-    const orgId = vehicleOrg[vehicle]!;
-    at(t.quote);
-    const q = await quotes.submit(people[transporterActor[orgId]!]!.actor, orgId, {
-      bookingId,
-      vehicleId: vehicles[vehicle]!,
-      pickupWindowStart: new Date(S - 15 * HOUR).toISOString(),
-      pickupWindowEnd: new Date(S - 13 * HOUR).toISOString(),
-      deliveryWindowStart: new Date(S).toISOString(),
-      deliveryWindowEnd: new Date(S + 3 * HOUR).toISOString(),
-      priceKobo: price,
-      includedServices: ['LOADING', 'OFFLOADING', 'TARPAULIN_COVER'],
-      cancellationTerms: 'Free cancellation up to 12 hours before pickup; later cancellations are handled as incidents.',
-      validForHours: 48,
-    });
-    if (!t.accept) return q.id;
-    at(t.accept);
-    const b = await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } });
-    await quotes.accept(people[processorActor[b.processorOrgId]!]!.actor, q.id, { expectedVersion: q.version });
-    if (!t.assign) return q.id;
-    at(t.assign);
-    await quotes.acceptAssignment(people[transporterActor[orgId]!]!.actor, { quoteId: q.id, driverId: drivers[driver]! });
-    return q.id;
-  };
-  const farmerSideActor = (farmerKey: string, actorKey?: string) => (actorKey ? people[actorKey]!.actor : farmers[farmerKey]!.actor!);
-  const runToPickup = async (bookingId: string, S: number, farmerKey: string, driver: string, opts: { actorKey?: string; until: 'HARVEST' | 'EN_ROUTE' | 'DELIVERED' } ) => {
-    const fa = farmerSideActor(farmerKey, opts.actorKey);
-    at(new Date(S - 20 * HOUR));
-    const b = await bookings.detail(fa, bookingId);
-    await bookings.startHarvest(fa, bookingId, b.version);
-    at(new Date(S - 17 * HOUR));
-    await bookings.readyForPickup(fa, bookingId, { reportedHarvestedKg: b.current.content.quantityKg });
-    if (opts.until === 'HARVEST') return null;
-    const driverActor = people[driverUser[driver]!]!.actor;
-    const shipment = await prisma.shipment.findFirstOrThrow({ where: { bookingId, status: { not: 'CANCELLED' } } });
-    at(new Date(S - 16 * HOUR));
-    let job = await shipments.milestone(driverActor, shipment.id, 'depart', { expectedVersion: shipment.version });
-    if (opts.until === 'EN_ROUTE') return job;
-    at(new Date(S - 15 * HOUR));
-    job = await shipments.milestone(driverActor, shipment.id, 'arrivePickup', { expectedVersion: job.version, gps: { point: { lat: 7.5, lng: 3.9 }, accuracyM: 25, source: 'DEVICE_GPS' } });
-    at(new Date(S - 14.5 * HOUR));
-    await shipments.recordCollection(driverActor, shipment.id, { expectedVersion: job.version, quantityKg: b.current.content.quantityKg, evidenceAttachmentIds: [], note: 'Loaded in 40 bags (demo)' });
-    at(new Date(S - 14.4 * HOUR));
-    await shipments.confirmPickup(fa, shipment.id, { agree: true });
-    const s2 = await prisma.shipment.findUniqueOrThrow({ where: { id: shipment.id } });
-    at(new Date(S - 14.3 * HOUR));
-    job = await shipments.milestone(driverActor, shipment.id, 'leavePickup', { expectedVersion: s2.version });
-    at(new Date(S + 0.5 * HOUR));
-    job = await shipments.milestone(driverActor, shipment.id, 'arriveFacility', { expectedVersion: job.version });
+  /** The buyer records what arrived and what they accept, from the booking (one step). */
+  const receive = async (bookingId: string, S: number, receivedKg: string, acceptedKg: string, opts: { reasons?: string[]; note?: string } = {}) => {
     const bk = await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } });
-    at(new Date(S + 0.6 * HOUR));
-    await shipments.confirmDelivery(people[receivingActor[bk.processorOrgId]!]!.actor, shipment.id);
-    return job;
-  };
-  const receive = async (bookingId: string, S: number, gross: string, tare: string, accepted: string, rejected: string, opts: { reasons?: string[]; note?: string } = {}) => {
-    const bk = await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } });
-    const actor = people[receivingActor[bk.processorOrgId]!]!.actor;
-    at(new Date(S + 1 * HOUR));
-    await receiving.recordWeighing(actor, bookingId, { grossKg: gross, tareKg: tare, weighingMethod: 'WEIGHBRIDGE', scaleReference: `WB-DEMO-${Math.floor(1000 + Math.random() * 8999)}` });
-    await receiving.addEvidence(actor, bookingId, { kind: 'WEIGHBRIDGE_TICKET', reference: 'Ticket recorded on paper (demo; no photo attached)' });
-    const rec = (await receiving.get(actor, bookingId))!;
-    at(new Date(S + 1.5 * HOUR));
-    return receiving.submitDecision(actor, bookingId, {
-      expectedVersion: rec.version,
-      acceptedKg: accepted,
-      rejectedKg: rejected,
+    at(new Date(S + 6 * HOUR));
+    return receiving.recordAcceptedWeight(people[receivingActor[bk.processorOrgId]!]!.actor, bookingId, {
+      expectedVersion: bk.version,
+      receivedKg,
+      acceptedKg,
+      weighingMethod: 'WEIGHBRIDGE',
       rejectionReasons: (opts.reasons ?? []) as never,
-      rejectionNote: opts.note,
-      rejectedDisposition: Number(rejected) > 0 ? 'RETURNED_TO_FARMER' : 'NONE',
-      criteriaResults: { soilAndStemsRemoved: true, visibleRotPercent: Number(rejected) > 0 ? 6 : 2 },
-      hoursSinceHarvest: 20,
+      note: opts.note,
     });
   };
-  const pay = async (bookingId: string, kind: 'PRODUCE' | 'FREIGHT' | 'PLATFORM_FEE', amountKobo: number | 'ALL', when: Date, confirmAt: Date | null, ref: string) => {
+  const pay = async (bookingId: string, kind: 'PRODUCE' | 'PLATFORM_FEE', amountKobo: number | 'ALL', when: Date, confirmAt: Date | null, ref: string) => {
     const inv = await prisma.invoice.findUniqueOrThrow({ where: { bookingId_kind: { bookingId, kind } } });
     const payerActor = people[financeActor[inv.payerOrgId!]!]!.actor;
     at(when);
@@ -468,46 +376,38 @@ async function main() {
     if (inv.payeeType === 'FARMER') {
       const profile = await prisma.farmerProfile.findUniqueOrThrow({ where: { id: inv.payeeFarmerId! } });
       confirmer = profile.userId ? people[Object.keys(people).find((k) => people[k]!.id === profile.userId)!]!.actor : people.rep!.actor;
-    } else if (inv.payeeType === 'PLATFORM') {
-      confirmer = people.admin!.actor;
     } else {
-      confirmer = people[transporterActor[inv.payeeOrgId!]!]!.actor;
+      confirmer = people.admin!.actor;
     }
     await finance.receipt(confirmer, attempt.id, { decision: 'CONFIRMED', note: 'Received (demo)' });
   };
 
   // ── Historical scenarios ──────────────────────────────────────────
-  // H1: Adunni — completed 9 days ago; produce invoice partially paid, one payment awaiting her confirmation.
+  // H1: Adunni — collected 9 days ago; 1,950 kg accepted; one transfer confirmed, a second awaiting her confirmation.
   {
     const S = slotStart(-9).getTime();
     const { bookingId } = await createAndAccept({ farmer: 'adunni', slot: 'p1a:-9', processorOrg: p1.id, qty: '2000', price: 24_000, times: { offer: new Date(S - 4 * DAY), accept: new Date(S - 3.8 * DAY) } });
-    await arrangeTransport(bookingId, S, 'v1', 'tunde', 3_500_000, { quote: new Date(S - 3.5 * DAY), accept: new Date(S - 3.4 * DAY), assign: new Date(S - 3.3 * DAY) });
-    await runToPickup(bookingId, S, 'adunni', 'tunde', { until: 'DELIVERED' });
-    await receive(bookingId, S, '2050', '100', '1950', '0');
+    await receive(bookingId, S, '1950', '1950');
     await pay(bookingId, 'PRODUCE', 30_000_000, new Date(S + 2 * DAY), new Date(S + 3 * DAY), 'GTB-TRF-88120');
     await pay(bookingId, 'PRODUCE', 10_000_000, ago(30), null, 'GTB-TRF-90231');
-    await pay(bookingId, 'FREIGHT', 'ALL', new Date(S + 2 * DAY), new Date(S + 2.5 * DAY), 'ACC-FRT-1102');
     await pay(bookingId, 'PLATFORM_FEE', 'ALL', new Date(S + 4 * DAY), new Date(S + 4.5 * DAY), 'HS-FEE-TRF-001');
     at(new Date(S + 1 * DAY));
     await bookings.postMessage(people.manager!.actor, bookingId, { body: 'Thank you — good quality roots. First transfer is on its way.' });
   }
-  // H2: Bisi — completed 8 days ago, fully paid, processed.
+  // H2: Bisi — delivered to the mill 8 days ago; 20 kg not accepted, which she agreed; fully paid and processed.
   {
     const S = slotStart(-8).getTime();
-    const { bookingId } = await createAndAccept({ farmer: 'f7', slot: 'p2:-8', processorOrg: p2.id, qty: '1500', price: 25_500, times: { offer: new Date(S - 3 * DAY), accept: new Date(S - 2.9 * DAY) } });
-    await arrangeTransport(bookingId, S, 'v5', 'chidi', 2_400_000, { quote: new Date(S - 2.5 * DAY), accept: new Date(S - 2.4 * DAY), assign: new Date(S - 2.3 * DAY) });
-    await runToPickup(bookingId, S, 'f7', 'chidi', { until: 'DELIVERED' });
-    await receive(bookingId, S, '1500', '0', '1480', '20', { reasons: ['EXCESS_SOIL_OR_STEMS'], note: 'One bag mostly stems' });
+    const { bookingId } = await createAndAccept({ farmer: 'f7', slot: 'p2:-8', processorOrg: p2.id, qty: '1500', price: 25_500, handover: 'FARMER_DELIVERS', deliveryCost: 1_500_000, times: { offer: new Date(S - 3 * DAY), accept: new Date(S - 2.9 * DAY) } });
+    await receive(bookingId, S, '1500', '1480', { reasons: ['EXCESS_SOIL_OR_STEMS'], note: 'One bag mostly stems' });
     const fa = farmers.f7!.actor!;
     const rec = (await receiving.get(fa, bookingId))!;
-    at(new Date(S + 3 * HOUR));
+    at(new Date(S + 8 * HOUR));
     await receiving.farmerReview(fa, bookingId, { expectedVersion: rec.version, decision: 'ACCEPTED', note: 'Agreed' });
-    at(new Date(S + 2 * HOUR));
+    at(new Date(S + 7 * HOUR));
     await receiving.startProcessing(people.p2owner!.actor, bookingId, { lineId: lines.p2, inputKg: '1480' });
-    at(new Date(S + 9 * HOUR));
+    at(new Date(S + 14 * HOUR));
     await receiving.completeProcessing(people.p2owner!.actor, bookingId, { outputProduct: 'FLOUR', outputKg: '370', handlingLossKg: '12', handlingLossReason: 'Spillage at the grater (measured)' });
     await pay(bookingId, 'PRODUCE', 'ALL', new Date(S + 4 * DAY), new Date(S + 4.2 * DAY), 'FBN-TRF-55120');
-    await pay(bookingId, 'FREIGHT', 'ALL', new Date(S + 3 * DAY), new Date(S + 3.1 * DAY), 'FBN-FRT-55121');
     const fee = await prisma.invoice.findUniqueOrThrow({ where: { bookingId_kind: { bookingId, kind: 'PLATFORM_FEE' } } });
     if (loadConfig().PAYMENT_PROVIDER === 'simulated') {
       at(new Date(S + 5 * DAY));
@@ -515,116 +415,95 @@ async function main() {
       await finance.simulate(people.p2owner!.actor, c.reference, 'success');
     }
   }
-  // H3: Femi — completed 7 days ago after a dispute resolved by an administrator.
+  // H3: Femi — completed 7 days ago after a problem report resolved by an administrator.
   {
     const S = slotStart(-7).getTime();
     const { bookingId } = await createAndAccept({ farmer: 'f8', slot: 'p1b:-7', processorOrg: p1.id, qty: '2000', price: 24_500, times: { offer: new Date(S - 3 * DAY), accept: new Date(S - 2.8 * DAY) } });
-    await arrangeTransport(bookingId, S, 'v2', 'kunle', 3_800_000, { quote: new Date(S - 2.5 * DAY), accept: new Date(S - 2.4 * DAY), assign: new Date(S - 2.3 * DAY) });
-    await runToPickup(bookingId, S, 'f8', 'kunle', { until: 'DELIVERED' });
-    await receive(bookingId, S, '1950', '50', '1750', '150', { reasons: ['TOO_LONG_SINCE_HARVEST'], note: 'Some roots harvested more than 48 h earlier' });
+    await receive(bookingId, S, '1900', '1750', { reasons: ['TOO_LONG_SINCE_HARVEST'], note: 'Some roots harvested more than 48 h earlier' });
     const fa = farmers.f8!.actor!;
     const rec = (await receiving.get(fa, bookingId))!;
-    at(new Date(S + 5 * HOUR));
-    await receiving.farmerReview(fa, bookingId, { expectedVersion: rec.version, decision: 'DISPUTED', dispute: { category: 'QUALITY_REJECTION', quantityInQuestionKg: '150', description: 'All roots were harvested the evening before pickup, as the driver can confirm.' } });
+    at(new Date(S + 9 * HOUR));
+    await receiving.farmerReview(fa, bookingId, { expectedVersion: rec.version, decision: 'DISPUTED', dispute: { category: 'QUALITY_REJECTION', quantityInQuestionKg: '150', description: 'All roots were harvested the evening before collection; the buyer’s own collector saw them fresh.' } });
     const d = await prisma.dispute.findFirstOrThrow({ where: { bookingId } });
     at(new Date(S + 1 * DAY));
     await disputes.message(people.manager!.actor, d.id, { body: 'Our inspector found softening on part of the load; we will share the photos.', evidenceAttachmentIds: [] });
     at(new Date(S + 2 * DAY));
-    await disputes.resolve(people.admin!.actor, d.id, { outcome: 'Half of the rejected quantity accepted', rationale: 'The pickup record supports a recent harvest, but the processor documented some softening. Splitting the disputed 150 kg.', revisedAcceptedKg: '1825' });
+    await disputes.resolve(people.admin!.actor, d.id, { outcome: 'Half of the rejected quantity accepted', rationale: 'The collection record supports a recent harvest, but the processor documented some softening. Splitting the disputed 150 kg.', revisedAcceptedKg: '1825' });
     await pay(bookingId, 'PRODUCE', 'ALL', new Date(S + 4 * DAY), new Date(S + 4.5 * DAY), 'UBA-TRF-23317');
   }
-  // H4: Grace — cancelled by the processor before harvest (line maintenance).
+  // H4: Grace — cancelled by the buyer before harvest (line maintenance).
   {
     const S = slotStart(-3).getTime();
     const { bookingId } = await createAndAccept({ farmer: 'f9', slot: 'p3:-3', processorOrg: p3.id, qty: '1200', price: 23_000, times: { offer: new Date(S - 4 * DAY), accept: new Date(S - 3.9 * DAY) } });
-    await arrangeTransport(bookingId, S, 'v4', 'sade', 2_600_000, { quote: new Date(S - 3.5 * DAY), accept: new Date(S - 3.4 * DAY), assign: new Date(S - 3.3 * DAY) });
     at(new Date(S - 2 * DAY));
     const b = await prisma.booking.findUniqueOrThrow({ where: { id: bookingId } });
-    await bookings.cancel(people.p3owner!.actor, bookingId, { expectedVersion: b.version, reason: 'Unplanned line maintenance; the processor apologised and cancelled before harvest' }, 'CANCEL');
+    await bookings.cancel(people.p3owner!.actor, bookingId, { expectedVersion: b.version, reason: 'Unplanned line maintenance; the buyer apologised and cancelled before harvest' }, 'CANCEL');
   }
-  // H5: Kayode — expired: accepted, but transport was never confirmed before the hold lapsed.
+  // H5: Kayode — an offer he did not answer in time expired, and its capacity hold was released.
   {
-    const S = slotStart(2).getTime();
-    await createAndAccept({ farmer: 'f4', slot: 'p3:2', processorOrg: p3.id, qty: '800', price: 23_000, times: { offer: ago(5 * 24 + 2), accept: ago(5 * 24) } });
-    void S;
+    const h = await harvestFor('f4', '800', 1, 6, ago(5 * 24 + 6));
+    await harvests.invite(farmers.f4!.actor!, h.id, f3fac.id);
+    at(ago(5 * 24 + 2));
+    await offerFor(h.id, 'p3:2', p3.id, '800', 23_000, { validForHours: 24 });
   }
 
   // ── Current scenarios ─────────────────────────────────────────────
-  // C1: Ngozi — delivered this morning (or yesterday if it is still early); weighed; quality decision pending.
+  // C1: Ngozi — the buyer collects today; next: the buyer records the weight.
   {
-    const d1 = realNow().getTime() > slotStart(0).getTime() + 2 * HOUR ? 0 : -1;
-    const S = slotStart(d1).getTime();
+    const S = slotStart(0).getTime();
     const before = Math.min(S - 3 * DAY, ago(72).getTime());
-    const { bookingId } = await createAndAccept({ farmer: 'f5', slot: `p1a:${d1}`, processorOrg: p1.id, qty: '2000', price: 24_000, times: { offer: new Date(before), accept: new Date(before + 2 * HOUR) } });
-    await arrangeTransport(bookingId, S, 'v3', 'sade', 3_200_000, { quote: new Date(before + 6 * HOUR), accept: new Date(before + 7 * HOUR), assign: new Date(before + 8 * HOUR) });
-    await runToPickup(bookingId, S, 'f5', 'sade', { until: 'DELIVERED' });
-    at(new Date(S + 1 * HOUR));
-    await receiving.recordWeighing(people.receiving!.actor, bookingId, { grossKg: '2400', tareKg: '500', weighingMethod: 'WEIGHBRIDGE', scaleReference: 'WB-DEMO-4410' });
+    await createAndAccept({ farmer: 'f5', slot: 'p1a:0', processorOrg: p1.id, qty: '2000', price: 24_000, times: { offer: new Date(before), accept: new Date(before + 2 * HOUR) } });
   }
-  // C2: Tolu — yesterday's delivery; 1,900 kg net, 1,800 accepted / 100 rejected; awaiting the farmer's review.
+  // C2: Tolu — collected yesterday; 1,900 kg received, 1,800 accepted / 100 not accepted; waiting for Tolu to check.
   {
     const S = slotStart(-1).getTime();
     const { bookingId } = await createAndAccept({ farmer: 'f6', slot: 'p2:-1', processorOrg: p2.id, qty: '2000', price: 25_500, times: { offer: new Date(S - 3 * DAY), accept: new Date(S - 2.9 * DAY) } });
-    await arrangeTransport(bookingId, S, 'v6', 'chidi', 2_900_000, { quote: new Date(S - 2.5 * DAY), accept: new Date(S - 2.4 * DAY), assign: new Date(S - 2.3 * DAY) });
-    await runToPickup(bookingId, S, 'f6', 'chidi', { until: 'DELIVERED' });
-    await receive(bookingId, S, '2000', '100', '1800', '100', { reasons: ['ROTTEN_OR_DAMAGED'], note: 'Soft rot found in four bags (photos on the workbench)' });
+    await receive(bookingId, S, '1900', '1800', { reasons: ['ROTTEN_OR_DAMAGED'], note: 'Soft rot found in four bags' });
   }
-  // C3: Halima — disputed receiving decision; awaiting the processor's response / admin review.
+  // C3: Halima — reported a problem with the weight; waiting for the buyer's response / admin review.
   {
     const S = slotStart(-2).getTime();
-    const { bookingId } = await createAndAccept({ farmer: 'f3', slot: 'p3:-2', processorOrg: p3.id, qty: '1500', price: 23_500, times: { offer: new Date(S - 3 * DAY), accept: new Date(S - 2.9 * DAY) } });
-    await arrangeTransport(bookingId, S, 'v4', 'kunle', 3_000_000, { quote: new Date(S - 2.5 * DAY), accept: new Date(S - 2.4 * DAY), assign: new Date(S - 2.3 * DAY) });
-    await runToPickup(bookingId, S, 'f3', 'kunle', { until: 'DELIVERED' });
-    await receive(bookingId, S, '1500', '40', '1300', '160', { reasons: ['UNDERSIZED'], note: 'Roots below 15 cm' });
+    const { bookingId } = await createAndAccept({ farmer: 'f3', slot: 'p3:-2', processorOrg: p3.id, qty: '1500', price: 23_500, handover: 'FARMER_DELIVERS', times: { offer: new Date(S - 3 * DAY), accept: new Date(S - 2.9 * DAY) } });
+    await receive(bookingId, S, '1460', '1300', { reasons: ['UNDERSIZED'], note: 'Roots below 15 cm' });
     const fa = farmers.f3!.actor!;
     const rec = (await receiving.get(fa, bookingId))!;
-    at(new Date(S + 6 * HOUR));
-    await receiving.farmerReview(fa, bookingId, { expectedVersion: rec.version, decision: 'DISPUTED', dispute: { category: 'WEIGHT', quantityInQuestionKg: '160', description: 'Our own scale showed 1,520 kg at loading; the rejection for size was not part of the agreed criteria for this variety.' } });
+    at(new Date(S + 9 * HOUR));
+    await receiving.farmerReview(fa, bookingId, { expectedVersion: rec.version, decision: 'DISPUTED', dispute: { category: 'WEIGHT', quantityInQuestionKg: '160', description: 'Our own scale showed 1,520 kg at loading; size was not part of the agreed terms for this variety.' } });
   }
-  // C4: Emeka — harvest started, driver Tunde on the way (the pickup window is still open).
+  // C4: Emeka — harvest started this morning; the buyer collects within the agreed window.
   {
     const d4 = [0, 1, 2].find((d) => slotStart(d).getTime() > realNow().getTime() + 9 * HOUR)!;
     const S = slotStart(d4).getTime();
     const { bookingId } = await createAndAccept({ farmer: 'f2', slot: `p1b:${d4}`, processorOrg: p1.id, qty: '1800', price: 24_500, times: { offer: ago(60), accept: ago(58) } });
-    await arrangeTransport(bookingId, S, 'v1', 'tunde', 3_100_000, { quote: ago(50), accept: ago(49), assign: ago(48) });
-    const startAt = ago(3).getTime();
-    at(new Date(startAt));
+    at(ago(3));
     const fa = farmers.f2!.actor!;
     const b = await bookings.detail(fa, bookingId);
     await bookings.startHarvest(fa, bookingId, b.version);
-    at(ago(1));
-    await bookings.readyForPickup(fa, bookingId, { reportedHarvestedKg: '1800' });
-    const shipment = await prisma.shipment.findFirstOrThrow({ where: { bookingId, status: { not: 'CANCELLED' } } });
-    at(ago(0.5));
-    await shipments.milestone(people.tunde!.actor, shipment.id, 'depart', { expectedVersion: shipment.version, note: 'Leaving the depot' });
     void S;
   }
-  // C5: Adunni — confirmed and READY TO HARVEST in three days.
+  // C5: Adunni — confirmed plan, READY TO HARVEST: the buyer collects in three days.
   {
-    const S = slotStart(3).getTime();
     const { bookingId } = await createAndAccept({ farmer: 'adunni', slot: 'p1a:3', processorOrg: p1.id, qty: '2500', price: 24_500, times: { offer: ago(30), accept: ago(26) } });
-    await arrangeTransport(bookingId, S, 'v2', 'kunle', 3_600_000, { quote: ago(20), accept: ago(19), assign: ago(18) });
     at(ago(17));
-    await bookings.postMessage(people.dispatcher!.actor, bookingId, { body: 'Kunle will call you the evening before pickup. Please have the roots bagged.' });
+    await bookings.postMessage(people.manager!.actor, bookingId, { body: 'Our truck will come around 10:00. Please have the roots bagged and the farm road clear.' });
   }
-  // C6: Bisi — confirmed, but the transporter cancelled: not ready until replacement transport is confirmed.
+  // C6: Bisi — confirmed; she delivers to the flour mill in four days (her delivery cost shown before she accepted).
   {
-    const S = slotStart(4).getTime();
-    const { bookingId } = await createAndAccept({ farmer: 'f7', slot: 'p2:4', processorOrg: p2.id, qty: '1500', price: 25_500, times: { offer: ago(40), accept: ago(38) } });
-    await arrangeTransport(bookingId, S, 'v5', 'chidi', 2_500_000, { quote: ago(30), accept: ago(29), assign: ago(28) });
-    at(ago(2));
-    const trip = await prisma.tripReservation.findFirstOrThrow({ where: { bookingId, status: 'CONFIRMED' } });
-    await quotes.cancelTrip(people.t2owner!.actor, trip.id, 'Truck needs a new gearbox; cannot make this pickup');
+    await createAndAccept({ farmer: 'f7', slot: 'p2:4', processorOrg: p2.id, qty: '1500', price: 25_500, handover: 'FARMER_DELIVERS', deliveryCost: 1_200_000, times: { offer: ago(40), accept: ago(38) } });
   }
-  // C7: Grace — accepted, transport not yet arranged (open opportunity for transporters).
+  // C7: Grace — sent a request to Iseyin Cassava Hub; waiting for the buyer's offer.
   {
-    await createAndAccept({ farmer: 'f9', slot: 'p3:5', processorOrg: p3.id, qty: '2200', price: 23_500, times: { offer: ago(8), accept: ago(5) } });
+    const h = await harvestFor('f9', '2200', 4, 9, ago(8));
+    at(ago(7));
+    await harvests.invite(farmers.f9!.actor!, h.id, f3fac.id);
   }
-  // C8: Halima — processor accepted a quote; awaiting the transporter to confirm a driver (dispatcher action).
+  // C8: Halima — asked Oluyole for an offer; the buyer saved a draft but has not decided collection or delivery yet.
   {
-    const S = slotStart(6).getTime();
-    const { bookingId } = await createAndAccept({ farmer: 'f3', slot: 'p1b:6', processorOrg: p1.id, qty: '1600', price: 24_500, times: { offer: ago(12), accept: ago(10) } });
-    await arrangeTransport(bookingId, S, 'v3', 'sade', 2_800_000, { quote: ago(4), accept: ago(1) });
+    const h = await harvestFor('f3', '1600', 5, 9, ago(12));
+    at(ago(11));
+    await harvests.invite(farmers.f3!.actor!, h.id, f1.id);
+    at(ago(4));
+    await offerFor(h.id, 'p1b:6', p1.id, '1600', 24_500, { send: false, note: 'Check truck availability before choosing collection.' });
   }
   // C9: Mojisola (represented, data-entry permission only) — acceptance prepared by the representative, awaiting approval.
   {
@@ -632,70 +511,42 @@ async function main() {
   }
   // C10: Baba Alabi (represented, full permissions) — confirmed by the cooperative representative acting for him.
   {
-    const S = slotStart(7).getTime();
-    const { bookingId } = await createAndAccept({ farmer: 'r1', farmerActor: 'rep', slot: 'p1a:7', processorOrg: p1.id, qty: '1200', price: 24_000, times: { offer: ago(20), accept: ago(16) } });
-    await arrangeTransport(bookingId, S, 'v6', 'chidi', 2_300_000, { quote: ago(12), accept: ago(11), assign: ago(10) });
+    await createAndAccept({ farmer: 'r1', farmerActor: 'rep', slot: 'p1a:7', processorOrg: p1.id, qty: '1200', price: 24_000, times: { offer: ago(20), accept: ago(16) } });
+  }
+  // C11: Kayode — sent Oluyole a request for 1,700 kg: the buyer's next step is "Review harvest request".
+  {
+    const h = await harvestFor('f4', '1700', 5, 14, ago(36));
+    at(ago(5));
+    await harvests.invite(farmers.f4!.actor!, h.id, f1.id);
+  }
+  // C12: Kehinde (Saki) — the Iseyin hub said it cannot buy this time, so the request is open for other buyers.
+  {
+    const h = await harvestFor('r6', '1000', 8, 12, ago(12), 'c2rep');
+    at(ago(11));
+    await harvests.invite(people.c2rep!.actor, h.id, f3fac.id);
+    at(ago(9));
+    await harvests.declineRequest(people.p3owner!.actor, p3.id, h.id, { reason: 'Our trucks do not cover Saki this month.' });
   }
 
   // ── Open requests and offers ──────────────────────────────────────
-  // Adunni's second request with two competing offers to compare.
+  // Adunni's second request with two offers to compare: Oluyole collects; Iseyin pays less but she delivers.
   {
     const h = await harvestFor('adunni', '3000', 6, 12, ago(20));
-    for (const [slotKey, orgId, price] of [['p1a:8', p1.id, 25_000], ['p3:9', p3.id, 23_500]] as const) {
-      const slot = await slotInfo(slotKey);
-      const S = slot.startsAt.getTime();
-      const facility = await prisma.facility.findFirstOrThrow({ where: { organisationId: orgId } });
-      at(ago(orgId === p1.id ? 10 : 6));
-      await offers.create(people[processorActor[orgId]!]!.actor, {
-        harvestRequestId: h.id,
-        slotId: slot.id,
-        quantityKg: '3000',
-        priceKoboPerKg: price,
-        plannedHarvestDate: lagosDateString(new Date(S - 20 * HOUR)),
-        pickupWindowStart: new Date(S - 16 * HOUR).toISOString(),
-        pickupWindowEnd: new Date(S - 12 * HOUR).toISOString(),
-        deliveryWindowStart: new Date(S).toISOString(),
-        deliveryWindowEnd: new Date(S + 4 * HOUR).toISOString(),
-        qualityTerms: qualityTermsSchema.parse(facility.qualityCriteria),
-        toleranceBps: 500,
-        paymentTermsDays: orgId === p1.id ? 7 : 3,
-        freightPayer: 'PROCESSOR',
-        rejectionHandling: 'RETURNED_AT_PROCESSOR_COST',
-        cancellationTerms: facility.cancellationTerms,
-        note: orgId === p1.id ? 'We can collect the evening before.' : 'Faster payment: 3 days.',
-        validForHours: 96,
-      });
-    }
+    at(ago(19));
+    await harvests.invite(farmers.adunni!.actor!, h.id, f1.id);
+    await harvests.invite(farmers.adunni!.actor!, h.id, f3fac.id);
+    at(ago(10));
+    await offerFor(h.id, 'p1a:8', p1.id, '3000', 25_000, { validForHours: 96, note: 'We collect with our own truck.' });
+    at(ago(6));
+    await offerFor(h.id, 'p3:9', p3.id, '3000', 23_500, { handover: 'FARMER_DELIVERS', deliveryCost: 2_000_000, paymentTermsDays: 3, validForHours: 96, note: 'Faster payment: 3 days.' });
   }
-  // A tight slot: 2,500 kg capacity with a 2,000 kg hold — a second request cannot overbook it.
+  // A tight slot: 2,500 kg capacity with a 2,000 kg hold — a second offer cannot overbook it.
   {
     const h = await harvestFor('r5', '2000', 7, 11, ago(14), 'c2rep');
-    const slot = await slotInfo('p2:9');
-    const S = slot.startsAt.getTime();
-    const facility = await prisma.facility.findFirstOrThrow({ where: { organisationId: p2.id } });
     at(ago(9));
-    await offers.create(people.p2owner!.actor, {
-      harvestRequestId: h.id,
-      slotId: slot.id,
-      quantityKg: '2000',
-      priceKoboPerKg: 25_000,
-      plannedHarvestDate: lagosDateString(new Date(S - 20 * HOUR)),
-      pickupWindowStart: new Date(S - 16 * HOUR).toISOString(),
-      pickupWindowEnd: new Date(S - 12 * HOUR).toISOString(),
-      deliveryWindowStart: new Date(S).toISOString(),
-      deliveryWindowEnd: new Date(S + 4 * HOUR).toISOString(),
-      qualityTerms: qualityTermsSchema.parse(facility.qualityCriteria),
-      toleranceBps: 500,
-      paymentTermsDays: 7,
-      freightPayer: 'PROCESSOR',
-      rejectionHandling: 'RETURNED_AT_PROCESSOR_COST',
-      cancellationTerms: facility.cancellationTerms,
-      validForHours: 120,
-    });
+    await offerFor(h.id, 'p2:9', p2.id, '2000', 25_000, { validForHours: 120 });
   }
-  await harvestFor('r6', '1000', 8, 12, ago(12), 'c2rep');
   await harvestFor('r2', '1400', 4, 10, ago(30), 'rep');
-  await harvestFor('f4', '1700', 5, 14, ago(36));
   // Drafts, a closed and a withdrawn request.
   await harvestFor('f2', '1200', 9, 14, ago(5), undefined, false);
   await harvestFor('r3', '800', 10, 14, ago(4), 'rep', false);
@@ -719,7 +570,6 @@ async function main() {
     users: await prisma.user.count({ where: { isDemo: true } }),
     farmers: await prisma.farmerProfile.count({ where: { isDemo: true } }),
     organisations: await prisma.organisation.count({ where: { isDemo: true } }),
-    vehicles: await prisma.vehicle.count({ where: { isDemo: true } }),
     harvestRequests: await prisma.harvestRequest.count({ where: { isDemo: true } }),
     slots: await prisma.processingSlot.count({ where: { isDemo: true } }),
     bookings: Object.fromEntries((await prisma.booking.groupBy({ by: ['status'], where: { isDemo: true }, _count: true })).map((g) => [g.status, g._count])),

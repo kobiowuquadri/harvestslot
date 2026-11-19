@@ -1,80 +1,280 @@
-import { CalendarCheck2, ClipboardCheck, Factory, HandCoins, Scale, Truck } from 'lucide-react';
 import Link from 'next/link';
+import {
+  ArrowRight,
+  BadgeCheck,
+  CalendarClock,
+  CheckCircle2,
+  Factory,
+  HandCoins,
+  KeyRound,
+  ListChecks,
+  Scale,
+  Sprout,
+  Truck,
+  XCircle,
+} from 'lucide-react';
+import { Photo } from '@/components/domain/photo';
+import { Button } from '@/components/ui/button';
+import { photos } from '@/content/photos';
 import { DemoEntry } from './demo-entry';
 
-const checklist = [
-  { icon: HandCoins, text: 'Who is buying your cassava, at what price per kilogram' },
-  { icon: Factory, text: 'Which facility will receive and process it, and when' },
-  { icon: ClipboardCheck, text: 'The quality requirements and quantity tolerance' },
-  { icon: Truck, text: 'Who transports it, and who pays for transport' },
-  { icon: CalendarCheck2, text: 'When to harvest, when pickup happens, what is still awaiting confirmation' },
-  { icon: Scale, text: 'What happens if quantities differ, and what payment is due' },
+const roles = [
+  { icon: Sprout, title: 'Sell cassava', body: 'Add your harvest, choose a buyer, agree who collects and when — then harvest.' },
+  { icon: Factory, title: 'Buy cassava', body: 'Publish buying slots, answer farmers’ requests, record the weight and the payment.' },
+  { icon: Truck, title: 'Collect or deliver', body: 'One decision in the offer: the buyer collects from the farm, or the farmer delivers.' },
+  { icon: HandCoins, title: 'Paid for what is accepted', body: 'The final amount uses the weight accepted; the farmer confirms the money arrived.' },
 ];
+
+const steps = [
+  { icon: Sprout, title: 'Add your harvest', body: 'Where the cassava is, roughly how much (kg or tonnes) and when it will be ready. Drafts wait on the phone without a signal.' },
+  { icon: ListChecks, title: 'Find a buyer', body: 'See buyers whose location, buying dates and free space fit — each explained in one sentence — and send a request.' },
+  { icon: Truck, title: 'Accept the offer', body: 'Price, quantity, date, place and who brings the cassava are on one screen. Accept or decline; declining keeps your harvest listed.' },
+  { icon: BadgeCheck, title: 'Ready to harvest', body: 'Once both sides agree and the buyer’s space is reserved, the plan says so in one sentence. Then weigh, pay and confirm receipt.' },
+];
+
+const features = [
+  { icon: ListChecks, title: 'Buyers explained in one sentence', body: '“Can receive your full 2,000 kg on Thursday.” Each suggestion says why it fits — dates, distance (labelled straight-line) and free space.' },
+  { icon: CalendarClock, title: 'Space that is really held', body: 'A sent offer holds the buyer’s capacity until it expires, and acceptance reserves it. Two farmers can never be promised the same space.' },
+  { icon: CheckCircle2, title: 'Always “what happens next”', body: 'Every plan says who acts next — “Waiting for the buyer’s offer”, “Record the weight”, “Confirm you received ₦190,000”.' },
+  { icon: KeyRound, title: 'Changes need agreement', body: 'If price, quantity, date or the handover changes, both sides agree again. Nothing is edited behind anyone’s back.' },
+  { icon: Scale, title: 'Paid on the accepted weight', body: 'The buyer records what arrived and what they accept. Any difference from the offer is flagged, and the farmer can agree or report a problem.' },
+  { icon: HandCoins, title: 'Payment the farmer confirms', body: '“Payment reported” and “Payment received” are kept apart: it counts as paid only when the farmer confirms the money arrived.' },
+];
+
+const audiences = [
+  { id: 'farmers', title: 'Farmers selling cassava', photo: photos.farmerHoldingCassava, body: 'Know your buyer, price, place and day before you dig, and confirm every payment yourself. Free for farmers.' },
+  { id: 'processors', title: 'Processors buying cassava', photo: photos.cassavaTubers, body: 'Tell farmers how much you can receive, where and when. Plan intake instead of hoping for deliveries, and keep weights on record.' },
+];
+
+const notDone = [
+  'Hold or move the money for your cassava — buyers pay farmers directly and the farmer confirms.',
+  'Charge farmers a fee for selling their crop.',
+  'Track trucks live — the buyer collects or the farmer delivers, at the agreed time.',
+  'Publish impact numbers it has not measured. HarvestSlot is a new service with no pilot results yet.',
+];
+
+function SectionHeading({ eyebrow, title, body, center = false }: { eyebrow: string; title: string; body?: string; center?: boolean }) {
+  return (
+    <div className={center ? 'mx-auto max-w-2xl text-center' : 'max-w-2xl'}>
+      <p className="font-display text-sm font-semibold text-forest">{eyebrow}</p>
+      <h2 className="mt-2 font-display text-3xl font-semibold tracking-tight text-ink sm:text-[2.1rem] sm:leading-tight">{title}</h2>
+      {body ? <p className="mt-3 text-base leading-relaxed text-muted">{body}</p> : null}
+    </div>
+  );
+}
+
+function HeroCardLeft() {
+  return (
+    <div className="relative mx-auto w-full max-w-[290px]">
+      <div className="dot-grid absolute -right-8 -top-8 h-24 w-28 opacity-50" aria-hidden />
+      <div className="relative aspect-[3/4] overflow-hidden rounded-[28px] bg-line shadow-[var(--shadow-raised)]">
+        <Photo photo={photos.farmerHarvesting} mono priority sizes="290px" />
+        <div className="absolute inset-x-2.5 top-2.5 rounded-xl bg-white/95 px-2.5 py-2 shadow-lg backdrop-blur sm:inset-x-3 sm:top-3 sm:rounded-2xl sm:p-3">
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-ink sm:text-[13px]">
+            <CheckCircle2 className="size-4 shrink-0 text-forest" aria-hidden /> Ready to harvest
+          </p>
+          <p className="mt-0.5 hidden text-xs text-muted sm:block">Buyer, date and collection agreed</p>
+        </div>
+      </div>
+      <div className="absolute -bottom-4 -left-2 rotate-[-10deg] rounded-2xl bg-forest p-2.5 text-white shadow-lg sm:-bottom-6 sm:-left-6 sm:p-3.5" aria-hidden>
+        <Sprout className="size-5 sm:size-7" />
+      </div>
+    </div>
+  );
+}
+
+function HeroCardRight() {
+  return (
+    <div className="relative mx-auto w-full max-w-[290px] lg:mt-16">
+      <svg className="absolute -right-2 -top-10 h-16 w-16 text-forest sm:-right-6 sm:-top-14 sm:h-24 sm:w-24" viewBox="0 0 96 96" fill="none" aria-hidden>
+        <path d="M18 78C18 42 42 18 82 16c0 40-24 64-64 62Z" stroke="currentColor" strokeWidth="6" strokeLinejoin="round" />
+        <path d="M18 78 60 36" stroke="currentColor" strokeWidth="6" strokeLinecap="round" />
+      </svg>
+      <div className="relative aspect-[3/4] overflow-hidden rounded-[28px] bg-line shadow-[var(--shadow-raised)]">
+        <Photo photo={photos.farmerUprooting} mono priority sizes="290px" />
+        <div className="absolute inset-x-2.5 bottom-2.5 rounded-xl bg-white/95 px-2.5 py-2 shadow-lg backdrop-blur sm:inset-x-3 sm:bottom-3 sm:rounded-2xl sm:p-3">
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-ink sm:text-[13px]">
+            <KeyRound className="size-4 shrink-0 text-forest" aria-hidden /> Pickup confirmed
+          </p>
+          <p className="mt-0.5 hidden text-xs text-muted sm:block">Handed over with a one-time code</p>
+        </div>
+      </div>
+      <div className="absolute -left-2 -top-3 rotate-[8deg] rounded-xl bg-white p-2 text-forest shadow-lg ring-1 ring-line sm:-left-4 sm:-top-4 sm:p-2.5" aria-hidden>
+        <Truck className="size-5" />
+      </div>
+    </div>
+  );
+}
 
 export default function LandingPage() {
   return (
     <>
-      <section className="bg-forest text-white">
-        <div className="mx-auto grid grid-cols-1 max-w-6xl gap-10 px-4 py-14 md:grid-cols-2 md:py-20">
-          <div>
-            <p className="mb-3 inline-block rounded-full bg-amber px-3 py-1 text-xs font-semibold text-amber-ink">Cassava · Oyo State, Nigeria</p>
-            <h1 className="text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">Harvest with a confirmed plan.</h1>
-            <p className="mt-4 max-w-xl text-lg text-white/90">
-              HarvestSlot helps cassava farmers arrange a buyer, processing capacity and transport <em>before</em> harvesting — so fresh roots are not dug up without somewhere to go.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/register" className="rounded-lg bg-amber px-5 py-3 font-semibold text-amber-ink hover:bg-amber-100">
-                Create an account
-              </Link>
-              <Link href="/how-it-works" className="rounded-lg border border-white/40 px-5 py-3 font-semibold text-white hover:bg-white/10">
-                See how it works
-              </Link>
-            </div>
-            <DemoEntry />
+      {/* ── Hero ── */}
+      <section className="relative overflow-hidden bg-canvas">
+        <div className="mx-auto grid max-w-6xl grid-cols-2 items-center gap-x-5 gap-y-14 px-4 pb-14 pt-12 sm:gap-x-8 sm:px-6 lg:grid-cols-[1fr_1.5fr_1fr] lg:gap-x-10 lg:pb-16 lg:pt-16">
+          <div className="order-2 lg:order-1">
+            <HeroCardLeft />
           </div>
-          <div className="rounded-2xl bg-white p-6 text-ink shadow-lg">
-            <p className="text-sm font-semibold uppercase tracking-wide text-leaf">The question HarvestSlot answers</p>
-            <p className="mt-1 text-2xl font-semibold text-forest">Is there a confirmed plan for this harvest?</p>
-            <ul className="mt-5 flex flex-col gap-3">
-              {checklist.map(({ icon: Icon, text }) => (
-                <li key={text} className="flex gap-3 text-sm">
-                  <Icon className="mt-0.5 size-5 shrink-0 text-leaf" aria-hidden />
-                  {text}
+          <div className="order-1 col-span-2 text-center lg:order-2 lg:col-span-1">
+            <p className="inline-flex items-center gap-2 rounded-full bg-surface px-3 py-1 text-xs font-medium text-muted ring-1 ring-line">
+              <span className="size-1.5 rounded-full bg-forest" aria-hidden /> Cassava · Oyo State, Nigeria
+            </p>
+            <h1 className="mt-5 text-[2.5rem] font-semibold leading-[1.1] text-ink sm:text-5xl lg:text-[3.25rem]">
+              Harvest with a <span className="headline-underline whitespace-nowrap">confirmed plan.</span>
+            </h1>
+            <p className="mx-auto mt-5 max-w-md text-[17px] leading-relaxed text-muted">
+              Know who will buy your cassava, how much they will take, and when and where it should be ready — <strong className="font-semibold text-ink">before you harvest</strong> — so fresh roots are never dug up without somewhere to go.
+            </p>
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
+              <Button asChild size="lg">
+                <Link href="/register">Get started</Link>
+              </Button>
+              <Button asChild size="lg" variant="outline">
+                <Link href="/how-it-works">How it works</Link>
+              </Button>
+            </div>
+            <p className="mt-5 text-[13px] text-muted">
+              <span className="whitespace-nowrap">Free for farmers</span> · <span className="whitespace-nowrap">Works on any phone</span> · <span className="whitespace-nowrap">Drafts work offline</span>
+            </p>
+          </div>
+          <div className="order-3">
+            <HeroCardRight />
+          </div>
+        </div>
+        <DemoEntry />
+
+        {/* In place of a partner strip: who the platform serves (no partnerships are claimed). */}
+        <div className="border-t border-line/80 bg-canvas">
+          <ul className="mx-auto grid max-w-6xl grid-cols-2 gap-x-6 gap-y-8 px-4 py-10 sm:px-6 lg:grid-cols-4">
+            {roles.map(({ icon: Icon, title, body }) => (
+              <li key={title} className="flex flex-col items-start gap-3 sm:flex-row">
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface text-ink shadow-[var(--shadow-card)] ring-1 ring-line">
+                  <Icon className="size-5" aria-hidden />
+                </span>
+                <span>
+                  <span className="block font-display text-[15px] font-semibold text-ink">{title}</span>
+                  <span className="mt-0.5 block text-sm leading-snug text-muted">{body}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      {/* ── How it works ── */}
+      <section className="bg-surface">
+        <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-12 px-4 py-20 sm:px-6 lg:grid-cols-2 lg:gap-16">
+          <div className="relative">
+            <div className="dot-grid absolute -bottom-6 -left-6 h-28 w-32 opacity-40" aria-hidden />
+            <div className="relative aspect-[4/3] overflow-hidden rounded-[28px] shadow-[var(--shadow-raised)]">
+              <Photo photo={photos.cassavaFarm} sizes="(min-width: 1024px) 540px, 100vw" />
+            </div>
+            <div className="absolute bottom-6 right-3 max-w-[220px] rounded-2xl bg-surface p-4 shadow-[var(--shadow-raised)] ring-1 ring-line sm:-right-6 sm:bottom-8">
+              <p className="text-xs font-medium text-muted">The question we answer</p>
+              <p className="mt-1 font-display text-[15px] font-semibold leading-snug text-ink">Is there a confirmed plan for this harvest?</p>
+            </div>
+          </div>
+          <div>
+            <SectionHeading eyebrow="How it works" title="From expected harvest to a confirmed plan" body="Four steps stand between a field of mature cassava and a harvest that is safe to start." />
+            <ol className="mt-8 flex flex-col gap-5">
+              {steps.map(({ icon: Icon, title, body }, i) => (
+                <li key={title} className="flex gap-4">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-leaf-50 text-forest">
+                    <Icon className="size-5" aria-hidden />
+                  </span>
+                  <div>
+                    <h3 className="font-display text-base font-semibold text-ink">
+                      <span className="mr-1.5 text-muted">{String(i + 1).padStart(2, '0')}</span>
+                      {title}
+                    </h3>
+                    <p className="mt-1 text-sm leading-relaxed text-muted">{body}</p>
+                  </div>
                 </li>
               ))}
-            </ul>
-            <p className="mt-5 rounded-lg bg-leaf-50 p-3 text-sm text-forest">
-              Only when the farmer, processor and transporter have all confirmed the same terms does a booking show <strong>Ready to harvest</strong>.
-            </p>
+            </ol>
+            <Link href="/how-it-works" className="mt-8 inline-flex items-center gap-1.5 font-display text-sm font-semibold text-forest hover:underline">
+              See all nine steps, through to payment <ArrowRight className="size-4" aria-hidden />
+            </Link>
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 py-14">
-        <h2 className="text-2xl font-semibold text-forest">One booking, every commitment visible</h2>
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-          {[
-            ['Farmers', 'Post your expected harvest, compare offers in plain language, and start harvesting only when the plan is confirmed. You confirm pickup and payment yourself.'],
-            ['Processors', 'Publish capacity by processing line and date, make offers that hold capacity, schedule intake, record weights and quality, and track what you owe.'],
-            ['Transporters', 'See jobs in your service area, quote with a specific vehicle, and record pickup and delivery with handover codes instead of disputes.'],
-          ].map(([title, body]) => (
-            <div key={title} className="rounded-xl border border-line bg-surface p-5">
-              <h3 className="font-semibold text-forest">{title}</h3>
-              <p className="mt-2 text-sm text-muted">{body}</p>
-            </div>
-          ))}
+      {/* ── Features ── */}
+      <section id="features" className="scroll-mt-20 bg-canvas">
+        <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+          <SectionHeading center eyebrow="Features" title="Built for the realities of a fresh crop" body="Cassava starts to spoil within days of harvest. Every part of HarvestSlot is designed so nobody digs, drives or pays on a promise that might not hold." />
+          <div className="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {features.map(({ icon: Icon, title, body }) => (
+              <div key={title} className="rounded-2xl border border-line bg-surface p-6 shadow-[var(--shadow-card)]">
+                <span className="flex size-11 items-center justify-center rounded-xl bg-leaf-50 text-forest">
+                  <Icon className="size-5" aria-hidden />
+                </span>
+                <h3 className="mt-5 font-display text-[17px] font-semibold text-ink">{title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted">{body}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
-      <section className="border-y border-line bg-surface">
-        <div className="mx-auto max-w-6xl px-4 py-12">
-          <h2 className="text-2xl font-semibold text-forest">What HarvestSlot does not do</h2>
-          <ul className="mt-4 grid grid-cols-1 gap-2 text-sm text-muted sm:grid-cols-2">
-            <li>• It does not hold or move the money for your cassava. Processors pay farmers directly; both sides confirm.</li>
-            <li>• It never charges farmers a processing fee for selling their crop.</li>
-            <li>• It does not show live vehicle tracking — drivers record milestones, and you confirm handovers.</li>
-            <li>• It does not claim impact numbers it has not measured. HarvestSlot is a new service and publishes no pilot results yet.</li>
+      {/* ── Who it's for ── */}
+      <section className="bg-surface">
+        <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <SectionHeading eyebrow="Who it’s for" title="One booking, every commitment visible" />
+            <Link href="/roles" className="inline-flex items-center gap-1.5 font-display text-sm font-semibold text-forest hover:underline">
+              What each role can do <ArrowRight className="size-4" aria-hidden />
+            </Link>
+          </div>
+          <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2">
+            {audiences.map((a) => (
+              <Link key={a.id} href={`/roles#${a.id}`} className="group block">
+                <div className="aspect-[4/5] overflow-hidden rounded-[22px] bg-line">
+                  <Photo photo={a.photo} mono sizes="(min-width: 1024px) 270px, (min-width: 640px) 50vw, 100vw" className="transition duration-500 group-hover:scale-[1.03] group-hover:grayscale-0" />
+                </div>
+                <h3 className="mt-4 font-display text-lg font-semibold text-ink">{a.title}</h3>
+                <p className="mt-1 text-sm leading-relaxed text-muted">{a.body}</p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Honesty ── */}
+      <section className="bg-canvas">
+        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-10 px-4 py-20 sm:px-6 lg:grid-cols-[1fr_1.3fr]">
+          <SectionHeading eyebrow="Plainly stated" title="What HarvestSlot does not do" body="Trust starts with being clear about the limits of the service." />
+          <ul className="grid grid-cols-1 gap-3">
+            {notDone.map((t) => (
+              <li key={t} className="flex gap-3 rounded-2xl border border-line bg-surface p-4 text-sm leading-relaxed text-ink">
+                <XCircle className="mt-0.5 size-5 shrink-0 text-muted" aria-hidden />
+                <span>It does not {t.charAt(0).toLowerCase() + t.slice(1)}</span>
+              </li>
+            ))}
           </ul>
+        </div>
+      </section>
+
+      {/* ── Call to action ── */}
+      <section className="bg-surface px-4 py-20 sm:px-6">
+        <div className="mx-auto max-w-6xl overflow-hidden rounded-[28px] bg-ink">
+          <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-[1.4fr_1fr]">
+            <div className="px-6 py-12 sm:px-12">
+              <h2 className="font-display text-3xl font-semibold tracking-tight text-white sm:text-4xl">Plan your next harvest before you dig.</h2>
+              <p className="mt-3 max-w-lg text-base leading-relaxed text-white/75">Sell cassava as a farmer, or buy it for your processing facility. Free to start.</p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Button asChild size="lg">
+                  <Link href="/register">Create an account</Link>
+                </Button>
+                <Button asChild size="lg" variant="ghost" className="border border-white/25 text-white hover:bg-white/10">
+                  <Link href="/login">Sign in</Link>
+                </Button>
+              </div>
+            </div>
+            <div className="hidden h-full min-h-[300px] lg:block">
+              <Photo photo={photos.cassavaHarvest} mono sizes="420px" className="opacity-80" />
+            </div>
+          </div>
         </div>
       </section>
     </>

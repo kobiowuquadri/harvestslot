@@ -2,7 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import {
   BOOKING_STATUS_LABELS,
+  HANDOVER_ARRANGEMENT_LABELS,
   LOT_STATUS_LABELS,
+  REJECTION_REASON_LABELS,
   RECEIVING_STATUS_LABELS,
   SHIPMENT_STATUS_LABELS,
   bookingListQuerySchema,
@@ -19,7 +21,10 @@ import {
   toGrams,
   type BookingDetail,
   type BookingParty,
+  type BookingStatus,
   type BookingSummary,
+  type NextStep,
+  type SalePlan,
   type BookingTermsContent,
   type Readiness,
   type TermsVersionDto,
@@ -31,6 +36,7 @@ import {
   bookingRecipients,
   changedFields,
   computeReadiness,
+  describePlan,
   DomainError,
   expireBookingIfDue,
   notify,
@@ -45,7 +51,7 @@ import type { Prisma, Tx } from '@harvestslot/db';
 import { AccessService, type BookingAccess } from '../../common/access.service.js';
 import { PrismaService } from '../../common/prisma.service.js';
 import { iso, kg } from '../../common/serialize.js';
-import { BookingEngine } from './booking-engine.service.js';
+import { BookingEngine, handoverFor } from './booking-engine.service.js';
 
 const COMMERCIAL_ROLES = ['OWNER', 'MANAGER'] as const;
 
@@ -64,6 +70,75 @@ export class BookingsService {
   ) {}
 
   // ───────────── Reads ─────────────
+
+  /**
+   * The plan sentence and "what happens next" for a page of bookings, from one batch of reads:
+   * weights, the produce invoice and its payments, open disputes and outstanding confirmations.
+   */
+  private async plansFor(
+    items: Array<{ id: string; status: BookingStatus; ready: boolean; versionId: string; content: BookingTermsContent; readiness?: Readiness }>,
+    viewer: { farmer: boolean; processor: boolean },
+  ): Promise<Map<string, { plan: SalePlan; nextStep: NextStep }>> {
+    const db = this.prisma.db;
+    const now = new Date();
+    const ids = items.map((i) => i.id);
+    const [records, invoices, disputes, confs] = await Promise.all([
+      db.receivingRecord.findMany({ where: { bookingId: { in: ids } }, include: { qualityAssessment: true } }),
+      db.invoice.findMany({ where: { bookingId: { in: ids }, kind: 'PRODUCE' }, include: { payments: { orderBy: { createdAt: 'desc' } } } }),
+      db.dispute.findMany({ where: { bookingId: { in: ids }, status: { notIn: ['RESOLVED', 'WITHDRAWN'] } }, select: { bookingId: true } }),
+      db.confirmation.findMany({ where: { termsVersionId: { in: items.map((i) => i.versionId) } }, select: { termsVersionId: true, party: true } }),
+    ]);
+    const out = new Map<string, { plan: SalePlan; nextStep: NextStep }>();
+    for (const item of items) {
+      const have = new Set(confs.filter((c) => c.termsVersionId === item.versionId).map((c) => c.party));
+      let blocker: { responsible: BookingParty | null; explanation: string } | null = null;
+      if (item.status === 'CONFIRMED' && !item.ready) {
+        const readiness = item.readiness ?? (await computeReadiness(db, item.id, now));
+        const failing = readiness?.checks.find((c) => !c.passed);
+        if (failing) blocker = { responsible: failing.responsible, explanation: failing.explanation };
+      }
+      const rec = records.find((r) => r.bookingId === item.id);
+      const inv = invoices.find((i) => i.bookingId === item.id);
+      const pendingG = inv ? inv.payments.filter((p) => p.status === 'REPORTED' || p.status === 'PROVIDER_PENDING').reduce((s, p) => s + p.amountKobo, 0n) : 0n;
+      const outstanding = inv ? inv.totalKobo - inv.confirmedPaidKobo : 0n;
+      out.set(
+        item.id,
+        describePlan({
+          status: item.status,
+          ready: item.ready,
+          now,
+          content: item.content,
+          pendingParties: requiredParties(item.content).filter((p) => !have.has(p)),
+          blocker,
+          receiving: rec
+            ? {
+                status: rec.status,
+                netKg: gramsToKgString(toGrams(rec.netKg.toString())),
+                acceptedKg: rec.qualityAssessment ? gramsToKgString(toGrams(rec.qualityAssessment.acceptedKg.toString())) : null,
+                reasons: rec.qualityAssessment?.rejectionReasons.map((r) => REJECTION_REASON_LABELS[r]) ?? [],
+                note: rec.qualityAssessment?.rejectionNote ?? rec.qualityAssessment?.note ?? null,
+                farmerDecision: rec.farmerDecision,
+              }
+            : null,
+          invoice: inv
+            ? {
+                id: inv.id,
+                totalKobo: Number(inv.totalKobo),
+                confirmedPaidKobo: Number(inv.confirmedPaidKobo),
+                reportedPendingKobo: Number(pendingG),
+                outstandingKobo: Number(outstanding),
+                dueAt: inv.dueAt,
+                overdue: outstanding > 0n && inv.dueAt < now,
+                pendingPaymentId: inv.payments.find((p) => p.status === 'REPORTED')?.id ?? null,
+              }
+            : null,
+          openDispute: disputes.some((d) => d.bookingId === item.id),
+          viewer,
+        }),
+      );
+    }
+    return out;
+  }
 
   private async expireIfDue(bookingIds: string[]): Promise<void> {
     const now = new Date();
@@ -129,11 +204,17 @@ export class BookingsService {
     });
     await this.expireIfDue(rows.filter((r) => PRE_CONFIRMATION_STATUSES.includes(r.status)).map((r) => r.id));
     const page = rows.slice(0, q.limit);
+    const currentOf = (b: (typeof page)[number]) => b.termsVersions.find((v) => v.versionNo === b.currentTermsVersionNo)!;
+    const plans = await this.plansFor(
+      page.map((b) => ({ id: b.id, status: b.status, ready: b.lastReadiness, versionId: currentOf(b).id, content: currentOf(b).content as unknown as BookingTermsContent })),
+      { farmer: view === 'farmer' || view === 'cooperative', processor: view === 'processor' },
+    );
     return {
       items: page.map((b) => {
-        const t = b.termsVersions.find((v) => v.versionNo === b.currentTermsVersionNo)!;
+        const t = currentOf(b);
         const c = t.content as unknown as BookingTermsContent;
         const shipment = b.shipments[0];
+        const described = plans.get(b.id)!;
         return {
           id: b.id,
           reference: b.reference,
@@ -149,10 +230,18 @@ export class BookingsService {
           pickupWindow: c.pickupWindow,
           deliveryWindow: c.deliveryWindow,
           ready: b.lastReadiness,
-          transportStatus: shipment ? SHIPMENT_STATUS_LABELS[shipment.status] : c.transport ? 'Transport agreed' : 'Transport not arranged',
+          transportStatus: c.handover
+            ? HANDOVER_ARRANGEMENT_LABELS[c.handover.arrangement]
+            : shipment
+              ? SHIPMENT_STATUS_LABELS[shipment.status]
+              : c.transport
+                ? 'Transport agreed'
+                : 'Transport not arranged',
           receivingStatus: b.receivingRecord ? RECEIVING_STATUS_LABELS[b.receivingRecord.status] : null,
-          nextAction: this.nextActionHint(b.status, b.lastReadiness, Boolean(c.transport), b.harvestLot?.status ?? null),
+          nextAction: described.nextStep.forViewer ?? described.nextStep.waitingFor ?? this.nextActionHint(b.status, b.lastReadiness, Boolean(c.transport || c.handover), b.harvestLot?.status ?? null),
           confirmationDeadline: iso(b.confirmationDeadline),
+          plan: described.plan,
+          nextStep: described.nextStep,
           isDemo: b.isDemo,
           updatedAt: b.updatedAt.toISOString(),
         };
@@ -244,6 +333,12 @@ export class BookingsService {
           db.vehicle.findUnique({ where: { id: shipment.vehicleId }, select: { registrationPlate: true } }),
         ])
       : [null, null];
+    const described = (
+      await this.plansFor([{ id, status: b.status, ready: readiness.ready, versionId: version.id, content: current.content, readiness }], {
+        farmer: access.parties.includes('FARMER'),
+        processor: access.parties.includes('PROCESSOR'),
+      })
+    ).get(id)!;
     const contacts: BookingDetail['contacts'] = [
       { party: 'FARMER', name: b.farmerProfile.displayName, phone: ['CONFIRMED', 'ACTIVE'].includes(b.status) ? b.farmerProfile.phone : null },
       { party: 'PROCESSOR', name: b.processorOrg.name, phone: b.processorOrg.contactPhone },
@@ -256,7 +351,7 @@ export class BookingsService {
       version: b.version,
       viewerParties: access.parties,
       viewerActingFor: access.farmer?.mode === 'DELEGATE' ? { farmerName: access.farmer.farmerName, cooperativeName: access.farmer.cooperativeName, scopes: access.farmer.scopes } : null,
-      allowedActions: this.allowedActions(access, b.status, b.harvestLot?.status ?? null, Boolean(pending), pendingParties, readiness.ready, Boolean(current.content.transport)),
+      allowedActions: this.allowedActions(access, b.status, b.harvestLot?.status ?? null, Boolean(pending), pendingParties, readiness.ready, Boolean(current.content.transport), current.content, described.plan),
       current,
       pendingAmendment: pending && pendingDto
         ? {
@@ -312,11 +407,23 @@ export class BookingsService {
       cancelled: b.cancelledAt ? { at: b.cancelledAt.toISOString(), by: b.cancelledByParty, reason: b.cancelReason } : null,
       incidents: b.incidents.map((i) => ({ id: i.id, kind: i.kind, status: i.status, blocking: i.blocking, description: i.description, recoveryAction: i.recoveryAction, createdAt: i.createdAt.toISOString() })),
       timeline: await this.timeline(id),
+      plan: described.plan,
+      nextStep: described.nextStep,
       isDemo: b.isDemo,
     };
   }
 
-  private allowedActions(a: BookingAccess, status: string, lot: string | null, hasPending: boolean, pendingParties: BookingParty[], ready: boolean, hasTransport: boolean): string[] {
+  private allowedActions(
+    a: BookingAccess,
+    status: string,
+    lot: string | null,
+    hasPending: boolean,
+    pendingParties: BookingParty[],
+    ready: boolean,
+    hasTransport: boolean,
+    content: BookingTermsContent,
+    plan: SalePlan,
+  ): string[] {
     const out: string[] = [];
     const farmerCan = (scope: string) => a.farmer && (a.farmer.mode === 'SELF' || (a.farmer.mode === 'DELEGATE' && a.farmer.scopes.includes(scope as never)));
     const processorCommercial = a.parties.includes('PROCESSOR') && a.processorRoles.some((r) => (COMMERCIAL_ROLES as readonly string[]).includes(r));
@@ -331,16 +438,25 @@ export class BookingsService {
       if (pendingParties.includes('TRANSPORTER') && transporterManager) out.push('confirmTerms');
       if (hasPending && (farmerCan('APPROVE_SALE') || processorCommercial || transporterManager)) out.push('rejectAmendment');
       if (!hasPending && (farmerCan('APPROVE_SALE') || processorCommercial)) out.push('proposeAmendment');
-      if (processorCommercial) out.push('manageTransport');
+      // Transport arrangements apply only to bookings made with a transporter.
+      if (processorCommercial && !content.handover) out.push('manageTransport');
       out.push('openIncident', 'message');
     }
     if (['DRAFT', 'AWAITING_CONFIRMATIONS', 'CONFIRMED'].includes(status) && (farmerCan('APPROVE_SALE') || processorCommercial || a.isAdmin)) out.push('cancel');
     if (status === 'CONFIRMED' && ready && farmerCan('ASSIST_DATA_ENTRY')) out.push('startHarvest');
-    if (status === 'ACTIVE' && lot === 'HARVEST_STARTED' && farmerCan('ASSIST_DATA_ENTRY')) out.push('readyForPickup');
-    if (status === 'ACTIVE' && a.parties.includes('PROCESSOR') && a.processorRoles.some((r) => ['OWNER', 'MANAGER', 'RECEIVING_OFFICER'].includes(r))) out.push('receiving');
+    // Transport bookings: the farmer tells the transporter the load is ready; receiving uses the workbench.
+    if (status === 'ACTIVE' && lot === 'HARVEST_STARTED' && farmerCan('ASSIST_DATA_ENTRY') && !content.handover) out.push('readyForPickup');
+    if (status === 'ACTIVE' && !content.handover && a.parties.includes('PROCESSOR') && a.processorRoles.some((r) => ['OWNER', 'MANAGER', 'RECEIVING_OFFICER'].includes(r))) out.push('receiving');
     if (['ACTIVE', 'COMPLETED'].includes(status) && (farmerCan('APPROVE_SALE') || a.parties.includes('PROCESSOR') || a.parties.includes('TRANSPORTER'))) out.push('openDispute');
     if (status === 'COMPLETED') out.push('message');
-    if (status === 'AWAITING_CONFIRMATIONS' && !hasTransport && processorCommercial) out.push('awaitingQuotes');
+    if (status === 'AWAITING_CONFIRMATIONS' && !hasTransport && !content.handover && processorCommercial) out.push('awaitingQuotes');
+    // The short sale journey, all from the booking page.
+    const receivingRole = a.parties.includes('PROCESSOR') && a.processorRoles.some((r) => ['OWNER', 'MANAGER', 'RECEIVING_OFFICER'].includes(r));
+    const financeRole = a.parties.includes('PROCESSOR') && a.processorRoles.some((r) => ['OWNER', 'FINANCE_OFFICER'].includes(r));
+    if (content.handover && ['CONFIRMED', 'ACTIVE'].includes(status) && !plan.weighed && receivingRole) out.push('recordWeight');
+    if (plan.weighed?.farmerDecision === 'PENDING' && farmerCan('APPROVE_SALE')) out.push('reviewWeight');
+    if (plan.payment && financeRole && plan.payment.outstandingKobo - plan.payment.reportedPendingKobo > 0) out.push('recordPayment');
+    if (plan.payment?.pendingPaymentId && farmerCan('CONFIRM_PAYMENT_RECEIPT')) out.push('confirmPayment');
     return Array.from(new Set(out));
   }
 
@@ -589,7 +705,7 @@ export class BookingsService {
     const now = new Date();
     await withTransaction(this.prisma.db, async (tx) => {
       await this.engine.lockGraph(tx, id);
-      const b = await tx.booking.findUniqueOrThrow({ where: { id }, include: { slot: true, harvestRequest: true } });
+      const b = await tx.booking.findUniqueOrThrow({ where: { id }, include: { slot: true, harvestRequest: { include: { farmLocation: true } }, facility: true } });
       if (!['AWAITING_CONFIRMATIONS', 'CONFIRMED', 'ACTIVE'].includes(b.status)) throw new DomainError('INVALID_STATE_TRANSITION', `Terms cannot be changed while the booking is ${b.status.toLowerCase()}`);
       const { content } = await this.engine.currentTerms(tx, id);
       const next: BookingTermsContent = structuredClone(content);
@@ -604,6 +720,20 @@ export class BookingsService {
       if (input.paymentTermsDays !== undefined) {
         next.paymentTermsDays = input.paymentTermsDays;
         next.invoiceDueRule = content.invoiceDueRule.replace(/due \d+ day\(s\)/, `due ${input.paymentTermsDays} day(s)`);
+      }
+      if (input.handoverArrangement || input.handoverWindowStart || input.handoverWindowEnd || input.farmerDeliveryCostKobo !== undefined) {
+        // Changing how or when the cassava changes hands is a material change: both sides agree again.
+        const arrangement = input.handoverArrangement ?? content.handover?.arrangement;
+        if (!arrangement) throw new DomainError('VALIDATION_FAILED', 'Choose whether the buyer collects or the farmer delivers', [{ path: 'handoverArrangement', message: 'Choose one' }]);
+        const window = {
+          start: new Date(input.handoverWindowStart ?? content.handover?.window.start ?? content.pickupWindow.start).toISOString(),
+          end: new Date(input.handoverWindowEnd ?? content.handover?.window.end ?? content.pickupWindow.end).toISOString(),
+        };
+        const cost = arrangement === 'FARMER_DELIVERS' ? (input.farmerDeliveryCostKobo ?? content.handover?.farmerDeliveryCostKobo ?? null) : null;
+        next.handover = handoverFor(arrangement, { farm: b.harvestRequest.farmLocation, facility: b.facility }, window, cost);
+        next.pickupWindow = { ...window };
+        next.deliveryWindow = { ...window };
+        next.freightPayer = arrangement === 'FARMER_DELIVERS' ? 'FARMER' : 'PROCESSOR';
       }
       const ds = new Date(next.deliveryWindow.start);
       const de = new Date(next.deliveryWindow.end);

@@ -10,6 +10,7 @@ function readyFacts(overrides: Partial<ReadinessFacts> = {}): ReadinessFacts {
     bookingStatus: 'CONFIRMED',
     currentVersionNo: 2,
     hasTransportTerms: true,
+    handover: null,
     confirmedParties: ['FARMER', 'PROCESSOR', 'TRANSPORTER'],
     pickupWindowEnd: later(30),
     deliveryWindowStart: later(26),
@@ -56,11 +57,9 @@ describe('evaluateReadiness', () => {
     expect(codes).toEqual(expect.arrayContaining(['CAPACITY_RESERVED', 'WINDOWS_FEASIBLE', 'NO_BLOCKING_ISSUES']));
   });
 
-  it('requires transport terms and a confirmed, conflict-free trip with a driver', () => {
-    expect(failing(readyFacts({ hasTransportTerms: false, confirmedParties: ['FARMER', 'PROCESSOR'], trip: null }))).toEqual([
-      'TRANSPORT_ACCEPTED',
-      'VEHICLE_DRIVER_CONFIRMED',
-    ]);
+  it('older bookings made with a transporter still need a confirmed, conflict-free trip with a driver', () => {
+    // Without transport terms and without a handover, how the cassava gets there is not agreed.
+    expect(failing(readyFacts({ hasTransportTerms: false, confirmedParties: ['FARMER', 'PROCESSOR'], trip: null }))).toEqual(['HANDOVER_AGREED']);
     expect(failing(readyFacts({ trip: { status: 'CONFIRMED', hasDriver: false, conflict: false, matchesTerms: true } }))).toEqual(['VEHICLE_DRIVER_CONFIRMED']);
     expect(failing(readyFacts({ trip: { status: 'CANCELLED', hasDriver: true, conflict: false, matchesTerms: true } }))).toEqual(['VEHICLE_DRIVER_CONFIRMED']);
     expect(failing(readyFacts({ trip: { status: 'HELD', hasDriver: true, conflict: true, matchesTerms: true } }))).toEqual(['VEHICLE_DRIVER_CONFIRMED']);
@@ -88,5 +87,53 @@ describe('evaluateReadiness', () => {
 
   it('a represented farmer has no account and is not blocked by account status', () => {
     expect(evaluateReadiness(readyFacts({ farmerAccountStatus: null })).ready).toBe(true);
+  });
+});
+
+/** The simplified journey: the buyer collects or the farmer delivers. No transporter, vehicle or driver. */
+function handoverFacts(overrides: Partial<ReadinessFacts> = {}): ReadinessFacts {
+  return readyFacts({
+    hasTransportTerms: false,
+    confirmedParties: ['FARMER', 'PROCESSOR'],
+    trip: null,
+    transporterOrgStatus: null,
+    handover: { arrangement: 'COLLECT_FROM_FARM', placeLabel: "Adunni's farm, Akinyele", windowStart: later(25), windowEnd: later(29) },
+    pickupWindowEnd: later(29),
+    deliveryWindowStart: later(25),
+    deliveryWindowEnd: later(29),
+    ...overrides,
+  });
+}
+
+describe('evaluateReadiness with a handover arrangement', () => {
+  it('is ready when both sides agreed, capacity is reserved and the handover is complete — no driver or vehicle needed', () => {
+    const r = evaluateReadiness(handoverFacts());
+    expect(r.ready).toBe(true);
+    expect(r.checks.map((c) => c.code)).toEqual(['FARMER_ACCEPTED', 'PROCESSOR_ACCEPTED', 'CAPACITY_RESERVED', 'HANDOVER_AGREED', 'WINDOWS_FEASIBLE', 'PARTICIPANTS_ELIGIBLE', 'NO_BLOCKING_ISSUES']);
+    expect(r.checks.find((c) => c.code === 'HANDOVER_AGREED')!.explanation).toContain('collects');
+  });
+
+  it('describes delivery by the farmer', () => {
+    const r = evaluateReadiness(handoverFacts({ handover: { arrangement: 'FARMER_DELIVERS', placeLabel: 'Oluyole Garri Plant, Oluyole', windowStart: later(25), windowEnd: later(29) } }));
+    expect(r.ready).toBe(true);
+    expect(r.checks.find((c) => c.code === 'HANDOVER_AGREED')!.explanation).toBe('The farmer delivers to Oluyole Garri Plant, Oluyole.');
+  });
+
+  it('is not ready while a party has not agreed the current terms, or capacity is only held', () => {
+    expect(failing(handoverFacts({ confirmedParties: ['PROCESSOR'] }))).toEqual(['FARMER_ACCEPTED']);
+    expect(failing(handoverFacts({ reservation: { status: 'HELD', expiresAt: later(5) } }))).toEqual(['CAPACITY_RESERVED']);
+  });
+
+  it('is not ready when the handover details are incomplete', () => {
+    expect(failing(handoverFacts({ handover: { arrangement: 'COLLECT_FROM_FARM', placeLabel: ' ', windowStart: later(25), windowEnd: later(29) } }))).toEqual(['HANDOVER_AGREED']);
+    expect(failing(handoverFacts({ handover: { arrangement: 'COLLECT_FROM_FARM', placeLabel: 'Farm', windowStart: later(29), windowEnd: later(25) } }))).toEqual(['HANDOVER_AGREED']);
+  });
+
+  it('is no longer valid after cancellation, a pending change of terms, or when the handover time has passed', () => {
+    expect(failing(handoverFacts({ bookingStatus: 'CANCELLED' }))).toEqual(['NO_BLOCKING_ISSUES']);
+    expect(failing(handoverFacts({ pendingAmendment: true }))).toEqual(['NO_BLOCKING_ISSUES']);
+    const passed = evaluateReadiness(handoverFacts({ pickupWindowEnd: later(-1) }));
+    expect(passed.ready).toBe(false);
+    expect(passed.checks.find((c) => c.code === 'WINDOWS_FEASIBLE')!.explanation).toContain('handover time has passed');
   });
 });

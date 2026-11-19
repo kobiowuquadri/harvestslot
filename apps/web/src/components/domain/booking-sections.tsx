@@ -537,7 +537,7 @@ export function Documents({ b }: { b: BookingDetail }) {
               ))}
             </Select>
           </Field>
-          <label className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line-strong bg-surface px-4 text-sm font-medium hover:bg-leaf-50">
+          <label className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line-strong bg-surface px-4 text-sm font-medium hover:bg-canvas">
             {busy ? 'Uploading…' : 'Upload photo or PDF'}
             <input
               type="file"

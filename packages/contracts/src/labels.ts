@@ -4,6 +4,7 @@ import type {
   DeliveryStatus,
   DisputeCategory,
   DisputeStatus,
+  HandoverArrangement,
   HarvestLotStatus,
   HarvestRequestStatus,
   IncidentKind,
@@ -34,8 +35,9 @@ export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
 };
 
 export const OFFER_STATUS_LABELS: Record<OfferStatus, string> = {
-  OPEN: 'Open — awaiting farmer',
-  COUNTERED: 'Counter-offer — awaiting processor',
+  DRAFT: 'Draft — not sent yet',
+  OPEN: 'Waiting for the farmer',
+  COUNTERED: 'Farmer proposed changes',
   ACCEPTED: 'Accepted',
   DECLINED: 'Declined',
   WITHDRAWN: 'Withdrawn',
@@ -209,4 +211,9 @@ export const DELIVERY_STATUS_LABELS: Record<DeliveryStatus, string> = {
   SUPPRESSED: 'Not sent — demo account or contact preference',
   CAPTURED_LOCALLY: 'Captured locally (development) — not delivered',
   DEAD: 'Failed permanently',
+};
+
+export const HANDOVER_ARRANGEMENT_LABELS: Record<HandoverArrangement, string> = {
+  COLLECT_FROM_FARM: 'Buyer collects from the farm',
+  FARMER_DELIVERS: 'Farmer delivers to the buyer',
 };

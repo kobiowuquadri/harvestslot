@@ -40,10 +40,20 @@ test.describe('unauthorised access', () => {
     expect((await r.json()).error.code).toBe('CSRF_FAILED');
   });
 
-  test('demo persona switching is refused for unknown personas', async () => {
+  test('demo persona switching is refused for unknown personas and for roles outside the simple journey', async () => {
     const api = await Api.create();
-    const r = await api.raw('POST', '/auth/demo-login', { persona: 'superuser' });
-    expect(r.status()).toBe(422);
-    expect((await r.json()).error.code).toBe('VALIDATION_FAILED');
+    for (const persona of ['superuser', 'transporter', 'driver']) {
+      const r = await api.raw('POST', '/auth/demo-login', { persona });
+      expect(r.status(), persona).toBe(422);
+      expect((await r.json()).error.code).toBe('VALIDATION_FAILED');
+    }
+  });
+
+  test('public registration offers only selling or buying', async () => {
+    const api = await Api.create();
+    for (const accountType of ['TRANSPORTER', 'COOPERATIVE']) {
+      const r = await api.raw('POST', '/auth/register', { accountType, displayName: 'Not allowed', email: `x-${Date.now()}@e2e.example`, password: 'E2e-Cassava-Route-2026', organisationName: 'Nope Ltd', acceptTerms: true, acceptPrivacy: true });
+      expect(r.status(), accountType).toBe(422);
+    }
   });
 });

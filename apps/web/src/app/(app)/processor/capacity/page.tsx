@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { addDays, formatLagosDate, lagosDateString, lagosStartOfDay, type FacilityDto, type SlotDto } from '@harvestslot/contracts';
+import { BuyingSlotButton } from '@/components/domain/buying-slot-form';
 import { ReasonActionDialog } from '@/components/domain/dialogs';
 import { DemoTag, Kg, StatusBadge, When, Window } from '@/components/domain/display';
 import { OrgGate } from '@/components/domain/org-gate';
@@ -26,7 +27,7 @@ function UsageBar({ s }: { s: SlotDto }) {
         <div className="bg-amber" style={{ width: pct(s.usage.heldKg) }} />
       </div>
       <p className="mt-1 text-xs text-muted">
-        <span className="text-forest">■</span> received <Kg kg={s.usage.consumedKg} /> · <span className="text-leaf">■</span> confirmed <Kg kg={s.usage.committedKg} /> · <span className="text-amber-ink">■</span> on hold <Kg kg={s.usage.heldKg} /> · free <strong><Kg kg={s.usage.availableKg} /></strong> of <Kg kg={s.usage.limitKg} />
+        <span className="text-forest">■</span> received <Kg kg={s.usage.consumedKg} /> · <span className="text-leaf">■</span> booked <Kg kg={s.usage.committedKg} /> · <span className="text-amber-ink">■</span> held by offers <Kg kg={s.usage.heldKg} /> · free <strong><Kg kg={s.usage.availableKg} /></strong> of <Kg kg={s.usage.limitKg} />
       </p>
     </div>
   );
@@ -107,8 +108,8 @@ function CreateSlot({ orgId, facilities }: { orgId: string; facilities: Facility
   });
   return (
     <>
-      <Button onClick={() => setOpen(true)} disabled={!lines.length}>
-        <Plus className="size-4" aria-hidden /> Add capacity
+      <Button variant="outline" onClick={() => setOpen(true)} disabled={!lines.length}>
+        <Plus className="size-4" aria-hidden /> Add by processing line
       </Button>
       <Dialog
         open={open}
@@ -209,8 +210,19 @@ function Capacity({ w }: { w: Extract<Workspace, { kind: 'processor' }> }) {
   }, [slots.data]);
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Processing capacity" description="Publish slots so farmers can be matched. Holds from accepted offers count against the purchase limit until confirmed or released." actions={facilities.data ? <CreateSlot orgId={w.orgId} facilities={facilities.data} /> : null} />
-      {w.status !== 'APPROVED' ? <Alert tone="warning">You can create draft slots now; publishing needs an approved organisation.</Alert> : null}
+      <PageHeader
+        title="Buying slots"
+        description="Tell farmers how much cassava you can receive, where, and on which dates. Farmers whose harvest fits see you as a buyer; an offer you send holds the space until they answer."
+        actions={
+          facilities.data ? (
+            <>
+              <BuyingSlotButton orgId={w.orgId} facilities={facilities.data} approved={w.status === 'APPROVED'} />
+              {facilities.data.some((f) => f.lines.length) ? <CreateSlot orgId={w.orgId} facilities={facilities.data} /> : null}
+            </>
+          ) : null
+        }
+      />
+      {w.status !== 'APPROVED' ? <Alert tone="warning">HarvestSlot is reviewing your business. You can save buying slots now and publish them once the review is done.</Alert> : null}
       <div className="flex flex-wrap items-end gap-3">
         <Field label="Facility">
           <Select value={facilityId} onChange={(e) => setFacilityId(e.target.value)}>
@@ -229,12 +241,20 @@ function Capacity({ w }: { w: Extract<Workspace, { kind: 'processor' }> }) {
           <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         </Field>
       </div>
-      <QueryView query={slots} isEmpty={(d) => d.length === 0} empty={<EmptyState title="No slots in this period">Add capacity to start receiving matches.</EmptyState>}>
+      <QueryView
+        query={slots}
+        isEmpty={(d) => d.length === 0}
+        empty={
+          <EmptyState title="No buying slots in these dates" action={facilities.data ? <BuyingSlotButton orgId={w.orgId} facilities={facilities.data} approved={w.status === 'APPROVED'} size="md" /> : undefined}>
+            Publish one so farmers near you can send you their harvest.
+          </EmptyState>
+        }
+      >
         {() => (
           <div className="flex flex-col gap-5">
             {byDay.map(([day, list]) => (
               <section key={day} className="flex flex-col gap-2">
-                <h2 className="text-sm font-semibold text-forest">{formatLagosDate(day)}</h2>
+                <h2 className="text-sm font-semibold text-ink">{formatLagosDate(day)}</h2>
                 {list.map((s) => (
                   <Card key={s.id}>
                     <CardContent className="flex flex-col gap-3">
@@ -258,7 +278,7 @@ function Capacity({ w }: { w: Extract<Workspace, { kind: 'processor' }> }) {
                         {['DRAFT', 'PUBLISHED'].includes(s.status) ? (
                           <>
                             <AdjustDialog s={s} orgId={w.orgId} />
-                            <ReasonActionDialog trigger="Close to new bookings" triggerSize="sm" title="Close this slot?" description="Existing bookings stay. No new offers can use it." confirmLabel="Close slot" path={`/slots/${s.id}/close`} body={{ expectedVersion: s.version }} invalidate={[['slots', w.orgId]]} success="Slot closed" />
+                            <ReasonActionDialog trigger="Stop new offers" triggerSize="sm" title="Close this buying slot?" description="Existing bookings stay. No new offers can use it." confirmLabel="Close slot" path={`/slots/${s.id}/close`} body={{ expectedVersion: s.version }} invalidate={[['slots', w.orgId]]} success="Slot closed" />
                             {s.bookingsCount === 0 ? <ReasonActionDialog trigger="Cancel slot" triggerSize="sm" title="Cancel this slot?" confirmLabel="Cancel slot" path={`/slots/${s.id}/cancel`} body={{ expectedVersion: s.version }} invalidate={[['slots', w.orgId]]} success="Slot cancelled" /> : null}
                           </>
                         ) : null}

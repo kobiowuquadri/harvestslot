@@ -39,7 +39,7 @@ export const organisationSchema = z.object({
   name: z.string(),
   status: OrgStatusE.schema,
   statusReason: z.string().nullable(),
-  lga: z.string(),
+  lga: z.string().nullable(),
   state: z.string(),
   address: z.string().nullable(),
   registrationNumber: z.string().nullable(),

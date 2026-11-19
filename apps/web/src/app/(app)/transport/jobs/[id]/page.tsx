@@ -77,7 +77,7 @@ function Collection({ job }: { job: JobDto }) {
         <Field label="Quantity loaded (kg)" hint="Your count. The facility weighs it again on arrival.">
           <Input inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} />
         </Field>
-        <label className="inline-flex w-fit cursor-pointer items-center rounded-lg border border-line-strong px-3 py-2 text-sm font-medium hover:bg-leaf-50">
+        <label className="inline-flex w-fit cursor-pointer items-center rounded-lg border border-line-strong px-3 py-2 text-sm font-medium hover:bg-canvas">
           {uploading ? 'Uploading…' : `Add a photo of the load${evidence.length ? ` (${evidence.length} added)` : ''}`}
           <input
             type="file"

@@ -4,6 +4,24 @@ Every result below comes from a command that was actually run on the build machi
 
 Last full run: **2026-10-24**.
 
+### Re-run after the 2026-11-16 redesign
+
+Only the web app and the browser tests changed (DECISIONS #28–#32), so these checks were run again on 2026-11-16:
+
+| Check | Command | Result |
+|---|---|---|
+| Lint (whole repository) | `pnpm lint` | **0 problems** |
+| Type check (web) | `pnpm --filter @harvestslot/web typecheck` | **passed** |
+| Production build (web) | `pnpm --filter @harvestslot/web build` | **passed** (includes the new `/credits` page) |
+| Colour contrast of design tokens | `pnpm --filter @harvestslot/web contrast` | **21 of 21 pairs pass** WCAG AA |
+| Browser tests, including axe-core WCAG 2.1 AA | `pnpm test:e2e` on ports 3100/4200/4300 ([Running beside `pnpm dev`](#running-beside-pnpm-dev)) | **21 passed** in 6.0 min |
+
+Package unit tests, API integration tests and the load test were not re-run, because no API or shared-package code changed.
+
+Two browser-test problems were fixed along the way:
+* The farmer happy path checked for "Reported by payer" while the report-payment dialog was still open. The dialog's description contains that phrase, so the check could pass before the payment was saved. The test now waits for the dialog to close and matches the badge text exactly. This was a defect in the test, not the product.
+* The first redesign run failed the focus-visibility check because form fields had replaced the focus outline with a faint halo. Fields now use the standard 2px green outline.
+
 | Check | Command | Result |
 |---|---|---|
 | Lint (whole repository) | `pnpm lint` | **0 problems** |
@@ -38,6 +56,16 @@ Two test-isolation problems surfaced when files ran in a different order (shared
 ## Browser tests (`e2e/tests`, Playwright 1.64 + Chromium, isolated stack)
 
 `e2e/stack.mjs` drops and recreates `harvestslot_e2e`, applies migrations, loads the demo seed, and runs the built API, worker and web app with `APP_ENV=test`.
+
+### Running beside `pnpm dev`
+
+The default ports (web 3000, API 4000, worker health 4100) clash with a running `pnpm dev`. To use other ports, build the web app against the test API port (Next.js fixes its rewrites at build time), run the suite, then rebuild so `pnpm start` uses the default port again:
+
+```
+API_INTERNAL_URL=http://localhost:4200 pnpm --filter @harvestslot/web build
+E2E_BASE_URL=http://localhost:3100 API_PORT=4200 API_INTERNAL_URL=http://localhost:4200 WORKER_HEALTH_PORT=4300 pnpm test:e2e
+pnpm --filter @harvestslot/web build
+```
 
 | Spec | Tests | What it proves |
 |---|---|---|

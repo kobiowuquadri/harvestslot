@@ -32,10 +32,13 @@ export const password = z
 /** STAFF creates a plain account for someone invited to join an organisation (driver, officer…). */
 export const accountTypeSchema = z.enum(['FARMER', 'PROCESSOR', 'TRANSPORTER', 'COOPERATIVE', 'STAFF']);
 export type AccountType = z.infer<typeof accountTypeSchema>;
+/** What public registration accepts. Transporter and cooperative organisations are created by an administrator. */
+export const registrationAccountTypeSchema = z.enum(['FARMER', 'PROCESSOR', 'STAFF']);
 
 export const registerSchema = z
   .object({
-    accountType: accountTypeSchema,
+    /** Public registration offers selling (FARMER) or buying (PROCESSOR); STAFF is for invited staff. */
+    accountType: registrationAccountTypeSchema,
     displayName: shortText(120),
     email: emailAddress.optional(),
     phone: phoneNumber.optional(),
@@ -50,11 +53,10 @@ export const registerSchema = z
     contactConsentEmail: z.boolean().default(true),
   })
   .refine((v) => v.email || v.phone, { message: 'Provide an email address or a phone number', path: ['email'] })
-  .refine((v) => ['FARMER', 'STAFF'].includes(v.accountType) || (v.organisationName && v.organisationName.length >= 2), {
-    message: 'Organisation name is required',
+  .refine((v) => v.accountType !== 'PROCESSOR' || (v.organisationName && v.organisationName.length >= 2), {
+    message: 'Enter your business name',
     path: ['organisationName'],
-  })
-  .refine((v) => v.accountType === 'STAFF' || v.lga, { message: 'Choose your local government area', path: ['lga'] });
+  });
 export type RegisterInput = z.infer<typeof registerSchema>;
 
 export const loginSchema = z.object({
@@ -95,7 +97,7 @@ export const updateAccountSchema = z.object({
 });
 
 export const demoLoginSchema = z.object({
-  persona: z.enum(['farmer', 'processor-manager', 'receiving-officer', 'transporter', 'driver', 'cooperative', 'admin', 'finance-officer']),
+  persona: z.enum(['farmer', 'processor-manager', 'receiving-officer', 'cooperative', 'admin', 'finance-officer']),
 });
 export type DemoPersona = z.infer<typeof demoLoginSchema>['persona'];
 
@@ -115,7 +117,7 @@ export const meSchema = z.object({
   }),
   session: z.object({ id: uuid, mfaPending: z.boolean(), mfaVerified: z.boolean(), absoluteExpiresAt: z.string() }),
   farmerProfile: z
-    .object({ id: uuid, displayName: z.string(), claimStatus: FarmerClaimStatusE.schema, lga: z.string() })
+    .object({ id: uuid, displayName: z.string(), claimStatus: FarmerClaimStatusE.schema, lga: z.string().nullable() })
     .nullable(),
   memberships: z.array(
     z.object({

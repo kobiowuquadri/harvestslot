@@ -6,6 +6,7 @@ import {
   dbDateToString,
   decideOfferSchema,
   formatKg,
+  formatLagosDate,
   formatPricePerKg,
   gramsToKgString,
   kgToGrams,
@@ -14,9 +15,14 @@ import {
   produceAmountKobo,
   qualityTermsSchema,
   reviseOfferSchema,
+  sendOfferSchema,
   stringToDbDate,
   toGrams,
+  type FreightPayer,
+  type HandoverArrangement,
   type OfferDto,
+  type QualityTerms,
+  type RejectionHandling,
 } from '@harvestslot/contracts';
 import {
   audit,
@@ -40,11 +46,11 @@ import {
   type Actor,
   type FarmerAuthority,
 } from '@harvestslot/core';
-import type { Prisma, Tx } from '@harvestslot/db';
+import type { Facility, Prisma, Tx } from '@harvestslot/db';
 import { AccessService } from '../../common/access.service.js';
 import { PrismaService } from '../../common/prisma.service.js';
 import { iso } from '../../common/serialize.js';
-import { BookingEngine } from '../bookings/booking-engine.service.js';
+import { BookingEngine, placeLabel } from '../bookings/booking-engine.service.js';
 
 const offerInclude = {
   facility: true,
@@ -56,7 +62,28 @@ const offerInclude = {
 } as const;
 type OfferRow = Prisma.OfferGetPayload<{ include: typeof offerInclude }>;
 
-type Terms = z.infer<typeof createOfferSchema>;
+type TermsInput = Omit<z.infer<typeof reviseOfferSchema>, 'expectedVersionNo' | 'send'>;
+
+/** Offer terms with every default filled in: what is stored on an offer version. */
+interface ResolvedTerms {
+  slotId: string;
+  quantityKg: string;
+  priceKoboPerKg: number;
+  plannedHarvestDate: string;
+  pickupWindowStart: string;
+  pickupWindowEnd: string;
+  deliveryWindowStart: string;
+  deliveryWindowEnd: string;
+  qualityTerms: QualityTerms;
+  toleranceBps: number;
+  paymentTermsDays: number;
+  freightPayer: FreightPayer;
+  handoverArrangement: HandoverArrangement | null;
+  farmerDeliveryCostKobo: number | null;
+  rejectionHandling: RejectionHandling;
+  cancellationTerms: string;
+  note: string | null;
+}
 
 @Injectable()
 export class OffersService {
@@ -68,6 +95,7 @@ export class OffersService {
 
   private async dto(o: OfferRow): Promise<OfferDto> {
     const users = await this.prisma.db.user.findMany({ where: { id: { in: o.versions.map((v) => v.proposedByUserId) } }, select: { id: true, displayName: true } });
+    const farm = o.harvestRequest.farmLocation;
     const versions = o.versions.map((v) => ({
       versionNo: v.versionNo,
       proposedBy: v.proposedBy,
@@ -86,6 +114,14 @@ export class OffersService {
       toleranceBps: v.toleranceBps,
       paymentTermsDays: v.paymentTermsDays,
       freightPayer: v.freightPayer,
+      handoverArrangement: v.handoverArrangement,
+      farmerDeliveryCostKobo: v.farmerDeliveryCostKobo !== null ? koboToNumber(v.farmerDeliveryCostKobo) : null,
+      handoverPlace:
+        v.handoverArrangement === 'COLLECT_FROM_FARM'
+          ? placeLabel(farm.label, farm.lga)
+          : v.handoverArrangement === 'FARMER_DELIVERS'
+            ? placeLabel(o.facility.name, o.facility.lga) + (o.facility.address ? ` (${o.facility.address})` : '')
+            : null,
       rejectionHandling: v.rejectionHandling,
       cancellationTerms: v.cancellationTerms,
       note: v.note,
@@ -93,8 +129,7 @@ export class OffersService {
       estimatedProduceAmountKobo: koboToNumber(produceAmountKobo(toGrams(v.quantityKg), v.priceKoboPerKg)),
     }));
     const current = versions[versions.length - 1]!;
-    const loc = o.harvestRequest.farmLocation;
-    const approx = loc.approxLat !== null && loc.approxLng !== null ? { lat: Number(loc.approxLat), lng: Number(loc.approxLng) } : null;
+    const approx = farm.approxLat !== null && farm.approxLng !== null ? { lat: Number(farm.approxLat), lng: Number(farm.approxLng) } : null;
     return {
       id: o.id,
       harvestRequestId: o.harvestRequestId,
@@ -110,7 +145,7 @@ export class OffersService {
       currentVersionNo: o.currentVersionNo,
       current,
       versions,
-      awaiting: o.status === 'OPEN' ? 'FARMER' : o.status === 'COUNTERED' ? 'PROCESSOR' : 'NONE',
+      awaiting: o.status === 'OPEN' ? 'FARMER' : o.status === 'COUNTERED' || o.status === 'DRAFT' ? 'PROCESSOR' : 'NONE',
       hold: o.reservation ? { status: o.reservation.status, quantityKg: gramsToKgString(toGrams(o.reservation.quantityKg)), expiresAt: iso(o.reservation.expiresAt) } : null,
       straightLineKm: approx ? round1(haversineKm(approx, { lat: Number(o.facility.lat), lng: Number(o.facility.lng) })) : null,
       bookingId: o.booking?.id ?? null,
@@ -127,11 +162,12 @@ export class OffersService {
     return o;
   }
 
-  /** Farmer side (via harvest access) or the issuing processor organisation. */
-  private async viewerSide(actor: Actor, o: { processorOrgId: string; harvestRequest: { farmerProfileId: string } }): Promise<'FARMER' | 'PROCESSOR'> {
+  /** Farmer side (via harvest access) or the issuing processor organisation. Drafts are private to the buyer. */
+  private async viewerSide(actor: Actor, o: { status: string; processorOrgId: string; harvestRequest: { farmerProfileId: string } }): Promise<'FARMER' | 'PROCESSOR'> {
     const memberships = await this.access.memberships(actor);
     if (memberships.some((m) => m.organisationId === o.processorOrgId)) return 'PROCESSOR';
     await this.access.farmer(actor, o.harvestRequest.farmerProfileId, 'harvest.view');
+    if (o.status === 'DRAFT') throw new DomainError('NOT_FOUND', 'Offer not found');
     return 'FARMER';
   }
 
@@ -150,7 +186,7 @@ export class OffersService {
     if (!req) throw new DomainError('NOT_FOUND', 'Harvest request not found');
     await this.access.farmer(actor, req.farmerProfileId, 'harvest.view');
     await this.expireDue({ harvestRequestId });
-    const rows = await this.prisma.db.offer.findMany({ where: { harvestRequestId }, include: offerInclude, orderBy: { createdAt: 'desc' } });
+    const rows = await this.prisma.db.offer.findMany({ where: { harvestRequestId, status: { not: 'DRAFT' } }, include: offerInclude, orderBy: { createdAt: 'desc' } });
     return Promise.all(rows.map((r) => this.dto(r)));
   }
 
@@ -158,7 +194,7 @@ export class OffersService {
     await this.access.requireOrg(actor, orgId, 'processor.booking.view');
     await this.expireDue({ processorOrgId: orgId });
     const rows = await this.prisma.db.offer.findMany({
-      where: { processorOrgId: orgId, ...(status === 'open' ? { status: { in: ['OPEN', 'COUNTERED'] } } : {}) },
+      where: { processorOrgId: orgId, ...(status === 'open' ? { status: { in: ['DRAFT', 'OPEN', 'COUNTERED'] } } : {}) },
       include: offerInclude,
       orderBy: { createdAt: 'desc' },
       take: 200,
@@ -173,75 +209,149 @@ export class OffersService {
     for (const d of due) await withTransaction(this.prisma.db, (tx) => expireOfferIfDue(tx, d.id, now));
   }
 
-  private validateTerms(input: Omit<Terms, 'harvestRequestId' | 'validForHours'>, slot: { startsAt: Date; endsAt: Date }, request: { earliestHarvestDate: Date; latestHarvestDate: Date }, now: Date) {
+  /**
+   * Fills a simple offer ("this much, this price, this day, collect or deliver") with the facility's
+   * defaults. Pickup and delivery windows both follow the handover window unless given explicitly.
+   */
+  private resolve(input: TermsInput, facility: Facility): ResolvedTerms {
+    const start = input.handoverWindowStart ?? input.pickupWindowStart!;
+    const end = input.handoverWindowEnd ?? input.pickupWindowEnd!;
+    const arrangement = input.handoverArrangement ?? null;
+    return {
+      slotId: input.slotId,
+      quantityKg: input.quantityKg,
+      priceKoboPerKg: input.priceKoboPerKg,
+      plannedHarvestDate: input.plannedHarvestDate,
+      pickupWindowStart: input.pickupWindowStart ?? start,
+      pickupWindowEnd: input.pickupWindowEnd ?? end,
+      deliveryWindowStart: input.deliveryWindowStart ?? start,
+      deliveryWindowEnd: input.deliveryWindowEnd ?? end,
+      qualityTerms: input.qualityTerms ?? qualityTermsSchema.parse(facility.qualityCriteria),
+      toleranceBps: input.toleranceBps ?? facility.defaultToleranceBps,
+      paymentTermsDays: input.paymentTermsDays ?? facility.defaultPaymentTermsDays,
+      // Who carries the cassava decides who pays for it: the buyer when collecting, the farmer when delivering.
+      freightPayer: arrangement === 'FARMER_DELIVERS' ? 'FARMER' : arrangement === 'COLLECT_FROM_FARM' ? 'PROCESSOR' : (input.freightPayer ?? 'PROCESSOR'),
+      handoverArrangement: arrangement,
+      farmerDeliveryCostKobo: arrangement === 'FARMER_DELIVERS' && input.farmerDeliveryCostKobo ? input.farmerDeliveryCostKobo : null,
+      rejectionHandling: input.rejectionHandling ?? facility.rejectionHandling,
+      cancellationTerms: input.cancellationTerms ?? facility.cancellationTerms,
+      note: input.note ?? null,
+    };
+  }
+
+  private validateTerms(t: ResolvedTerms, slot: { startsAt: Date; endsAt: Date }, request: { earliestHarvestDate: Date; latestHarvestDate: Date }, now: Date) {
     const issues: Array<{ path: string; message: string }> = [];
-    const pickupStart = new Date(input.pickupWindowStart);
-    const deliveryStart = new Date(input.deliveryWindowStart);
-    const deliveryEnd = new Date(input.deliveryWindowEnd);
-    if (pickupStart <= now) issues.push({ path: 'pickupWindowStart', message: 'Pickup must be in the future' });
-    if (deliveryStart < slot.startsAt || deliveryEnd > slot.endsAt) issues.push({ path: 'deliveryWindowStart', message: 'Delivery window must fall inside the processing slot' });
-    if (input.plannedHarvestDate < dbDateToString(request.earliestHarvestDate) || input.plannedHarvestDate > dbDateToString(request.latestHarvestDate)) {
-      issues.push({ path: 'plannedHarvestDate', message: 'Harvest date must be within the farmer’s acceptable dates' });
+    const pickupStart = new Date(t.pickupWindowStart);
+    const deliveryStart = new Date(t.deliveryWindowStart);
+    const deliveryEnd = new Date(t.deliveryWindowEnd);
+    if (pickupStart <= now) issues.push({ path: 'handoverWindowStart', message: 'Choose a time in the future' });
+    if (deliveryStart < slot.startsAt || deliveryEnd > slot.endsAt) {
+      issues.push({ path: 'handoverWindowStart', message: `The time must fall inside the buying slot (${formatLagosDate(slot.startsAt)} – ${formatLagosDate(slot.endsAt)})` });
     }
-    const maxHours = input.qualityTerms.maxHoursHarvestToDelivery;
-    if ((deliveryEnd.getTime() - new Date(`${input.plannedHarvestDate}T00:00:00+01:00`).getTime()) / 3_600_000 > maxHours + 24) {
-      issues.push({ path: 'deliveryWindowEnd', message: `Delivery would be later than ${maxHours} h after harvest` });
+    if (t.plannedHarvestDate < dbDateToString(request.earliestHarvestDate) || t.plannedHarvestDate > dbDateToString(request.latestHarvestDate)) {
+      issues.push({ path: 'plannedHarvestDate', message: `Choose a day the farmer can harvest (${formatLagosDate(dbDateToString(request.earliestHarvestDate))} – ${formatLagosDate(dbDateToString(request.latestHarvestDate))})` });
+    }
+    const maxHours = t.qualityTerms.maxHoursHarvestToDelivery;
+    if ((deliveryEnd.getTime() - new Date(`${t.plannedHarvestDate}T00:00:00+01:00`).getTime()) / 3_600_000 > maxHours + 24) {
+      issues.push({ path: 'handoverWindowEnd', message: `Delivery would be later than ${maxHours} h after harvest` });
     }
     if (issues.length) throw new DomainError('VALIDATION_FAILED', 'Some offer terms are not workable', issues);
   }
 
-  async create(actor: Actor, input: Terms): Promise<OfferDto> {
+  async create(actor: Actor, input: z.infer<typeof createOfferSchema>): Promise<OfferDto> {
     const facilitySlot = await this.prisma.db.processingSlot.findUnique({ where: { id: input.slotId }, include: { facility: true, line: true } });
     if (!facilitySlot) throw new DomainError('NOT_FOUND', 'Slot not found');
     const orgId = facilitySlot.facility.organisationId;
-    await this.access.requireOrg(actor, orgId, 'processor.offer.manage', { requireApproved: true });
+    const send = input.send && input.handoverArrangement !== undefined;
+    // Drafts can be prepared before the organisation is approved; sending needs approval.
+    await this.access.requireOrg(actor, orgId, 'processor.offer.manage', { requireApproved: send });
     const request = await this.prisma.db.harvestRequest.findUnique({ where: { id: input.harvestRequestId } });
     if (!request || request.status !== 'PUBLISHED') throw new DomainError('NOT_FOUND', 'Published harvest request not found');
     if (request.isDemo !== facilitySlot.isDemo) throw new DomainError('NOT_FOUND', 'Published harvest request not found');
     const now = new Date();
-    this.validateTerms(input, facilitySlot, request, now);
+    const terms = this.resolve(input, facilitySlot.facility);
+    this.validateTerms(terms, facilitySlot, request, now);
     if (facilitySlot.status !== 'PUBLISHED' || facilitySlot.startsAt <= now) throw new DomainError('INVALID_STATE_TRANSITION', 'The slot is not open for offers');
     if (facilitySlot.facility.status !== 'ACTIVE' || facilitySlot.line.status !== 'ACTIVE') throw new DomainError('INVALID_STATE_TRANSITION', 'The facility or line is inactive');
     const qtyG = kgToGrams(input.quantityKg);
     if (qtyG < toGrams(facilitySlot.facility.minOrderKg)) throw new DomainError('VALIDATION_FAILED', `Below this facility’s minimum order of ${formatKg(facilitySlot.facility.minOrderKg.toString())}`);
-    const policies = await this.prisma.policies();
-    const hours = Math.min(input.validForHours ?? policies.offerHoldHours, 14 * 24);
-    const expiresAt = new Date(Math.min(now.getTime() + hours * 3_600_000, new Date(input.pickupWindowStart).getTime()));
 
     const id = await withTransaction(this.prisma.db, async (tx) => {
       await lockRow(tx, 'harvest_requests', request.id);
       await lockRow(tx, 'processing_slots', input.slotId);
       const fresh = await tx.harvestRequest.findUniqueOrThrow({ where: { id: request.id } });
       if (fresh.status !== 'PUBLISHED') throw new DomainError('INVALID_STATE_TRANSITION', 'The request is no longer open for offers');
-      const duplicate = await tx.offer.findFirst({ where: { harvestRequestId: request.id, processorOrgId: orgId, status: { in: ['OPEN', 'COUNTERED'] } } });
-      if (duplicate) throw new DomainError('DUPLICATE', 'Your organisation already has an open offer on this request. Revise it instead.', { offerId: duplicate.id });
-      const remaining = toGrams(fresh.eligibleQuantityKg) - (await requestAllocation(tx, request.id, now));
-      if (qtyG > remaining) throw new DomainError('SUPPLY_EXCEEDED', `Only ${formatKg(remaining > 0n ? remaining : 0n)} of this request is still unallocated`);
-      const usage = await slotUsage(tx, input.slotId, now);
-      if (usage.availableG < qtyG) {
-        throw new DomainError('CAPACITY_EXCEEDED', `Only ${formatKg(usage.availableG)} of capacity is left in this slot`, { availableKg: gramsToKgString(usage.availableG) });
+      const duplicate = await tx.offer.findFirst({ where: { harvestRequestId: request.id, processorOrgId: orgId, status: { in: ['DRAFT', 'OPEN', 'COUNTERED'] } } });
+      if (duplicate) {
+        throw new DomainError('DUPLICATE', duplicate.status === 'DRAFT' ? 'You already have a draft offer on this request. Finish and send it instead.' : 'Your organisation already has an open offer on this request. Revise it instead.', { offerId: duplicate.id });
       }
       const offer = await tx.offer.create({
-        data: { harvestRequestId: request.id, processorOrgId: orgId, facilityId: facilitySlot.facilityId, expiresAt, createdByUserId: actor.userId, isDemo: request.isDemo },
+        data: {
+          harvestRequestId: request.id,
+          processorOrgId: orgId,
+          facilityId: facilitySlot.facilityId,
+          status: 'DRAFT',
+          // Placeholder for drafts; sending sets the real expiry.
+          expiresAt: new Date(terms.pickupWindowStart),
+          createdByUserId: actor.userId,
+          isDemo: request.isDemo,
+        },
       });
-      await tx.offerVersion.create({ data: this.versionData(offer.id, 1, 'PROCESSOR', actor.userId, null, input) });
-      await tx.reservation.create({ data: { slotId: input.slotId, offerId: offer.id, quantityKg: gramsToKgString(qtyG), status: 'HELD', expiresAt } });
-      await audit(tx, { actor, organisationId: orgId, action: 'offer.created', entityType: 'offer', entityId: offer.id, data: { quantityKg: input.quantityKg, priceKoboPerKg: input.priceKoboPerKg } });
-      await notify(tx, {
-        userIds: await farmerRecipients(tx, request.farmerProfileId, undefined, now),
-        type: 'offer.received',
-        category: 'offers',
-        title: `New offer for ${request.reference}`,
-        body: `${facilitySlot.facility.name} offers ${formatPricePerKg(input.priceKoboPerKg)} for ${formatKg(input.quantityKg)}. Capacity is held until ${expiresAt.toISOString().slice(0, 16).replace('T', ' ')} UTC. Nothing is agreed until you accept.`,
-        link: `/offers/${offer.id}`,
-        dedupeKey: `offer-received:${offer.id}`,
-      });
+      await tx.offerVersion.create({ data: this.versionData(offer.id, 1, 'PROCESSOR', actor.userId, null, terms) });
+      await audit(tx, { actor, organisationId: orgId, action: 'offer.drafted', entityType: 'offer', entityId: offer.id, data: { quantityKg: input.quantityKg, priceKoboPerKg: input.priceKoboPerKg, handover: terms.handoverArrangement } });
+      if (send) await this.sendInTx(tx, actor, offer.id, now, input.validForHours);
       return offer.id;
     });
     return this.dto(await this.load(id));
   }
 
-  private versionData(offerId: string, versionNo: number, proposedBy: 'PROCESSOR' | 'FARMER', userId: string, farmer: FarmerAuthority | null, t: Omit<Terms, 'harvestRequestId' | 'validForHours'>): Prisma.OfferVersionUncheckedCreateInput {
+  /** Sends a draft offer: it must say how the cassava gets there. */
+  async send(actor: Actor, offerId: string, input: z.infer<typeof sendOfferSchema>): Promise<OfferDto> {
+    const before = await this.load(offerId);
+    await this.access.requireOrg(actor, before.processorOrgId, 'processor.offer.manage', { requireApproved: true });
+    const now = new Date();
+    await withTransaction(this.prisma.db, async (tx) => {
+      const o = await this.lockOffer(tx, offerId, [before.versions[before.versions.length - 1]!.slotId]);
+      if (o.currentVersionNo !== input.expectedVersionNo) throw new DomainError('VERSION_CONFLICT', 'The offer changed. Reload and try again.');
+      await this.sendInTx(tx, actor, offerId, now, input.validForHours);
+    });
+    return this.dto(await this.load(offerId));
+  }
+
+  /** Checks supply and capacity, reserves capacity until the offer expires, and tells the farmer. */
+  private async sendInTx(tx: Tx, actor: Actor, offerId: string, now: Date, validForHours?: number): Promise<void> {
+    const o = await tx.offer.findUniqueOrThrow({ where: { id: offerId }, include: offerInclude });
+    const v = o.versions[o.versions.length - 1]!;
+    transition(OFFER_MACHINE, o.status, 'send', 'offer');
+    if (!v.handoverArrangement) throw new DomainError('VALIDATION_FAILED', 'Choose how the cassava will get there before sending the offer', [{ path: 'handoverArrangement', message: 'Choose collection or delivery' }]);
+    if (o.harvestRequest.status !== 'PUBLISHED') throw new DomainError('INVALID_STATE_TRANSITION', 'The request is no longer open for offers');
+    if (v.pickupWindowStart <= now) throw new DomainError('VALIDATION_FAILED', 'The handover time has passed. Choose a new time and send again.');
+    const qtyG = toGrams(v.quantityKg);
+    const remaining = toGrams(o.harvestRequest.eligibleQuantityKg) - (await requestAllocation(tx, o.harvestRequestId, now));
+    if (qtyG > remaining) throw new DomainError('SUPPLY_EXCEEDED', `Only ${formatKg(remaining > 0n ? remaining : 0n)} of this request is still unallocated`);
+    const usage = await slotUsage(tx, v.slotId, now);
+    if (usage.availableG < qtyG) {
+      throw new DomainError('CAPACITY_EXCEEDED', `Only ${formatKg(usage.availableG)} of capacity is left in this buying slot`, { availableKg: gramsToKgString(usage.availableG) });
+    }
+    const policies = await this.prisma.policies();
+    const hours = Math.min(validForHours ?? policies.offerHoldHours, 14 * 24);
+    const expiresAt = new Date(Math.min(now.getTime() + hours * 3_600_000, v.pickupWindowStart.getTime()));
+    await tx.reservation.create({ data: { slotId: v.slotId, offerId, quantityKg: gramsToKgString(qtyG), status: 'HELD', expiresAt } });
+    await tx.offer.update({ where: { id: offerId }, data: { status: 'OPEN', expiresAt, version: { increment: 1 } } });
+    await audit(tx, { actor, organisationId: o.processorOrgId, action: 'offer.created', entityType: 'offer', entityId: offerId, data: { quantityKg: gramsToKgString(qtyG), priceKoboPerKg: koboToNumber(v.priceKoboPerKg) } });
+    const how = v.handoverArrangement === 'COLLECT_FROM_FARM' ? 'They will collect from your farm.' : 'You deliver to their facility.';
+    await notify(tx, {
+      userIds: await farmerRecipients(tx, o.harvestRequest.farmerProfileId, undefined, now),
+      type: 'offer.received',
+      category: 'offers',
+      title: `New offer for ${o.harvestRequest.reference}`,
+      body: `${o.facility.name} offers ${formatPricePerKg(v.priceKoboPerKg)} for ${formatKg(v.quantityKg.toString())}. ${how} Review it before ${formatLagosDate(expiresAt)}. Nothing is agreed until you accept.`,
+      link: `/offers/${offerId}`,
+      dedupeKey: `offer-received:${offerId}`,
+    });
+  }
+
+  private versionData(offerId: string, versionNo: number, proposedBy: 'PROCESSOR' | 'FARMER', userId: string, farmer: FarmerAuthority | null, t: ResolvedTerms): Prisma.OfferVersionUncheckedCreateInput {
     return {
       offerId,
       versionNo,
@@ -261,9 +371,11 @@ export class OffersService {
       toleranceBps: t.toleranceBps,
       paymentTermsDays: t.paymentTermsDays,
       freightPayer: t.freightPayer,
+      handoverArrangement: t.handoverArrangement,
+      farmerDeliveryCostKobo: t.farmerDeliveryCostKobo !== null ? BigInt(t.farmerDeliveryCostKobo) : null,
       rejectionHandling: t.rejectionHandling,
       cancellationTerms: t.cancellationTerms,
-      note: t.note ?? null,
+      note: t.note,
     };
   }
 
@@ -286,11 +398,16 @@ export class OffersService {
 
   async revise(actor: Actor, offerId: string, input: z.infer<typeof reviseOfferSchema>): Promise<OfferDto> {
     const before = await this.load(offerId);
-    await this.access.requireOrg(actor, before.processorOrgId, 'processor.offer.manage', { requireApproved: true });
+    const sending = before.status === 'DRAFT' && input.send;
+    await this.access.requireOrg(actor, before.processorOrgId, 'processor.offer.manage', { requireApproved: before.status !== 'DRAFT' || sending });
     const slot = await this.prisma.db.processingSlot.findUnique({ where: { id: input.slotId }, include: { facility: true } });
     if (!slot || slot.facilityId !== before.facilityId) throw new DomainError('VALIDATION_FAILED', 'Choose a slot at the same facility');
+    if (before.status !== 'DRAFT' && !input.handoverArrangement) {
+      throw new DomainError('VALIDATION_FAILED', 'A sent offer must keep saying how the cassava gets there', [{ path: 'handoverArrangement', message: 'Choose collection or delivery' }]);
+    }
     const now = new Date();
-    this.validateTerms(input, slot, before.harvestRequest, now);
+    const terms = this.resolve(input, slot.facility);
+    this.validateTerms(terms, slot, before.harvestRequest, now);
     const outcome = await withTransaction(this.prisma.db, async (tx) => {
       const o = await this.lockOffer(tx, offerId, [input.slotId]);
       try {
@@ -300,6 +417,15 @@ export class OffersService {
       }
       transition(OFFER_MACHINE, o.status, 'revise', 'offer');
       if (o.currentVersionNo !== input.expectedVersionNo) throw new DomainError('VERSION_CONFLICT', 'The offer changed (a counter-offer may have arrived). Reload and try again.');
+      const nextNo = o.currentVersionNo + 1;
+      if (o.status === 'DRAFT') {
+        // Nothing is reserved for a draft; just record the new version.
+        await tx.offerVersion.create({ data: this.versionData(offerId, nextNo, 'PROCESSOR', actor.userId, null, terms) });
+        await tx.offer.update({ where: { id: offerId }, data: { currentVersionNo: nextNo, expiresAt: new Date(terms.pickupWindowStart), version: { increment: 1 } } });
+        await audit(tx, { actor, organisationId: o.processorOrgId, action: 'offer.draft-updated', entityType: 'offer', entityId: offerId, data: { versionNo: nextNo } });
+        if (input.send) await this.sendInTx(tx, actor, offerId, now);
+        return null;
+      }
       const qtyG = kgToGrams(input.quantityKg);
       const r = o.reservation!;
       const heldG = toGrams(r.quantityKg);
@@ -309,9 +435,9 @@ export class OffersService {
       const extraNeeded = input.slotId === r.slotId ? qtyG - heldG : qtyG;
       if (extraNeeded > usage.availableG) throw new DomainError('CAPACITY_EXCEEDED', `Only ${formatKg(usage.availableG)} more capacity is available in that slot`);
       await tx.reservation.update({ where: { id: r.id }, data: { slotId: input.slotId, quantityKg: gramsToKgString(qtyG), version: { increment: 1 } } });
-      await tx.offerVersion.create({ data: this.versionData(offerId, o.currentVersionNo + 1, 'PROCESSOR', actor.userId, null, input) });
-      await tx.offer.update({ where: { id: offerId }, data: { status: transition(OFFER_MACHINE, o.status, 'revise'), currentVersionNo: o.currentVersionNo + 1, version: { increment: 1 } } });
-      await audit(tx, { actor, organisationId: o.processorOrgId, action: 'offer.revised', entityType: 'offer', entityId: offerId, data: { versionNo: o.currentVersionNo + 1 } });
+      await tx.offerVersion.create({ data: this.versionData(offerId, nextNo, 'PROCESSOR', actor.userId, null, terms) });
+      await tx.offer.update({ where: { id: offerId }, data: { status: transition(OFFER_MACHINE, o.status, 'revise'), currentVersionNo: nextNo, version: { increment: 1 } } });
+      await audit(tx, { actor, organisationId: o.processorOrgId, action: 'offer.revised', entityType: 'offer', entityId: offerId, data: { versionNo: nextNo } });
       await notify(tx, {
         userIds: await farmerRecipients(tx, o.harvestRequest.farmerProfileId, undefined, now),
         type: 'offer.revised',
@@ -319,7 +445,7 @@ export class OffersService {
         title: `Revised offer for ${o.harvestRequest.reference}`,
         body: `${o.facility.name} now offers ${formatPricePerKg(input.priceKoboPerKg)} for ${formatKg(input.quantityKg)}.`,
         link: `/offers/${offerId}`,
-        dedupeKey: `offer-revised:${offerId}:${o.currentVersionNo + 1}`,
+        dedupeKey: `offer-revised:${offerId}:${nextNo}`,
       });
       return null;
     });
@@ -347,25 +473,25 @@ export class OffersService {
       if (kgToGrams(input.quantityKg) > remaining) throw new DomainError('SUPPLY_EXCEEDED', `Only ${formatKg(remaining)} is unallocated`);
       const latest = o.versions[o.versions.length - 1]!;
       await tx.offerVersion.create({
-        data: {
-          ...this.versionData(offerId, o.currentVersionNo + 1, 'FARMER', actor.userId, authority, {
-            slotId: latest.slotId,
-            quantityKg: input.quantityKg,
-            priceKoboPerKg: input.priceKoboPerKg,
-            plannedHarvestDate: input.plannedHarvestDate,
-            pickupWindowStart: latest.pickupWindowStart.toISOString(),
-            pickupWindowEnd: latest.pickupWindowEnd.toISOString(),
-            deliveryWindowStart: latest.deliveryWindowStart.toISOString(),
-            deliveryWindowEnd: latest.deliveryWindowEnd.toISOString(),
-            qualityTerms: qualityTermsSchema.parse(latest.qualityTerms),
-            toleranceBps: latest.toleranceBps,
-            paymentTermsDays: latest.paymentTermsDays,
-            freightPayer: latest.freightPayer,
-            rejectionHandling: latest.rejectionHandling,
-            cancellationTerms: latest.cancellationTerms,
-            note: input.note,
-          }),
-        },
+        data: this.versionData(offerId, o.currentVersionNo + 1, 'FARMER', actor.userId, authority, {
+          slotId: latest.slotId,
+          quantityKg: input.quantityKg,
+          priceKoboPerKg: input.priceKoboPerKg,
+          plannedHarvestDate: input.plannedHarvestDate,
+          pickupWindowStart: latest.pickupWindowStart.toISOString(),
+          pickupWindowEnd: latest.pickupWindowEnd.toISOString(),
+          deliveryWindowStart: latest.deliveryWindowStart.toISOString(),
+          deliveryWindowEnd: latest.deliveryWindowEnd.toISOString(),
+          qualityTerms: qualityTermsSchema.parse(latest.qualityTerms),
+          toleranceBps: latest.toleranceBps,
+          paymentTermsDays: latest.paymentTermsDays,
+          freightPayer: latest.freightPayer,
+          handoverArrangement: latest.handoverArrangement,
+          farmerDeliveryCostKobo: latest.farmerDeliveryCostKobo !== null ? koboToNumber(latest.farmerDeliveryCostKobo) : null,
+          rejectionHandling: latest.rejectionHandling,
+          cancellationTerms: latest.cancellationTerms,
+          note: input.note ?? null,
+        }),
       });
       await tx.offer.update({ where: { id: offerId }, data: { status: transition(OFFER_MACHINE, o.status, 'counter'), currentVersionNo: o.currentVersionNo + 1, version: { increment: 1 } } });
       await audit(tx, { actor, farmer: authority, action: 'offer.countered', entityType: 'offer', entityId: offerId, data: { quantityKg: input.quantityKg, priceKoboPerKg: input.priceKoboPerKg } });
@@ -386,7 +512,8 @@ export class OffersService {
 
   /**
    * Turns an agreed offer version into a booking: allocates supply (harvest lot) under the request
-   * lock, attaches the capacity hold with a confirmation deadline, and snapshots version 1 of the terms.
+   * lock, attaches the capacity hold, and snapshots version 1 of the terms. When the offer says how the
+   * cassava changes hands, both sides have now agreed complete terms, so the booking is confirmed at once.
    */
   async accept(actor: Actor, offerId: string, input: z.infer<typeof decideOfferSchema>, mode: 'ACCEPT' | 'PREPARE' | 'ACCEPT_COUNTER'): Promise<{ bookingId: string; bookingReference: string; status: string }> {
     const before = await this.load(offerId);
@@ -418,7 +545,8 @@ export class OffersService {
       const remaining = toGrams(o.harvestRequest.eligibleQuantityKg) - (await requestAllocation(tx, o.harvestRequestId, now));
       if (qtyG > remaining) throw new DomainError('SUPPLY_EXCEEDED', `Only ${formatKg(remaining > 0n ? remaining : 0n)} of the harvest is still unallocated`);
       const r = o.reservation!;
-      if (r.status !== 'HELD') throw new DomainError('HOLD_EXPIRED', 'The capacity hold for this offer is no longer valid');
+      // A hold past its expiry no longer protects the capacity, even before the sweeper marks it.
+      if (r.status !== 'HELD' || (r.expiresAt && r.expiresAt <= now)) throw new DomainError('HOLD_EXPIRED', 'The buyer’s space for this offer was released and may have gone to someone else');
       const heldG = toGrams(r.quantityKg);
       if (qtyG !== heldG || r.slotId !== v.slotId) {
         // A counter-offer changed the quantity: re-check capacity for the difference.
@@ -477,13 +605,14 @@ export class OffersService {
         where: { id: offerId },
         data: { status: transition(OFFER_MACHINE, o.status, mode === 'ACCEPT_COUNTER' ? 'acceptCounter' : 'accept'), decidedAt: now, decidedByUserId: actor.userId, version: { increment: 1 } },
       });
-      // Other open offers that no longer fit the remaining supply lapse and release their holds.
+      // Other offers that no longer fit the remaining supply lapse and release their holds.
       const left = remaining - qtyG;
-      const others = await tx.offer.findMany({ where: { harvestRequestId: o.harvestRequestId, id: { not: offerId }, status: { in: ['OPEN', 'COUNTERED'] } }, include: { reservation: true } });
+      const others = await tx.offer.findMany({ where: { harvestRequestId: o.harvestRequestId, id: { not: offerId }, status: { in: ['DRAFT', 'OPEN', 'COUNTERED'] } }, include: { reservation: true, versions: { orderBy: { versionNo: 'desc' }, take: 1 } } });
       for (const other of others) {
-        if (other.reservation && toGrams(other.reservation.quantityKg) > left) {
+        const otherG = other.reservation ? toGrams(other.reservation.quantityKg) : toGrams(other.versions[0]!.quantityKg);
+        if (otherG > left) {
           await tx.offer.update({ where: { id: other.id }, data: { status: 'LAPSED', decidedAt: now, decisionReason: 'Not enough unallocated quantity remains', version: { increment: 1 } } });
-          if (other.reservation.status === 'HELD') {
+          if (other.reservation?.status === 'HELD') {
             await tx.reservation.update({ where: { id: other.reservation.id }, data: { status: 'RELEASED', releasedAt: now, releaseReason: 'Offer lapsed', version: { increment: 1 } } });
           }
           await notify(tx, {
@@ -491,7 +620,7 @@ export class OffersService {
             type: 'offer.lapsed',
             category: 'offers',
             title: `Offer on ${o.harvestRequest.reference} lapsed`,
-            body: 'The farmer accepted another offer, so not enough quantity remains for yours. Your capacity hold was released.',
+            body: 'The farmer accepted another offer, so not enough quantity remains for yours. Any capacity you held was released.',
             link: `/offers/${other.id}`,
             dedupeKey: `offer-lapsed:${other.id}`,
           });
@@ -508,37 +637,36 @@ export class OffersService {
       });
       const farmerSide = await farmerRecipients(tx, o.harvestRequest.farmerProfileId, undefined, now);
       const processorSide = await orgRecipients(tx, o.processorOrgId, ['OWNER', 'MANAGER']);
-      await notify(tx, {
-        userIds: mode === 'PREPARE' ? farmerSide : [...farmerSide, ...processorSide],
-        type: mode === 'PREPARE' ? 'booking.prepared' : 'booking.created',
-        category: 'bookings',
-        title: mode === 'PREPARE' ? `${reference} needs the farmer’s approval` : `${reference}: terms agreed, transport next`,
-        body:
-          mode === 'PREPARE'
-            ? `A cooperative representative prepared acceptance of ${formatKg(v.quantityKg.toString())}. It is not agreed until the farmer (or an approver) approves it before ${deadline.toISOString().slice(0, 16).replace('T', ' ')} UTC.`
-            : `${formatKg(v.quantityKg.toString())} at ${formatPricePerKg(v.priceKoboPerKg)}. Capacity is held until ${deadline.toISOString().slice(0, 16).replace('T', ' ')} UTC while transport is arranged.`,
-        link: `/bookings/${booking.id}`,
-        bookingId: booking.id,
-        dedupeKey: `booking-created:${booking.id}`,
-      });
-      if (mode !== 'PREPARE') {
-        // Transporters serving the pickup area hear about the job.
-        const areas = await tx.transportServiceArea.findMany({ where: { lga: o.harvestRequest.farmLocation.lga, organisation: { status: 'APPROVED', isDemo: o.isDemo } }, select: { organisationId: true } });
-        for (const a of areas) {
-          await notify(tx, {
-            userIds: await orgRecipients(tx, a.organisationId, ['OWNER', 'DISPATCHER']),
-            type: 'transport.opportunity',
-            category: 'transport',
-            title: `Transport needed: ${formatKg(v.quantityKg.toString())} from ${o.harvestRequest.farmLocation.lga}`,
-            body: `To ${o.facility.name}. Pickup ${v.pickupWindowStart.toISOString().slice(0, 16).replace('T', ' ')} UTC.`,
-            link: `/transport/opportunities`,
-            bookingId: booking.id,
-            dedupeKey: `transport-opportunity:${booking.id}:${a.organisationId}`,
-          });
-        }
+      if (mode === 'PREPARE') {
+        await notify(tx, {
+          userIds: farmerSide,
+          type: 'booking.prepared',
+          category: 'bookings',
+          title: `${reference} needs the farmer’s approval`,
+          body: `A cooperative representative prepared acceptance of ${formatKg(v.quantityKg.toString())}. It is not agreed until the farmer (or an approver) approves it before ${formatLagosDate(deadline)}.`,
+          link: `/bookings/${booking.id}`,
+          bookingId: booking.id,
+          dedupeKey: `booking-created:${booking.id}`,
+        });
+        await recomputeReadiness(tx, booking.id, 'booking.created', now);
+      } else if (content.handover) {
+        // Complete terms agreed by both sides: confirm now (the engine notifies both with the plan).
+        await this.engine.settle(tx, booking.id, now, actor, 'booking.created');
+      } else {
+        await notify(tx, {
+          userIds: [...farmerSide, ...processorSide],
+          type: 'booking.created',
+          category: 'bookings',
+          title: `${reference}: terms agreed, transport next`,
+          body: `${formatKg(v.quantityKg.toString())} at ${formatPricePerKg(v.priceKoboPerKg)}. Capacity is held until ${formatLagosDate(deadline)} while transport is arranged.`,
+          link: `/bookings/${booking.id}`,
+          bookingId: booking.id,
+          dedupeKey: `booking-created:${booking.id}`,
+        });
+        await recomputeReadiness(tx, booking.id, 'booking.created', now);
       }
-      await recomputeReadiness(tx, booking.id, 'booking.created', now);
-      return { bookingId: booking.id, bookingReference: reference, status: booking.status };
+      const fresh = await tx.booking.findUniqueOrThrow({ where: { id: booking.id }, select: { status: true } });
+      return { bookingId: booking.id, bookingReference: reference, status: fresh.status };
     });
     if (result instanceof DomainError) throw result;
     return result;
@@ -559,13 +687,15 @@ export class OffersService {
         await tx.reservation.update({ where: { id: o.reservation.id }, data: { status: 'RELEASED', releasedAt: now, releaseReason: mode === 'DECLINE' ? 'Offer declined' : 'Offer withdrawn', version: { increment: 1 } } });
       }
       await audit(tx, { actor, farmer, organisationId: o.processorOrgId, action: mode === 'DECLINE' ? 'offer.declined' : 'offer.withdrawn', entityType: 'offer', entityId: offerId, reason: input.reason ?? null });
+      // A withdrawn draft was never shown to the farmer, so there is nobody to tell.
+      if (o.status === 'DRAFT') return;
       await notify(tx, {
         userIds: mode === 'DECLINE' ? await orgRecipients(tx, o.processorOrgId, ['OWNER', 'MANAGER']) : await farmerRecipients(tx, o.harvestRequest.farmerProfileId, undefined, now),
         type: mode === 'DECLINE' ? 'offer.declined' : 'offer.withdrawn',
         category: 'offers',
         title: `Offer on ${o.harvestRequest.reference} ${mode === 'DECLINE' ? 'declined' : 'withdrawn'}`,
-        body: input.reason ?? (mode === 'DECLINE' ? 'The farmer declined the offer.' : 'The processor withdrew the offer.'),
-        link: `/offers/${offerId}`,
+        body: input.reason ?? (mode === 'DECLINE' ? 'The farmer declined the offer. Their harvest is still available.' : 'The buyer withdrew the offer. Your harvest is still available to other buyers.'),
+        link: mode === 'DECLINE' ? `/processor/inbox` : `/farmer/harvests/${o.harvestRequestId}`,
         dedupeKey: `offer-${mode.toLowerCase()}:${offerId}`,
       });
     });

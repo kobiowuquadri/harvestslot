@@ -5,22 +5,22 @@ import type { ButtonHTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
 
 export const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium transition-colors disabled:pointer-events-none disabled:opacity-55 [&_svg]:shrink-0',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium transition-[background-color,border-color,color,box-shadow] duration-150 disabled:pointer-events-none disabled:opacity-50 [&_svg]:shrink-0',
   {
     variants: {
       variant: {
-        primary: 'bg-forest text-white hover:bg-forest-800',
-        secondary: 'bg-leaf text-white hover:bg-leaf-600',
-        outline: 'border border-line-strong bg-surface text-ink hover:bg-leaf-50',
-        ghost: 'text-ink hover:bg-leaf-50',
-        danger: 'bg-danger text-white hover:opacity-90',
+        primary: 'bg-forest text-white shadow-[0_1px_2px_rgb(16_24_40/0.08),inset_0_-1px_0_rgb(0_0_0/0.08)] hover:bg-forest-800',
+        secondary: 'bg-leaf-50 text-forest hover:bg-leaf-100 hover:text-forest-800',
+        outline: 'border border-line bg-surface text-ink shadow-[0_1px_2px_rgb(16_24_40/0.05)] hover:border-line-strong/60 hover:bg-canvas',
+        ghost: 'text-ink hover:bg-ink/5',
+        danger: 'bg-danger text-white shadow-[0_1px_2px_rgb(16_24_40/0.08)] hover:opacity-90',
         accent: 'bg-amber text-amber-ink hover:bg-amber-100',
-        link: 'text-leaf underline-offset-4 hover:underline px-0',
+        link: 'px-0 text-leaf underline-offset-4 hover:underline',
       },
       size: {
-        sm: 'h-9 px-3 text-sm',
+        sm: 'h-9 px-3 text-[13px]',
         md: 'h-11 px-4 text-sm',
-        lg: 'h-12 px-5 text-base',
+        lg: 'h-12 px-6 text-[15px]',
         icon: 'h-11 w-11',
       },
     },

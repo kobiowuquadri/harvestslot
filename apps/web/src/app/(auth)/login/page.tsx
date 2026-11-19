@@ -6,7 +6,7 @@ import { Suspense, useState, type FormEvent } from 'react';
 import { DemoEntry } from '@/app/(public)/demo-entry';
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/form';
-import { Alert, Card, CardContent, CardHeader, CardTitle } from '@/components/ui/primitives';
+import { Alert } from '@/components/ui/primitives';
 import { ApiError, post } from '@/lib/api';
 import { useSession } from '@/lib/session';
 
@@ -49,11 +49,10 @@ function LoginForm() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-xl">{mfa ? 'Two-factor check' : 'Sign in'}</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <div>
+      <h1 className="text-3xl font-semibold tracking-tight text-ink">{mfa ? 'Two-factor check' : 'Sign in'}</h1>
+      <p className="mt-2 text-[15px] text-muted">{mfa ? 'One more step to keep your account safe.' : 'Welcome back. Sign in to see your harvests and bookings.'}</p>
+      <div className="mt-8">
         <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
           {error ? <Alert tone="danger">{error}</Alert> : null}
           {!mfa ? (
@@ -74,18 +73,20 @@ function LoginForm() {
             {mfa ? 'Verify' : 'Sign in'}
           </Button>
           <div className="flex flex-wrap justify-between gap-2 text-sm">
-            <Link href="/forgot-password" className="text-leaf underline">Forgot password?</Link>
-            <Link href="/register" className="text-leaf underline">Create an account</Link>
+            <Link href="/forgot-password" className="font-medium text-leaf hover:underline">Forgot password?</Link>
+            <span className="text-muted">
+              New here? <Link href="/register" className="font-medium text-leaf underline underline-offset-2">Create an account</Link>
+            </span>
           </div>
-          <p className="text-sm text-muted">
-            Registered by your cooperative? <Link href="/claim" className="text-leaf underline">Claim your account</Link>.
+          <p className="border-t border-line pt-4 text-sm text-muted">
+            Registered by your cooperative? <Link href="/claim" className="font-medium text-leaf underline underline-offset-2">Claim your account</Link>
           </p>
         </form>
-        <div className="mt-6">
+        <div className="mt-8">
           <DemoEntry compact />
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 

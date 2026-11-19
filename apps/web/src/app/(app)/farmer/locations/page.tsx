@@ -44,7 +44,7 @@ function Locations({ ctx }: { ctx: FarmerContext }) {
                 <li key={l.id}>
                   <Card>
                     <CardContent className="flex flex-col gap-2">
-                      <p className="flex items-center gap-2 font-semibold text-forest">
+                      <p className="flex items-center gap-2 font-semibold text-ink">
                         <MapPin className="size-4" aria-hidden /> {l.label}
                       </p>
                       <p className="text-sm">

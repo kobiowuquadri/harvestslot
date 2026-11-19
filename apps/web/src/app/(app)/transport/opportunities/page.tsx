@@ -127,9 +127,9 @@ function Opportunities({ w }: { w: Extract<Workspace, { kind: 'transporter' }> }
         {(items) => (
           <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {items.map((o) => (
-              <li key={o.bookingId} className="rounded-xl border border-line bg-surface p-4">
+              <li key={o.bookingId} className="rounded-2xl border border-line bg-surface p-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-sm font-semibold text-forest">{o.bookingReference}</span>
+                  <span className="font-mono text-sm font-semibold text-ink">{o.bookingReference}</span>
                   {o.reason === 'REPLACEMENT' ? <Badge tone="danger">Replacement needed</Badge> : null}
                   {o.myQuote ? <StatusBadge kind="generic" status={o.myQuote.status} label={`Your quote: ${o.myQuote.status.toLowerCase()}`} /> : null}
                 </div>

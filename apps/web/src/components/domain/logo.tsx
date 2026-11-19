@@ -1,12 +1,28 @@
+/** Shared HarvestSlot brand identity. */
+export function LogoMark({ size = 34, className }: { size?: number; className?: string }) {
+  return (
+    <img
+      src="/brand/harvestslot-mark.png"
+      width={size}
+      height={size}
+      alt=""
+      aria-hidden="true"
+      className={className}
+    />
+  );
+}
+
 export function Logo({ inverted = false }: { inverted?: boolean }) {
   return (
-    <span className="inline-flex items-center gap-2">
-      <svg width="28" height="28" viewBox="0 0 64 64" aria-hidden focusable="false">
-        <rect width="64" height="64" rx="14" fill={inverted ? '#ffffff' : '#143e31'} />
-        <path d="M18 40c6-14 16-20 28-22-2 12-8 22-22 28" fill="none" stroke="#e8b56b" strokeWidth="5" strokeLinecap="round" />
-        <path d="M20 46l8-8" stroke={inverted ? '#143e31' : '#ffffff'} strokeWidth="5" strokeLinecap="round" />
-      </svg>
-      <span className={`text-lg font-semibold tracking-tight ${inverted ? 'text-white' : 'text-forest'}`}>HarvestSlot</span>
+    <span className="inline-flex items-center gap-2.5 whitespace-nowrap">
+      <span className={inverted ? 'inline-flex rounded-lg bg-white p-1' : 'inline-flex'}>
+        <LogoMark />
+      </span>
+      <span
+        className={`font-display text-[20px] font-semibold tracking-[-0.045em] ${inverted ? 'text-white' : 'text-ink'}`}
+      >
+        Harvest<span className={inverted ? 'text-white' : 'text-forest'}>Slot</span>
+      </span>
     </span>
   );
 }

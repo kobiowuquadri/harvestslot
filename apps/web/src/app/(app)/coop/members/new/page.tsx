@@ -110,7 +110,7 @@ function Register({ coopId }: { coopId: string }) {
             <Field label="Witness name" error={err['consent.witnessName']}>
               <Input value={witness} onChange={(e) => setWitness(e.target.value)} />
             </Field>
-            <label className="inline-flex w-fit cursor-pointer items-center rounded-lg border border-line-strong px-3 py-2 text-sm font-medium hover:bg-leaf-50">
+            <label className="inline-flex w-fit cursor-pointer items-center rounded-lg border border-line-strong px-3 py-2 text-sm font-medium hover:bg-canvas">
               {uploading ? 'Uploading…' : evidenceId ? 'Signed form attached ✓' : 'Attach signed consent form'}
               <input
                 type="file"

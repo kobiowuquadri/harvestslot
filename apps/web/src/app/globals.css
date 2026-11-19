@@ -1,40 +1,45 @@
 @import 'tailwindcss';
 
 /*
- * HarvestSlot design tokens. Contrast of every text/background pairing used in components is
- * checked by `pnpm --filter @harvestslot/web contrast` (WCAG 2.2 AA: 4.5:1 body text, 3:1 large text
- * and UI boundaries). Amber is an accent: text on amber always uses the dark amber-ink colour.
+ * HarvestSlot design tokens. Neutral surfaces, near-black type and one confident green accent.
+ * Contrast of every text/background pairing used in components is checked by
+ * `pnpm --filter @harvestslot/web contrast` (WCAG 2.2 AA: 4.5:1 body text, 3:1 large text and UI
+ * boundaries). Amber is a decorative/warning accent: text on amber always uses amber-ink.
  */
 @theme {
-  --font-sans: Inter, Manrope, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+  --font-sans: 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: Poppins, 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
 
-  --color-forest-950: #0b231b;
-  --color-forest: #143e31;
-  --color-forest-800: #1a4b3c;
-  --color-leaf: #2f6b4e;
-  --color-leaf-600: #2a5f45;
-  --color-leaf-100: #d6e8dd;
-  --color-leaf-50: #ecf4ef;
+  /* Brand green: buttons, links, active states, success. */
+  --color-forest-950: #0c111d;
+  --color-forest: #137a3b;
+  --color-forest-800: #0f6431;
+  --color-leaf: #137a3b;
+  --color-leaf-600: #0f6431;
+  --color-leaf-100: #d3ecdc;
+  --color-leaf-50: #ecf7f0;
 
-  --color-canvas: #f7f8f4;
+  /* Neutrals */
+  --color-canvas: #f5f6f8;
   --color-surface: #ffffff;
-  --color-ink: #17211c;
-  --color-muted: #525e57;
-  --color-line: #d9dfd5;
-  --color-line-strong: #8a968f;
+  --color-ink: #101828;
+  --color-muted: #475467;
+  --color-line: #e4e7ec;
+  --color-line-strong: #848c9c;
 
-  --color-amber: #e8b56b;
-  --color-amber-100: #f6e2c2;
-  --color-amber-50: #fbf3e6;
+  --color-amber: #f0b94d;
+  --color-amber-100: #fbe8c3;
+  --color-amber-50: #fdf6e7;
   --color-amber-ink: #5c3a00;
 
-  --color-danger: #b42318;
-  --color-danger-50: #fdeceb;
-  --color-info: #1d5a85;
-  --color-info-50: #e8f1f8;
+  --color-danger: #c6281c;
+  --color-danger-50: #fef3f2;
+  --color-info: #1a5fb4;
+  --color-info-50: #eef5fd;
 
-  --radius-card: 0.75rem;
-  --shadow-card: 0 1px 2px rgb(16 33 26 / 0.06), 0 1px 3px rgb(16 33 26 / 0.04);
+  --radius-card: 1rem;
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 1px 3px rgb(16 24 40 / 0.04);
+  --shadow-raised: 0 12px 32px -8px rgb(16 24 40 / 0.14), 0 4px 8px -4px rgb(16 24 40 / 0.06);
 }
 
 @layer base {
@@ -46,17 +51,20 @@
     color: var(--color-ink);
     font-family: var(--font-sans);
     font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
   }
-  /* Visible keyboard focus everywhere; never removed without a replacement. */
-  /* Two-tone ring: forest outline (11.9:1 on white) + amber halo (6.4:1 on the forest sidebar). */
+  h1 {
+    font-family: var(--font-display);
+    letter-spacing: -0.015em;
+  }
+  /* Visible keyboard focus everywhere; never removed without a replacement (5.4:1 on white). */
   :focus-visible {
     outline: 2px solid var(--color-forest);
     outline-offset: 2px;
-    box-shadow: 0 0 0 5px var(--color-amber);
-    border-radius: 4px;
+    border-radius: 6px;
   }
   ::selection {
-    background: var(--color-amber-100);
+    background: var(--color-leaf-100);
   }
   @media (prefers-reduced-motion: reduce) {
     *,
@@ -85,4 +93,21 @@
   .tabular {
     font-variant-numeric: tabular-nums;
   }
+  /* Decorative dot grid used beside imagery (reference-style accent). */
+  .dot-grid {
+    background-image: radial-gradient(var(--color-forest) 1.6px, transparent 1.7px);
+    background-size: 14px 14px;
+  }
+  /* Hand-drawn style underline for a key word in headlines. */
+  .headline-underline {
+    text-decoration-line: underline;
+    text-decoration-thickness: 0.09em;
+    text-underline-offset: 0.16em;
+    text-decoration-color: var(--color-ink);
+  }
+}
+
+/* Horizontal scrollers: fade the trailing edge so a cut-off item reads as "scroll for more". */
+@utility scroll-fade-x {
+  mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
 }

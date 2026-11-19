@@ -5,18 +5,16 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/form';
-import { Alert, Card, CardContent, CardHeader, CardTitle } from '@/components/ui/primitives';
+import { Alert } from '@/components/ui/primitives';
 import { ApiError, post } from '@/lib/api';
 import { useSession } from '@/lib/session';
 
 function Shell({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-xl">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
+    <div>
+      <h1 className="text-3xl font-semibold tracking-tight text-ink">{title}</h1>
+      <div className="mt-8">{children}</div>
+    </div>
   );
 }
 

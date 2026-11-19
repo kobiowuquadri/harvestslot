@@ -156,3 +156,23 @@ export const slotsQuerySchema = z.object({
   to: isoDateTime.optional(),
   status: SlotStatusE.schema.optional(),
 });
+
+/**
+ * "Tell farmers how much cassava you can receive, where, and on which dates." One form: an existing
+ * place, or a new one described here (created on first use), a date range and a quantity.
+ */
+export const buyingSlotSchema = z
+  .object({
+    facilityId: uuid.optional(),
+    newFacility: z.object({ name: shortText(120), lga: lgaName, address: optionalText(300), point: nigeriaPoint.optional() }).optional(),
+    fromDate: z.iso.date(),
+    toDate: z.iso.date(),
+    quantityKg: positiveKgString,
+    /** The price per kg you expect to pay, shown to farmers as a guide (the offer sets the real price). */
+    priceKoboPerKg: koboInt.optional(),
+    notes: optionalText(500),
+  })
+  .refine((v) => v.facilityId || v.newFacility, { message: 'Tell farmers where to bring or where you collect from', path: ['facilityId'] })
+  .refine((v) => v.toDate >= v.fromDate, { message: 'The last day must be on or after the first day', path: ['toDate'] })
+  .refine((v) => (new Date(v.toDate).getTime() - new Date(v.fromDate).getTime()) / 86_400_000 < 7, { message: 'A buying slot can cover at most 7 days', path: ['toDate'] });
+export type BuyingSlotInput = z.infer<typeof buyingSlotSchema>;

@@ -47,7 +47,7 @@ function RecordConsent({ coopId, m }: { coopId: string; m: CoopMemberDto }) {
             <Field label="Witness name" hint="Someone present when the farmer agreed.">
               <Input value={witness} onChange={(e) => setWitness(e.target.value)} />
             </Field>
-            <label className="inline-flex w-fit cursor-pointer items-center rounded-lg border border-line-strong px-3 py-2 text-sm font-medium hover:bg-leaf-50">
+            <label className="inline-flex w-fit cursor-pointer items-center rounded-lg border border-line-strong px-3 py-2 text-sm font-medium hover:bg-canvas">
               {uploading ? 'Uploading…' : evidenceId ? 'Signed form attached ✓' : 'Attach signed consent form'}
               <input
                 type="file"
@@ -138,7 +138,7 @@ function Members({ coopId }: { coopId: string }) {
                   <Card>
                     <CardContent className="flex flex-col gap-3">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-semibold text-forest">{m.displayName}</span>
+                        <span className="font-semibold text-ink">{m.displayName}</span>
                         {m.memberRef ? <Badge tone="neutral">#{m.memberRef}</Badge> : null}
                         <Badge tone={m.claimStatus === 'REPRESENTED_UNCLAIMED' ? 'warning' : 'success'}>{CLAIM_LABEL[m.claimStatus]}</Badge>
                         {m.status === 'ENDED' ? <Badge tone="danger">Membership ended</Badge> : null}

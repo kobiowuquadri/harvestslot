@@ -32,8 +32,6 @@ export const DEMO_PERSONAS: Record<DemoPersona, string> = {
   'processor-manager': 'manager@ibadan-starch.demo.harvestslot.example',
   'receiving-officer': 'receiving@ibadan-starch.demo.harvestslot.example',
   'finance-officer': 'finance@ibadan-starch.demo.harvestslot.example',
-  transporter: 'dispatch@oke-ogun-haulage.demo.harvestslot.example',
-  driver: 'driver.tunde@demo.harvestslot.example',
   cooperative: 'rep@akinyele-coop.demo.harvestslot.example',
   admin: 'admin@demo.harvestslot.example',
 };
@@ -96,19 +94,21 @@ export class AuthService {
             displayName: input.displayName,
             phone: input.phone ?? null,
             email: input.email ?? null,
-            lga: input.lga!,
+            // Farm details are asked for when the farmer adds a harvest.
+            lga: input.lga ?? null,
             community: input.community ?? null,
             claimStatus: 'SELF_REGISTERED',
             contactConsentAt: input.contactConsentEmail || input.contactConsentSms ? new Date() : null,
             createdByUserId: user.id,
           },
         });
-      } else if (input.accountType !== 'STAFF') {
+      } else if (input.accountType === 'PROCESSOR') {
+        // Facility details are asked for when the buyer publishes their first buying slot.
         const org = await tx.organisation.create({
           data: {
-            type: input.accountType,
+            type: 'PROCESSOR',
             name: input.organisationName!,
-            lga: input.lga!,
+            lga: input.lga ?? null,
             registrationNumber: input.registrationNumber ?? null,
             contactEmail: input.email ?? null,
             contactPhone: input.phone ?? null,

@@ -1,14 +1,25 @@
 import { expect, test } from '@playwright/test';
-import { approve, lagosDate, makeProcessor, offerTerms, register, signedInPage, uid } from '../support/api';
+import { Api, lagosDate, offerTerms, signedInPage, uid } from '../support/api';
 
 /**
  * A cooperative representative acts for a member who has no account: first with data-entry
  * permission only (can prepare, cannot approve a sale), then with sale approval recorded.
  */
 test('cooperative acting with and without approval authority', async ({ browser }) => {
-  const processor = await makeProcessor();
-  const coop = await register('COOPERATIVE', 'coop');
-  await approve(coop.orgId!);
+  // The demo cooperative's members are demo records, so the demo buyer makes the offer.
+  const buyer = await Api.create();
+  await buyer.demo('processor-manager');
+  const buyerOrgId = (await buyer.get('/auth/me')).memberships.find((m: { organisationType: string }) => m.organisationType === 'PROCESSOR').organisationId as string;
+  const from = new Date(`${lagosDate(2)}T00:00:00+01:00`).toISOString();
+  const to = new Date(`${lagosDate(6)}T00:00:00+01:00`).toISOString();
+  const slots = await buyer.get<Array<{ id: string; startsAt: string; usage: { availableKg: string } }>>(`/organisations/${buyerOrgId}/slots?status=PUBLISHED&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+  const slot = slots.find((x) => Number(x.usage.availableKg) >= 1500)!;
+  expect(slot).toBeTruthy();
+  // Cooperatives are no longer part of public registration; existing ones keep working.
+  const coopApi = await Api.create();
+  await coopApi.demo('cooperative');
+  const me = await coopApi.get('/auth/me');
+  const coop = { api: coopApi, orgId: me.memberships.find((m: { organisationType: string }) => m.organisationType === 'COOPERATIVE').organisationId as string };
   const memberName = `Mama Iyabo ${uid()}`;
   await coop.api.post(`/cooperatives/${coop.orgId}/members`, {
     displayName: memberName,
@@ -19,7 +30,7 @@ test('cooperative acting with and without approval authority', async ({ browser 
   const members = await coop.api.get<Array<{ farmerProfileId: string; displayName: string }>>(`/cooperatives/${coop.orgId}/members`);
   const memberId = members.find((m) => m.displayName === memberName)!.farmerProfileId;
 
-  const rep = await signedInPage(browser, coop.email);
+  const rep = await signedInPage(browser, '', { persona: 'cooperative' });
   await rep.goto('/coop/members');
   const card = rep.locator('li', { hasText: memberName });
   await expect(card.getByText('May: Help with data entry')).toBeVisible();
@@ -36,12 +47,12 @@ test('cooperative acting with and without approval authority', async ({ browser 
   const loc = (await coop.api.get(`/farmers/${memberId}`)).locations[0];
   const harvest = await coop.api.post(`/farmers/${memberId}/harvests`, { farmLocationId: loc.id, estimatedQuantityKg: '1500', earliestHarvestDate: lagosDate(1), latestHarvestDate: lagosDate(6), transportPreference: 'PROCESSOR_PAYS', publish: true });
   expect(harvest.createdBy.viaCooperative).toBeTruthy();
-  const offer = await processor.api.post('/offers', { harvestRequestId: harvest.id, ...offerTerms(processor.slot, '1500') });
+  const offer = await buyer.post('/offers', { harvestRequestId: harvest.id, ...offerTerms(slot, '1500') });
 
   // Without APPROVE_SALE the representative can only prepare the acceptance.
   await rep.goto(`/offers/${offer.id}`);
   await expect(rep.getByText(`Acting for ${memberName}`)).toBeVisible();
-  await expect(rep.getByRole('button', { name: 'Accept this offer' })).toHaveCount(0);
+  await expect(rep.getByRole('button', { name: 'Accept offer' })).toHaveCount(0);
   await rep.getByRole('button', { name: 'Prepare acceptance' }).click();
   await expect(rep).toHaveURL(/\/bookings\//);
   await expect(rep.getByText('Prepared — waiting for the farmer to approve')).toBeVisible();
@@ -67,7 +78,8 @@ test('cooperative acting with and without approval authority', async ({ browser 
   await rep.getByRole('button', { name: 'Approve this sale' }).click();
   await expect(rep.getByText('Sale approved').first()).toBeVisible();
   const after = await coop.api.get(`/bookings/${bookingId}`);
-  expect(after.status).toBe('AWAITING_CONFIRMATIONS');
+  // The offer said the buyer collects, so the approved sale is confirmed at once.
+  expect(after.status).toBe('CONFIRMED');
   // The audit trail records both the representative and the farmer they acted for.
   expect(after.current.confirmations.some((c: { party: string; actingForFarmer: boolean }) => c.party === 'FARMER' && c.actingForFarmer)).toBe(true);
 });

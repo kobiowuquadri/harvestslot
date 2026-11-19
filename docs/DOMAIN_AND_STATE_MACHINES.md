@@ -73,32 +73,38 @@ A delegation is valid only while it is not revoked, not expired, the cooperative
 
 | From | Action | Actor | Preconditions | To | Writes / events |
 |---|---|---|---|---|---|
-| — | create | Processor OWNER/MANAGER | request `PUBLISHED`; org `APPROVED`; facility `ACTIVE`; slot `PUBLISHED`, in the future; qty ≤ request remaining; qty ≥ facility minimum; capacity available | `OPEN` | offer, version 1 (processor-proposed), reservation `HELD` (expires with offer), outbox `offer.created` |
-| `OPEN`/`COUNTERED` | revise | Processor OWNER/MANAGER | `expectedVersionNo` matches; capacity for any increase | `OPEN` | new version, reservation resized under slot lock |
+| — | save draft (`send: false`) | Processor OWNER/MANAGER | request `PUBLISHED`; slot at the processor's facility | `DRAFT` | offer, version 1; **nothing reserved**; not visible to the farmer; the handover may still be undecided |
+| `DRAFT` | revise | Processor OWNER/MANAGER | `expectedVersionNo` matches | `DRAFT` | new version |
+| — / `DRAFT` | send (create with `send: true`, or `POST /offers/:id/send`) | Processor OWNER/MANAGER | the terms say how the cassava gets there (`COLLECT_FROM_FARM` or `FARMER_DELIVERS`); request `PUBLISHED`; org `APPROVED`; facility `ACTIVE`; slot `PUBLISHED`, in the future; qty ≤ request remaining; qty ≥ facility minimum; capacity available | `OPEN` | reservation `HELD` (expires with the offer), farmer notified ("Nothing is agreed until you accept"), outbox `offer.created` |
+| `DRAFT` | delete | Processor OWNER/MANAGER | — | `WITHDRAWN` | — |
+| `OPEN`/`COUNTERED` | revise | Processor OWNER/MANAGER | `expectedVersionNo` matches; the handover stays decided; capacity for any increase | `OPEN` | new version, reservation resized under slot lock |
 | `OPEN` | counter | Farmer / `APPROVE_SALE` delegate | `expectedVersionNo` matches | `COUNTERED` | farmer-proposed version |
-| `OPEN` | accept | Farmer / `APPROVE_SALE` delegate | latest version processor-proposed; not expired; supply available | `ACCEPTED` | booking `AWAITING_CONFIRMATIONS` (see §6) |
+| `OPEN` | accept | Farmer / `APPROVE_SALE` delegate | latest version processor-proposed; offer not expired; reservation `HELD` **and** not past its own expiry; supply available | `ACCEPTED` | booking `CONFIRMED` when the offer has a handover (both sides have agreed complete terms); otherwise `AWAITING_CONFIRMATIONS` (see §6) |
 | `OPEN` | prepare acceptance | `ASSIST_DATA_ENTRY`-only delegate | as accept | `ACCEPTED` | booking `DRAFT` awaiting farmer-side approval |
-| `COUNTERED` | accept counter | Processor OWNER/MANAGER | capacity for counter qty; supply available | `ACCEPTED` | booking `AWAITING_CONFIRMATIONS` |
+| `COUNTERED` | accept counter | Processor OWNER/MANAGER | capacity for counter qty; supply available | `ACCEPTED` | booking `CONFIRMED` (with a handover) or `AWAITING_CONFIRMATIONS` |
 | `OPEN`/`COUNTERED` | decline | Farmer / `APPROVE_SALE` | — | `DECLINED` | reservation `RELEASED` |
 | `OPEN`/`COUNTERED` | withdraw | Processor OWNER/MANAGER | — | `WITHDRAWN` | reservation `RELEASED` |
 | `OPEN`/`COUNTERED` | expire | system (lazy read + sweeper) | `now ≥ expires_at` | `EXPIRED` | reservation `EXPIRED` |
-| `OPEN`/`COUNTERED` | lapse | system | request remaining < offer qty after another acceptance | `LAPSED` | reservation `RELEASED` |
+| `DRAFT`/`OPEN`/`COUNTERED` | lapse | system | request remaining < offer qty after another acceptance, or the harvest is ended | `LAPSED` | reservation `RELEASED` |
 
-A recommendation or match never reserves anything; only an offer holds capacity.
+A recommendation or match never reserves anything, and neither does a farmer's request to a buyer ("Send request" creates an `offer_invitation`) or a draft offer; only a sent offer holds capacity. A buyer may answer a request with "can't buy this time" (`declinedAt`, reason shown to the farmer); the farmer may ask again later.
+
+**Handover.** Each offer version carries `handoverArrangement` (`COLLECT_FROM_FARM` — the buyer collects at the farm; `FARMER_DELIVERS` — the farmer delivers to the facility) and, for delivery, an optional `farmerDeliveryCostKobo` the farmer pays outside HarvestSlot. Both are shown to the farmer before acceptance. The handover window is the pickup window (collection) or the delivery window (delivery).
 
 ## 6. Booking state machine
 
 | From | Action | Actor | Preconditions | To |
 |---|---|---|---|---|
-| — | accept offer | Farmer / `APPROVE_SALE` | §5 | `AWAITING_CONFIRMATIONS` |
+| — | accept offer | Farmer / `APPROVE_SALE` | §5 | `CONFIRMED` when the terms include a handover; `AWAITING_CONFIRMATIONS` for terms without one |
 | — | prepare acceptance | `ASSIST_DATA_ENTRY` delegate | §5 | `DRAFT` |
-| `DRAFT` | approve | Farmer / `APPROVE_SALE` | hold valid | `AWAITING_CONFIRMATIONS` |
+| `DRAFT` | approve | Farmer / `APPROVE_SALE` | hold valid | `CONFIRMED` (with a handover) or `AWAITING_CONFIRMATIONS` |
 | `DRAFT` | discard | Farmer / any delegate | — | `CANCELLED` (lot + hold released) |
-| `AWAITING_CONFIRMATIONS` | final confirmation | system, inside the confirming request | current terms include transport; all required parties confirmed the current version; reservation `HELD` and unexpired; trip conflict-free | `CONFIRMED` (reservation → `CONFIRMED`, trip → `CONFIRMED`, shipment `ASSIGNED`) |
+| `AWAITING_CONFIRMATIONS` | final confirmation | system, inside the confirming request | current terms include a handover **or** (older bookings) transport; all required parties confirmed the current version; reservation `HELD` and unexpired; for transport, trip conflict-free | `CONFIRMED` (reservation → `CONFIRMED`; for transport also trip → `CONFIRMED`, shipment `ASSIGNED`) |
 | `DRAFT`/`AWAITING_CONFIRMATIONS` | expire | system | reservation hold expired | `EXPIRED` (lot, hold and trip hold released exactly once) |
 | `DRAFT`/`AWAITING_CONFIRMATIONS`/`CONFIRMED` | cancel | Farmer / `APPROVE_SALE`, Processor OWNER/MANAGER, Admin (reason) | harvest not started | `CANCELLED` (lot, reservation, trip released) |
 | `CONFIRMED` | start harvest | Farmer / `ASSIST_DATA_ENTRY` or `APPROVE_SALE` | readiness = true | `ACTIVE` |
-| `ACTIVE` | complete | system | shipment `DELIVERED` and receiving decision `FINAL` | `COMPLETED` (reservation → `CONSUMED`) |
+| `CONFIRMED`/`ACTIVE` | record accepted weight (handover bookings) | Processor OWNER/MANAGER/RECEIVING_OFFICER | no weight recorded yet; `expectedVersion` matches | `ACTIVE` (reservation → `CONSUMED`; produce invoice issued for the accepted weight) |
+| `ACTIVE` | complete | system | receiving decision `FINAL` and, for transport bookings, shipment `DELIVERED` | `COMPLETED` (reservation → `CONSUMED`) |
 
 `ACTIVE` bookings cannot be cancelled. Problems after harvest commencement use **incidents** (`booking_incidents`) with recorded recovery actions (replacement transport, amended slot, produce disposition) and never return quantity to the unallocated pool.
 
@@ -106,9 +112,10 @@ A recommendation or match never reserves anything; only an offer holds capacity.
 
 * `booking_terms_versions` rows are immutable snapshots (DB trigger). `bookings.current_terms_version_no` points to the agreed version.
 * A change (transport added/replaced, price, quantity, slot, windows, freight, quality, tolerance) is a **proposed version** in `booking_amendments` (`PENDING`). The current version stays in force until every required party confirms. Any required party can reject → `REJECTED`; prior state untouched.
-* Required parties: farmer and processor always; transporter when a transport section exists.
+* Required parties: farmer and processor always; transporter only for older bookings with a transport section.
+* Changing the handover (collection ↔ delivery, place, window or the farmer's delivery cost) is a material change for the farmer and needs their agreement; switching to delivery makes the farmer the freight payer.
 * When a new version is proposed, a party's confirmation is **carried forward** (recorded as `CARRIED_FORWARD`) only if none of that party's material fields changed:
-  * Farmer: quantity, price, harvest date, pickup window, quality terms, tolerance, payment/cancellation/rejection terms, freight payer, and freight amount when the farmer pays.
+  * Farmer: quantity, price, harvest date, pickup window, handover (arrangement, place, window, delivery cost), quality terms, tolerance, payment/cancellation/rejection terms, freight payer, and freight amount when the farmer pays.
   * Processor: quantity, price, slot, delivery window, quality terms, tolerance, payment/cancellation/rejection terms, freight payer, freight amount when the processor pays, platform fee.
   * Transporter: pickup/destination, pickup and delivery windows, quantity, freight amount and payer, vehicle, driver.
 * Confirmations reference an exact `terms_version_id` and `content_hash`; the client must send both, so a party cannot confirm terms it has not seen.
@@ -120,15 +127,25 @@ Computed by `computeReadiness()` from current database facts; never stored as a 
 1. `FARMER_ACCEPTED` — farmer or valid `APPROVE_SALE` delegate confirmed the current version.
 2. `PROCESSOR_ACCEPTED` — processor confirmed the current version.
 3. `CAPACITY_RESERVED` — supply lot `ALLOCATED`+ and slot reservation `CONFIRMED`.
-4. `TRANSPORT_ACCEPTED` — current version has an accepted quote and freight payer.
-5. `VEHICLE_DRIVER_CONFIRMED` — trip `CONFIRMED`, driver assigned, no overlapping confirmed trip for vehicle or driver (with buffer).
-6. `WINDOWS_FEASIBLE` — pickup window not ended; slot not cancelled/closed; delivery window inside slot.
-7. `PARTICIPANTS_ELIGIBLE` — processor and transporter organisations approved and not suspended; facility active; farmer account (if any) not suspended; delegations used remain valid for future actions.
-8. `NO_BLOCKING_ISSUES` — booking `CONFIRMED`; no pending amendment; no open blocking incident; not cancelled/expired.
+4. `HANDOVER_AGREED` — the current version says who brings the cassava (the buyer collects, or the farmer delivers), where (a non-empty place) and when (a window that ends after it starts). **No driver or vehicle is needed.**
+   *Older bookings made with a transporter* use these two checks instead:
+   `TRANSPORT_ACCEPTED` — current version has an accepted quote and freight payer;
+   `VEHICLE_DRIVER_CONFIRMED` — trip `CONFIRMED`, driver assigned, no overlapping confirmed trip for vehicle or driver (with buffer).
+5. `WINDOWS_FEASIBLE` — the agreed handover time (or pickup window) has not passed; slot not cancelled/closed; delivery window inside slot.
+6. `PARTICIPANTS_ELIGIBLE` — processor (and, for older bookings, transporter) organisations approved and not suspended; facility active; farmer account (if any) not suspended; delegations used remain valid for future actions.
+7. `NO_BLOCKING_ISSUES` — booking `CONFIRMED`; no pending amendment (a material change waits for re-agreement); no open blocking incident; not cancelled/expired.
+
+Double-booking prevention is unchanged: capacity is reserved under slot row locks, and supply under request row locks.
+
+### Plan and next step
+
+Every harvest and booking response carries `nextStep` (`stage`, the `actor` who acts next, `forViewer` — what the signed-in person should do — and `waitingFor`). Booking responses also carry `plan`: one sentence (“[Buyer] will collect 2,000 kg at [place] on [date] for ₦[price] per kg.” or “[Farmer] will deliver …”), the handover place and window, agreed quantity, price, estimated total and any farmer delivery cost, then the weighed result (received, accepted, shortfall, final amount, the farmer's decision) and the payment position (confirmed, reported but unconfirmed, outstanding). `describePlan()` in `packages/core/src/plan.ts` computes both. “Payment reported” and “Payment received” are separate stages.
 
 Readiness transitions are persisted in `readiness_events` whenever a mutation or sweep recomputes a different result.
 
-## 7. Transport
+## 7. Transport (older bookings only)
+
+New offers say how the cassava gets there (§5), so transporters, quotes, trips and shipments are no longer part of the sale. The rules below still govern bookings created with a transporter; quotes for bookings with a handover are refused.
 
 **Quote** (`transport_quotes`): `SUBMITTED` → `ACCEPTED` | `DECLINED` | `WITHDRAWN` | `EXPIRED` | `SUPERSEDED`.
 * Submit (transporter OWNER/DISPATCHER): vehicle active, capacity ≥ contracted qty × (1 + tolerance); the trip `[pickup_start − buffer, delivery_end + buffer]` lies inside a published availability window and does not overlap another `HELD` (unexpired) / `CONFIRMED` / `IN_PROGRESS` trip of the vehicle or driver.
@@ -155,6 +172,8 @@ Receiving status: `DRAFT` → `PROPOSED` → (`FINAL` if no material discrepancy
 Material discrepancy: any rejected quantity, or net below contracted × (1 − tolerance).
 
 On `PROPOSED → FINAL` or `→ DISPUTED`, invoices are issued for the processor-accepted quantity (the undisputed amount); a later resolution can add an audited adjustment.
+
+**One step for handover bookings** (`POST /bookings/:id/receiving/accepted-weight`): the buyer records the weight received and the weight accepted (a reason is required when they differ). Accepting less than the agreed quantity minus tolerance counts as a material difference, like rejected cassava. The produce invoice for the accepted weight is issued immediately; with a material difference the record waits in `AWAITING_FARMER_REVIEW` for the farmer to agree or report a problem, otherwise it is `FINAL` and the booking completes.
 
 ## 9. Invoices and payments
 

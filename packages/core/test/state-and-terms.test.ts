@@ -169,3 +169,14 @@ describe('terms versions and carried-forward confirmations', () => {
     expect(materialChanged('TRANSPORTER', v1, v2)).toBe(true);
   });
 });
+
+describe('draft offers', () => {
+  it('can be revised, sent or withdrawn, but never accepted before they are sent', () => {
+    expect(transition(OFFER_MACHINE, 'DRAFT', 'revise')).toBe('DRAFT');
+    expect(transition(OFFER_MACHINE, 'DRAFT', 'send')).toBe('OPEN');
+    expect(transition(OFFER_MACHINE, 'DRAFT', 'withdraw')).toBe('WITHDRAWN');
+    expect(() => transition(OFFER_MACHINE, 'DRAFT', 'accept')).toThrow();
+    expect(() => transition(OFFER_MACHINE, 'DRAFT', 'expire')).toThrow();
+    expect(() => transition(OFFER_MACHINE, 'OPEN', 'send')).toThrow();
+  });
+});

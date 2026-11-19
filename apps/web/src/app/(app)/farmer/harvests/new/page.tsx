@@ -3,7 +3,7 @@
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { FarmerGate, WithFarmerProfile } from '@/components/domain/farmer-gate';
-import { emptyHarvestValues, HarvestForm, type HarvestFormValues } from '@/components/domain/harvest-form';
+import { emptyHarvestValues, HarvestForm, normaliseDraftValues, type HarvestFormValues } from '@/components/domain/harvest-form';
 import { LoadingState, PageHeader } from '@/components/domain/states';
 import { getDraft } from '@/lib/drafts';
 
@@ -14,14 +14,14 @@ function NewHarvest() {
   useEffect(() => {
     if (!draftParam) return;
     getDraft(draftParam)
-      .then((d) => setInitial(d ? { ...emptyHarvestValues, ...(d.values as Partial<HarvestFormValues>) } : emptyHarvestValues))
+      .then((d) => setInitial(d ? normaliseDraftValues(d.values) : emptyHarvestValues))
       .catch(() => setInitial(emptyHarvestValues));
   }, [draftParam]);
   return (
     <FarmerGate>
       {(ctx) => (
         <div className="mx-auto max-w-2xl">
-          <PageHeader title="New harvest request" description="About two minutes. Nothing is shared with processors until you publish." />
+          <PageHeader title="Add my harvest" description="Three quick questions. Then we show buyers that fit — nothing is agreed until you accept an offer." />
           {initial ? (
             <WithFarmerProfile ctx={ctx}>{(profile) => <HarvestForm ctx={ctx} profile={profile} initial={initial} draftId={draftParam ?? undefined} />}</WithFarmerProfile>
           ) : (

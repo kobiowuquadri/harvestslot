@@ -53,6 +53,14 @@ export async function loadReadinessFacts(db: Db, bookingId: string, now: Date): 
     bookingStatus: booking.status,
     currentVersionNo: current.versionNo,
     hasTransportTerms: content.transport !== null,
+    handover: content.handover
+      ? {
+          arrangement: content.handover.arrangement,
+          placeLabel: content.handover.place.label,
+          windowStart: new Date(content.handover.window.start),
+          windowEnd: new Date(content.handover.window.end),
+        }
+      : null,
     confirmedParties: confirmations.map((c) => c.party as BookingParty),
     pickupWindowEnd: new Date(content.pickupWindow.end),
     deliveryWindowStart: new Date(content.deliveryWindow.start),

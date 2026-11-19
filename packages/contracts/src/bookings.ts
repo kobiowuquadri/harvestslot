@@ -6,6 +6,7 @@ import {
   BookingStatusE,
   ConfirmationMethodE,
   FreightPayerE,
+  HandoverArrangementE,
   HandoverMethodE,
   HarvestLotStatusE,
   IncidentKindE,
@@ -56,6 +57,8 @@ export const matchResultSchema = z.object({
   score: z.number(),
   factors: z.array(matchFactorSchema),
   reliability: z.object({ completedBookings: z.number(), onTimeRate: z.number().nullable(), label: z.string() }),
+  /** One plain sentence, e.g. "Can receive your full 2,000 kg on Thu 20 Nov". */
+  headline: z.string(),
   explanation: z.array(z.string()),
   remainingSteps: z.array(z.string()),
   qualityCriteria: qualityTermsSchema,
@@ -100,6 +103,17 @@ export const transportTermsSchema = z.object({
 });
 export type TransportTerms = z.infer<typeof transportTermsSchema>;
 
+/** How and where the cassava changes hands (bookings made from offers with a handover decision). */
+export const handoverTermsSchema = z.object({
+  arrangement: HandoverArrangementE.schema,
+  /** The farm for collection, the facility for delivery. */
+  place: z.object({ label: z.string(), lga: z.string().nullable(), detail: z.string().nullable() }),
+  window: windowSchema,
+  /** Estimated delivery cost the farmer pays (farmer delivers only); information, not an invoice. */
+  farmerDeliveryCostKobo: z.number().nullable(),
+});
+export type HandoverTerms = z.infer<typeof handoverTermsSchema>;
+
 /** Immutable snapshot of everything a party agrees to. Stored in booking_terms_versions.content. */
 export const bookingTermsContentSchema = z.object({
   schemaVersion: z.literal(1),
@@ -129,6 +143,8 @@ export const bookingTermsContentSchema = z.object({
   rejectionHandling: RejectionHandlingE.schema,
   freightPayer: FreightPayerE.schema,
   transport: transportTermsSchema.nullable(),
+  /** Absent on bookings made before handover arrangements existed (they use `transport`). */
+  handover: handoverTermsSchema.optional(),
   platformFee: z.object({ enabled: z.boolean(), bps: z.number(), payer: z.literal('PROCESSOR'), estimatedKobo: z.number() }),
 });
 export type BookingTermsContent = z.infer<typeof bookingTermsContentSchema>;
@@ -139,6 +155,7 @@ export const READINESS_CHECKS = [
   'FARMER_ACCEPTED',
   'PROCESSOR_ACCEPTED',
   'CAPACITY_RESERVED',
+  'HANDOVER_AGREED',
   'TRANSPORT_ACCEPTED',
   'VEHICLE_DRIVER_CONFIRMED',
   'WINDOWS_FEASIBLE',
@@ -162,6 +179,57 @@ export const readinessSchema = z.object({
   checks: z.array(readinessCheckSchema),
 });
 export type Readiness = z.infer<typeof readinessSchema>;
+
+// ───────────── What happens next ─────────────
+
+/** The agreed plan in plain words, plus the figures that change as the sale finishes. */
+export const salePlanSchema = z.object({
+  /** e.g. "Oluyole Cassava will collect 2,000 kg at Adunni's farm, Akinyele on Thu 20 Nov for ₦100 per kg." */
+  sentence: z.string(),
+  arrangement: HandoverArrangementE.schema.nullable(),
+  placeLabel: z.string(),
+  window: windowSchema,
+  agreedKg: z.string(),
+  priceKoboPerKg: z.number(),
+  estimatedAmountKobo: z.number(),
+  farmerDeliveryCostKobo: z.number().nullable(),
+  /** Set once the buyer has recorded the weight. */
+  weighed: z
+    .object({
+      receivedKg: z.string(),
+      acceptedKg: z.string(),
+      /** Agreed minus accepted; positive when less was accepted than agreed. */
+      shortfallKg: z.string(),
+      reasons: z.array(z.string()),
+      note: z.string().nullable(),
+      finalAmountKobo: z.number(),
+      farmerDecision: z.enum(['PENDING', 'AGREED', 'PROBLEM_REPORTED', 'NOT_NEEDED']),
+    })
+    .nullable(),
+  payment: z
+    .object({
+      invoiceId: uuid,
+      totalKobo: z.number(),
+      confirmedPaidKobo: z.number(),
+      reportedPendingKobo: z.number(),
+      outstandingKobo: z.number(),
+      dueAt: z.string(),
+      overdue: z.boolean(),
+      /** The newest payment the buyer reported that the farmer has not answered yet. */
+      pendingPaymentId: uuid.nullable(),
+    })
+    .nullable(),
+});
+export type SalePlan = z.infer<typeof salePlanSchema>;
+
+/** Who acts next, and what this viewer should do now (or is waiting for). */
+export const nextStepSchema = z.object({
+  stage: z.string(),
+  actor: z.enum(['FARMER', 'PROCESSOR', 'ADMIN', 'NONE']),
+  forViewer: z.string().nullable(),
+  waitingFor: z.string().nullable(),
+});
+export type NextStep = z.infer<typeof nextStepSchema>;
 
 // ───────────── Booking resources ─────────────
 
@@ -229,6 +297,8 @@ export const bookingSummarySchema = z.object({
   receivingStatus: z.string().nullable(),
   nextAction: z.string().nullable(),
   confirmationDeadline: z.string().nullable(),
+  plan: salePlanSchema,
+  nextStep: nextStepSchema,
   isDemo: z.boolean(),
   updatedAt: z.string(),
 });
@@ -304,6 +374,8 @@ export const bookingDetailSchema = z.object({
     }),
   ),
   timeline: z.array(timelineEventSchema),
+  plan: salePlanSchema,
+  nextStep: nextStepSchema,
   isDemo: z.boolean(),
 });
 export type BookingDetail = z.infer<typeof bookingDetailSchema>;
@@ -332,6 +404,10 @@ export const proposeAmendmentSchema = z.object({
   deliveryWindowEnd: z.iso.datetime({ offset: true }).optional(),
   toleranceBps: z.number().int().min(0).max(5000).optional(),
   paymentTermsDays: z.number().int().min(0).max(180).optional(),
+  handoverArrangement: HandoverArrangementE.schema.optional(),
+  handoverWindowStart: z.iso.datetime({ offset: true }).optional(),
+  handoverWindowEnd: z.iso.datetime({ offset: true }).optional(),
+  farmerDeliveryCostKobo: z.number().int().min(0).optional(),
 });
 
 export const decideAmendmentSchema = z.object({

@@ -73,7 +73,7 @@ function ReportPayment({ inv }: { inv: InvoiceDto }) {
               <Textarea value={note} onChange={(e) => setNote(e.target.value)} />
             </Field>
             <div className="text-sm">
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-line-strong px-3 py-2 font-medium hover:bg-leaf-50">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-line-strong px-3 py-2 font-medium hover:bg-canvas">
                 {uploading ? 'Uploading…' : 'Attach a receipt (optional)'}
                 <input
                   type="file"

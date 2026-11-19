@@ -9,11 +9,11 @@ import { Alert, Skeleton } from '@/components/ui/primitives';
 
 export function PageHeader({ title, description, actions, eyebrow }: { title: ReactNode; description?: ReactNode; actions?: ReactNode; eyebrow?: ReactNode }) {
   return (
-    <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
-        {eyebrow ? <div className="mb-1 text-sm text-muted">{eyebrow}</div> : null}
-        <h1 className="text-2xl font-semibold tracking-tight text-forest">{title}</h1>
-        {description ? <p className="mt-1 max-w-2xl text-sm text-muted">{description}</p> : null}
+        {eyebrow ? <div className="mb-1.5 text-[13px] font-medium text-muted">{eyebrow}</div> : null}
+        <h1 className="text-[1.65rem] font-semibold leading-tight text-ink">{title}</h1>
+        {description ? <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted">{description}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
     </div>
@@ -22,9 +22,9 @@ export function PageHeader({ title, description, actions, eyebrow }: { title: Re
 
 export function EmptyState({ title, children, action, icon }: { title: ReactNode; children?: ReactNode; action?: ReactNode; icon?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-line-strong bg-surface px-6 py-10 text-center">
-      <div className="text-leaf">{icon ?? <Inbox className="size-8" aria-hidden />}</div>
-      <p className="font-semibold text-forest">{title}</p>
+    <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-line-strong/60 bg-surface px-6 py-12 text-center">
+      <div className="mb-1 flex size-12 items-center justify-center rounded-full bg-leaf-50 text-forest">{icon ?? <Inbox className="size-6" aria-hidden />}</div>
+      <p className="font-display font-semibold text-ink">{title}</p>
       {children ? <div className="max-w-md text-sm text-muted">{children}</div> : null}
       {action ? <div className="mt-2">{action}</div> : null}
     </div>

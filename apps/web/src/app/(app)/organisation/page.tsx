@@ -191,7 +191,7 @@ export default function OrganisationPage() {
                 {o.documents.length === 0 ? <li className="text-muted">No documents yet.</li> : null}
               </ul>
               {canEdit ? (
-                <label className="inline-flex w-fit cursor-pointer items-center rounded-lg border border-line-strong px-3 py-2 font-medium hover:bg-leaf-50">
+                <label className="inline-flex w-fit cursor-pointer items-center rounded-lg border border-line-strong px-3 py-2 font-medium hover:bg-canvas">
                   {uploading ? 'Uploading…' : 'Upload a document (PDF or photo)'}
                   <input
                     type="file"

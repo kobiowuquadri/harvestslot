@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import {
+  buyingSlotSchema,
+  formatLagosDate,
   addDays,
   adjustCapacitySchema,
   createSlotSchema,
@@ -22,6 +24,7 @@ import type { Prisma } from '@harvestslot/db';
 import { AccessService } from '../../common/access.service.js';
 import { PrismaService } from '../../common/prisma.service.js';
 import { iso, kg, kobo } from '../../common/serialize.js';
+import { approxFor } from '../farmers/farmers.service.js';
 
 type FacilityRow = Prisma.FacilityGetPayload<{ include: { lines: true; organisation: { select: { name: true } } } }>;
 type SlotRow = Prisma.ProcessingSlotGetPayload<{ include: { line: true; facility: { select: { name: true } }; _count: { select: { bookings: true } } } }>;
@@ -217,6 +220,62 @@ export class FacilitiesService {
     });
     await audit(this.prisma.db, { actor, organisationId: line.facility.organisationId, action: 'slot.created', entityType: 'slot', entityId: slot.id, data: { published: input.publish } });
     return this.getSlot(actor, slot.id);
+  }
+
+  /**
+   * The buyer's one-form buying slot: place (existing, or created now with sensible defaults),
+   * dates and quantity. Published at once when the organisation is approved, otherwise kept as a draft.
+   */
+  async createBuyingSlot(actor: Actor, orgId: string, input: z.infer<typeof buyingSlotSchema>): Promise<SlotDto> {
+    const membership = await this.access.requireOrg(actor, orgId, 'processor.slot.manage');
+    let facilityId = input.facilityId;
+    if (facilityId) {
+      const f = await this.prisma.db.facility.findUnique({ where: { id: facilityId } });
+      if (!f || f.organisationId !== orgId) throw new DomainError('NOT_FOUND', 'Facility not found');
+      if (input.priceKoboPerKg !== undefined) {
+        await this.prisma.db.facility.update({ where: { id: facilityId }, data: { indicativePriceKoboPerKg: BigInt(input.priceKoboPerKg), version: { increment: 1 } } });
+      }
+    } else {
+      const nf = input.newFacility!;
+      const point = nf.point ?? (await approxFor(this.prisma.db, nf.lga));
+      if (!point) throw new DomainError('VALIDATION_FAILED', 'Choose a local government area HarvestSlot supports', [{ path: 'newFacility.lga', message: 'Unsupported area' }]);
+      const f = await this.create(actor, orgId, {
+        name: nf.name,
+        lga: nf.lga,
+        address: nf.address,
+        point,
+        qualityCriteria: qualityTermsSchema.parse({ maxHoursHarvestToDelivery: 48, soilAndStemsRemoved: true, maxVisibleRotPercent: 5, varietiesAccepted: [], notes: 'Fresh roots, harvested no more than 48 hours before delivery.' }),
+        minOrderKg: '100',
+        maxPickupDistanceKm: 100,
+        indicativePriceKoboPerKg: input.priceKoboPerKg,
+        defaultToleranceBps: 500,
+        defaultPaymentTermsDays: 7,
+        rejectionHandling: 'RETURNED_AT_PROCESSOR_COST',
+        cancellationTerms: 'Either side may cancel without penalty before harvest starts. After that, problems are reported on the booking.',
+      });
+      facilityId = f.id;
+      await this.prisma.db.organisation.updateMany({ where: { id: orgId, lga: null }, data: { lga: nf.lga } });
+    }
+    let line = await this.prisma.db.processingLine.findFirst({ where: { facilityId, status: 'ACTIVE' }, orderBy: { createdAt: 'asc' } });
+    if (!line) {
+      await this.addLine(actor, facilityId, { name: 'Cassava intake', product: 'OTHER' });
+      line = await this.prisma.db.processingLine.findFirstOrThrow({ where: { facilityId, status: 'ACTIVE' }, orderBy: { createdAt: 'asc' } });
+    }
+    const startsAt = lagosDateTime(input.fromDate, 8);
+    const endsAt = lagosDateTime(input.toDate, 17);
+    const clash = await this.prisma.db.processingSlot.findFirst({ where: { lineId: line.id, status: { not: 'CANCELLED' }, startsAt: { lt: endsAt }, endsAt: { gt: startsAt } } });
+    if (clash) {
+      throw new DomainError('SLOT_OVERLAP', `You already have a buying slot here from ${formatLagosDate(clash.startsAt)} to ${formatLagosDate(clash.endsAt)}. Change its quantity instead, or choose other dates.`, { slotId: clash.id });
+    }
+    return this.createSlot(actor, {
+      lineId: line.id,
+      startsAt: startsAt.toISOString(),
+      endsAt: endsAt.toISOString(),
+      processingCapacityKg: input.quantityKg,
+      purchaseLimitKg: input.quantityKg,
+      notes: input.notes,
+      publish: membership.organisationStatus === 'APPROVED',
+    });
   }
 
   async createSeries(actor: Actor, input: z.infer<typeof createSlotSeriesSchema>): Promise<{ created: number; skipped: Array<{ date: string; reason: string }> }> {

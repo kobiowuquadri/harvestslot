@@ -27,6 +27,10 @@ export function createPrismaClient(options: CreatePrismaClientOptions): PrismaCl
       connectionTimeoutMillis: 10_000,
       idleTimeoutMillis: 30_000,
       application_name: options.applicationName ?? 'harvestslot',
+      // The adapter reads timestamptz values without their UTC offset, so the session must run in
+      // UTC. Otherwise, on a server whose time zone is not UTC (embedded PostgreSQL on a Lagos
+      // machine), stored instants are shifted by the server's offset and disagree with SQL now().
+      options: '-c TimeZone=UTC',
     },
     { onPoolError: options.onPoolError },
   );

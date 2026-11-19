@@ -60,9 +60,9 @@ export default function AdminOverview() {
           <>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {ATTENTION.map((a) => (
-                <Link key={a.key} href={a.href} className={`rounded-xl border p-4 hover:border-leaf ${o.attention[a.key] ? 'border-amber-100 bg-amber-50' : 'border-line bg-surface'}`}>
+                <Link key={a.key} href={a.href} className={`rounded-xl border p-4 transition-[border-color,box-shadow] hover:border-line-strong/40 hover:shadow-[var(--shadow-raised)] ${o.attention[a.key] ? 'border-amber-100 bg-amber-50' : 'border-line bg-surface'}`}>
                   <p className="text-sm text-muted">{a.label}</p>
-                  <p className="mt-1 text-3xl font-semibold tabular text-forest">{o.attention[a.key]}</p>
+                  <p className="mt-1 text-3xl font-semibold tabular text-ink">{o.attention[a.key]}</p>
                 </Link>
               ))}
             </div>

@@ -17,21 +17,28 @@ test('public pages and sign-in meet WCAG 2.1 AA automated checks', async ({ page
   }
 });
 
-test('farmer, processor and driver working screens meet WCAG 2.1 AA automated checks', async ({ browser }) => {
+test('farmer and buyer working screens meet WCAG 2.1 AA automated checks', async ({ browser }) => {
   const f = await confirmedBooking();
   const farmer = await signedInPage(browser, f.farmer.email, { mobile: true });
-  for (const path of ['/app', '/farmer/harvests/new', `/bookings/${f.bookingId}`, '/invoices']) {
+  for (const path of ['/app', '/farmer/harvests/new', `/farmer/harvests/${f.harvestId}`, `/offers/${f.offerId}`, `/bookings/${f.bookingId}`, '/bookings', '/invoices']) {
     await farmer.goto(path);
     await audit(farmer, `farmer ${path}`);
   }
   const proc = await signedInPage(browser, f.processor.email);
-  for (const path of ['/app', '/processor/capacity', '/processor/inbox', `/bookings/${f.bookingId}`]) {
+  for (const path of ['/app', '/processor/capacity', '/processor/inbox', `/offers/${f.offerId}`, `/bookings/${f.bookingId}`]) {
     await proc.goto(path);
     await audit(proc, `processor ${path}`);
   }
-  const driver = await signedInPage(browser, f.transporter.driver.email, { mobile: true });
-  await driver.goto('/transport/jobs');
-  await audit(driver, 'driver /transport/jobs');
+  // Dialogs on the short sale journey.
+  await proc.goto(`/bookings/${f.bookingId}`);
+  await proc.getByRole('button', { name: 'Record the weight' }).click();
+  await expect(proc.getByRole('dialog', { name: 'Record the weight' })).toBeVisible();
+  await audit(proc, 'record-the-weight dialog');
+  await proc.keyboard.press('Escape');
+  await proc.goto('/processor/capacity');
+  await proc.getByRole('button', { name: 'Publish a buying slot' }).first().click();
+  await expect(proc.getByRole('dialog', { name: 'Publish a buying slot' })).toBeVisible();
+  await audit(proc, 'publish-a-buying-slot dialog');
 });
 
 test('dialogs trap focus, have names, and keyboard focus is visible', async ({ browser }) => {

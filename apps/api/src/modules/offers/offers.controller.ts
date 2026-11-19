@@ -1,7 +1,7 @@
 import { Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
-import { acceptOfferResultSchema, counterOfferSchema, createOfferSchema, decideOfferSchema, offerSchema, reviseOfferSchema } from '@harvestslot/contracts';
+import { acceptOfferResultSchema, counterOfferSchema, createOfferSchema, decideOfferSchema, offerSchema, reviseOfferSchema, sendOfferSchema } from '@harvestslot/contracts';
 import type { Actor } from '@harvestslot/core';
 import { CurrentActor, Idempotent } from '../../common/decorators.js';
 import { ApiOk, ZodBody } from '../../common/zod.js';
@@ -45,6 +45,15 @@ export class OffersController {
   @ApiOk(offerSchema)
   revise(@CurrentActor() actor: Actor, @Param('id', uuid()) id: string, @ZodBody(reviseOfferSchema) body: z.infer<typeof reviseOfferSchema>) {
     return this.offers.revise(actor, id, body);
+  }
+
+  /** Sends a draft offer to the farmer (reserves capacity until it expires). */
+  @Post('offers/:id/send')
+  @HttpCode(200)
+  @Idempotent('offer.send')
+  @ApiOk(offerSchema)
+  send(@CurrentActor() actor: Actor, @Param('id', uuid()) id: string, @ZodBody(sendOfferSchema) body: z.infer<typeof sendOfferSchema>) {
+    return this.offers.send(actor, id, body);
   }
 
   @Post('offers/:id/counter')

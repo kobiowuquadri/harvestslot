@@ -21,60 +21,53 @@ Password for every demo account: **`HarvestSlot-Demo-2026`**. In a demonstration
 
 | Persona | Email | Lands on |
 |---|---|---|
-| Farmer (Adunni) | farmer.adunni@demo.harvestslot.example | Home |
-| Processor manager | manager@ibadan-starch.demo.harvestslot.example | Dashboard |
-| Receiving officer | receiving@ibadan-starch.demo.harvestslot.example | Receiving |
-| Finance officer | finance@ibadan-starch.demo.harvestslot.example | Invoices |
-| Transport dispatcher | dispatch@oke-ogun-haulage.demo.harvestslot.example | Find jobs |
-| Driver (Tunde) | driver.tunde@demo.harvestslot.example | Jobs |
-| Cooperative representative | rep@akinyele-coop.demo.harvestslot.example | Members |
+| Farmer (Adunni, Akinyele) | farmer.adunni@demo.harvestslot.example | Home |
+| Buyer — processor manager (Oluyole Cassava Processing) | manager@ibadan-starch.demo.harvestslot.example | Home (Buying slots · Requests · Bookings) |
 | Administrator | admin@demo.harvestslot.example | Admin overview |
-| Second processor owner (sign in by email) | owner@akinyele-flour.demo.harvestslot.example | Dashboard |
 
-Seeded data (last seed run): 24 demo users, 15 farmer profiles (including represented members without accounts), 4 processors with facilities and lines, 2 transporters, 2 cooperatives, 6 vehicles, 24 harvest requests, 100 processing slots, 15 bookings across all seven states, 14 invoices (including partial payment), 2 disputes, notifications and audit history.
+Also available by email, but not on the persona list: the buyer's receiving officer and finance officer (`receiving@…` and `finance@ibadan-starch.demo.harvestslot.example`), the other farmers (`farmer.<first name>@demo.harvestslot.example`), the Akinyele Fresh Flour Mill owner (`owner@akinyele-flour.demo.harvestslot.example`) and the cooperative representative (`rep@akinyele-coop.demo.harvestslot.example`). Transporter and driver accounts created before the simplification still sign in and keep their records, but they are not part of the demo journey.
 
-## The 13-step demonstration (live, ≈ 15 minutes)
+## The demonstration: one complete sale (live, about 10 minutes)
 
-Use two browser windows (or one normal and one private window) so two people can be signed in at once. A phone-sized window for the farmer and driver shows the mobile layout.
+The farmer's question is: *“Who will buy my cassava, how much will they take, and when and where should it be ready?”* Use two browser windows (or one normal and one private window). A phone-sized window for the farmer shows the mobile layout.
 
-1. **Farmer creates a 2,000 kg request.** Adunni → *New harvest request* → choose her farm → 2000 kg → harvest dates in the next week → *Publish to processors*. The wizard works offline too: switch the browser offline and *Keep on this phone*; it is sent later with *Send now* (and cannot be sent twice).
-2. **Matching explains available processors.** On the request page, *Matching processors* shows each facility with score, distance labelled *straight-line*, indicative price, capacity fit, payment track record and “Why this match is ranked here”. The banner states these are recommendations and nothing is reserved.
-3. **Processor offers and reserves capacity.** Processor manager → *Harvest inbox* → *Make an offer* → facility and slot (windows fill in from the slot) → price → *Send offer*. The offer holds slot capacity until it expires (*Capacity* shows it as “on hold”).
-4. **Farmer accepts the exact terms.** Adunni → request → *Offers* → *Accept this offer*. She lands on the booking: terms version 1 with its fingerprint, her estimate (not an invoice), the HarvestSlot fee paid by the processor, and *Not ready — do not harvest yet*.
-5. **Transport quote and assignment.** Dispatcher → *Find jobs* → *Send a quote* (vehicle, price). Processor manager → booking → *Accept quote*. Dispatcher → *Quotes* → choose driver Tunde → *Confirm vehicle and driver*.
-6. **Readiness becomes true.** Adunni's booking now shows every check ticked and *You can harvest now*. Readiness is computed by the server; no screen can toggle it.
-7. **A competing request cannot overbook.** Sign in as the second processor's owner (owner@akinyele-flour.demo.harvestslot.example) → *Capacity*: the seeded “tight” slot (2,500 kg with a 2,000 kg hold). From the *Harvest inbox*, offer 1,000 kg on that slot for another request → refused: *Only 500 kg of capacity is left in this slot*. (The concurrent version of this race is `tests/load/booking-race.mjs`.)
-8. **Harvest, collection and delivery.** Adunni: *I have started harvesting* → *Ready for pickup*. Driver Tunde (phone layout): *Jobs* → the job → *I am on my way* → *I have arrived at the farm* → loaded quantity → *Save loading*. Adunni confirms *I handed over this cassava* (or shows Tunde a one-time code). Tunde → *I have left the farm* → *I have arrived at the facility*. Receiving officer → booking → *Confirm delivery received*.
-9. **1,900 kg delivered, 1,800 accepted, 100 rejected with evidence.** Receiving officer → *Receiving* → the booking → gross 1900, tare 0 → *Save weighing* → upload a ticket photo → accepted 1800, rejected 100, reason, what happens to the rejected roots → *Submit decision for the farmer’s review*. (Scenario **C2** is already at this point if you want to skip ahead.)
-10. **Farmer reviews.** Adunni → booking → *Receiving and quality* → accept, or *I disagree* to open a dispute. The review deadline escalates to an administrator; silence is never treated as acceptance.
-11. **Produce invoice uses 1,800 kg.** *Payments* → the produce invoice: 1,800 kg × price. The freight and HarvestSlot fee invoices are separate and never charged to the farmer.
-12. **Payment reported, then confirmed by the payee.** Finance officer → invoice → *I have paid this* (bank transfer, reference). It shows *Reported by payer*. Adunni → *Did you receive it?* → *Yes* → *Confirmed by recipient*; the invoice becomes Paid. Fee invoices can be paid online: in development the **payment simulator** page is clearly marked “SIMULATED PAYMENT — no money moves” and its result is labelled *Simulated*, never *Verified*.
-13. **Operational metrics update without fabricated impact.** Processor → *Reports*, Administrator → *Analytics*: each figure has its definition, sources and exclusions, shows “not enough data” instead of a number when appropriate, and demo and live records are never mixed (choose *Demo records only* to see the seeded activity).
+1. **Two ways to start.** Open */register*: “What would you like to do?” — *Sell cassava* or *Buy cassava*. Only account details are asked; farm or facility details come when first needed. (For the demo itself, use the accounts above.)
+2. **Add my harvest.** Adunni → *Add my harvest* → where (her farm, or a local government area and village picked from suggestions) → roughly how much (type *2* with *Tonnes* and it shows **2,000 kg** at once) → when it will be ready → check the summary → *Find buyers*. It works offline too: *Keep on this phone*, then *Send now* when back online.
+3. **Find a buyer.** *Buyers that fit* lists buyers whose location, dates and free space fit, each explained in one sentence such as “Can receive your full 2,000 kg on Thu 26 Nov”. *Send request* on a card. The page then says *Waiting for the buyer’s offer*. If nobody fits, the harvest stays saved and the page suggests changing the dates.
+4. **The buyer reviews the request.** Processor manager → *Requests* → the card says *Review harvest request* → *Review and send offer*. Facility, date and quantity are prefilled. Enter the price (₦100/kg shows an estimated total of ₦200,000) and answer **“How will the cassava get there?”**: *We’ll collect from the farm* or *The farmer will deliver to our facility* (with any delivery cost the farmer pays). Not decided yet? *Save as draft* — drafts are private and reserve nothing. *Send offer* holds the capacity until the farmer answers.
+5. **The farmer reviews the offer.** Adunni → *Review the offer*: buyer, quantity, price per kg, **estimated total**, date and time, handover place, who brings the cassava and any cost to her. *Accept offer* or *Decline* (her harvest stays available to other buyers).
+6. **The confirmed plan.** On acceptance she lands on the plan: *“Oluyole Cassava Processing Ltd (Demo) will collect 2,000 kg at … on … for ₦100 per kg.”*, with the status *Ready to harvest* and what to do next. No driver, vehicle or freight quote is involved: the plan is ready as soon as both sides have agreed complete terms, the capacity is reserved and the handover details are complete. *My plans* shows it the next time she signs in.
+7. **Record the weight.** Processor manager (or receiving officer) → the booking → *Record the weight* → for example 1,900 kg received and accepted. Both sides now see the **final amount (₦190,000)**, with “100 kg less than agreed” flagged. When less is accepted than was received, a reason is required and the farmer is asked to *agree or report a problem*.
+8. **Payment.** Processor manager (or finance officer) → *Record payment* → amount and reference. It shows as **Payment reported** — not paid — until Adunni answers *Yes, I received ₦190,000* (or *It hasn’t arrived*). Then the plan says **Paid — sale complete**.
+9. **When things do not go to plan.** A change of price, quantity, date or handover needs the other side to agree again before it applies. An offer that is not answered in time expires, its capacity is released, and the farmer is pointed to other buyers. A buyer cannot offer more than its buying slot has left: try the seeded 2,500 kg “tight” slot at Akinyele Fresh Flour Mill, which already holds 2,000 kg.
+10. **Reports without invented impact.** Processor → *Reports*, Administrator → *Analytics*: each figure has its definition and exclusions, shows “not enough data” where appropriate, and never mixes demo with live records.
 
 ## Pre-seeded scenarios
 
 | Code | Where to look | What it shows |
 |---|---|---|
-| H1 | Adunni → Payments | Completed; produce invoice partly paid; one payment awaiting her confirmation |
-| H2 | Processor → Invoices | Fully paid; HarvestSlot fee paid through the **simulator** (labelled simulated) |
-| H3 | Admin → Disputes | Completed after a dispute resolved by an administrator with an invoice adjustment |
-| H4 | Processor → Bookings (Cancelled) | Cancelled by the processor before harvest, with reason |
-| H5 | Processor → Bookings (Expired) | **Expired hold**: accepted, but transport was never confirmed before the confirmation deadline; nothing stays reserved |
-| C1 | Receiving officer → Receiving | Delivered and weighed; quality decision pending |
-| C2 | Receiving | 1,900 kg net, 1,800 accepted / 100 rejected; awaiting the farmer's review |
-| C3 | Admin → Disputes | Disputed receiving decision awaiting response/review |
-| C4 | Driver Tunde → Jobs | Harvest started, driver on the way |
-| C5 | Adunni → Home | Confirmed and **ready to harvest** in three days |
-| C6 | Processor → Bookings | **Cancellation and reassignment**: the transporter cancelled; booking not ready until a replacement quote is accepted and a driver confirmed (dispatchers see it as a *Replacement needed* job) |
-| C7 | Dispatcher → Find jobs | Accepted booking with no transport yet |
-| C8 | Dispatcher → Quotes | Processor accepted a quote; dispatcher must confirm a driver before the vehicle hold expires |
+| H1 | Adunni → Payments | Collected 9 days ago; 1,950 kg accepted; one transfer confirmed, a second waiting for her confirmation |
+| H2 | Bisi → My plans | Delivered by the farmer; 20 kg not accepted, which she agreed; fully paid |
+| H3 | Admin → Disputes | Completed after a problem report resolved by an administrator |
+| H4 | Grace → My plans | Cancelled by the buyer before harvest, with a reason |
+| H5 | Kayode → Harvests | An offer he did not answer in time expired; its capacity was released |
+| C1 | Ngozi, or the buyer → Bookings | The buyer collects today; next step: record the weight |
+| C2 | Tolu → My plans | 1,900 kg received, 1,800 accepted (100 kg not accepted): waiting for Tolu to check |
+| C3 | Halima, or Admin → Disputes | Problem with the weight reported; waiting for the buyer and an administrator |
+| C4 | Emeka → My plans | Harvest started this morning; the buyer collects within the agreed window |
+| C5 | Adunni → Home | Confirmed plan, **ready to harvest**: the buyer collects in three days |
+| C6 | Bisi → My plans | She delivers to the flour mill in four days; her delivery cost was shown before she accepted |
+| C7 | Grace → Harvests | Request sent to Iseyin Cassava Hub; waiting for the buyer's offer |
+| C8 | Buyer → Requests | Draft offer for Halima: collection or delivery not decided yet, nothing reserved |
 | C9 | Cooperative rep → Bookings | Acceptance prepared for a member who only allowed data entry; awaiting approval |
-| C10 | Cooperative rep → Bookings | Confirmed by the representative acting for a member with full permissions; every record shows both names |
-| — | Adunni → second request → Offers | Two competing offers to compare side by side |
+| C10 | Cooperative rep → Bookings | Confirmed by the representative acting for a member with full permissions |
+| C11 | Buyer → Requests | Kayode asked for an offer for 1,700 kg: *Review harvest request* |
+| C12 | Kehinde → Harvests | The Iseyin hub said it cannot buy this time; the request is open for other buyers |
+| — | Adunni → her 3,000 kg harvest | Two offers to compare: Oluyole collects at ₦250/kg; Iseyin pays ₦235/kg but she delivers (about ₦20,000 delivery cost) |
 
 ## Other things worth showing
 
-* **Acting for a member**: Cooperative rep → *Members* → a member → *Harvest requests*. A banner names the farmer, the cooperative and the permissions on every screen.
-* **Permissions are the farmer's**: Adunni → *Cooperative permissions* shows what her cooperative may do; removing a permission takes effect immediately.
+* **Acting for a member** (existing cooperatives): Cooperative rep → *Members* → a member. A banner names the farmer, the cooperative and the permissions on every screen; a sale is approved for a member only if they allowed it.
 * **Admin**: *Verification* (documents reviewed by HarvestSlot, not a registry check), *Integrations* (what is working, simulated or awaiting credentials), *Messages & webhooks*, *Audit log*, *Exports* (CSV with formula-injection protection).
-* **Development mailbox** (local only): every email/SMS, including verification links and codes, captured instead of sent.
+* **Payment simulator** (development only): HarvestSlot fee invoices can be paid on a page marked “SIMULATED PAYMENT — no money moves”, and the result is labelled *Simulated*, never *Verified*. Produce payments never go through HarvestSlot.
+* **Development mailbox** (local only): every email and SMS, including verification links and codes, is captured instead of sent.

@@ -98,9 +98,9 @@ export default function DisputesPage() {
           <ul className="flex flex-col gap-2">
             {items.map((d) => (
               <li key={d.id}>
-                <Link href={`/disputes/${d.id}`} className="flex flex-col gap-1 rounded-xl border border-line bg-surface p-4 hover:border-leaf">
+                <Link href={`/disputes/${d.id}`} className="flex flex-col gap-1 rounded-2xl border border-line bg-surface p-4 transition-[border-color,box-shadow] hover:border-line-strong/40 hover:shadow-[var(--shadow-raised)]">
                   <span className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-sm font-semibold text-forest">{d.reference}</span>
+                    <span className="font-mono text-sm font-semibold text-ink">{d.reference}</span>
                     <StatusBadge kind="dispute" status={d.status} />
                     <Badge tone="neutral">{DISPUTE_CATEGORY_LABELS[d.category]}</Badge>
                     {d.overdue ? <Badge tone="danger">Response overdue</Badge> : null}

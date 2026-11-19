@@ -2,7 +2,7 @@ import { cloneElement, isValidElement, useId, type InputHTMLAttributes, type Rea
 import { cn } from '@/lib/utils';
 
 const fieldBase =
-  'w-full rounded-lg border border-line-strong bg-surface px-3 text-base text-ink placeholder:text-muted/80 disabled:bg-canvas disabled:text-muted aria-[invalid=true]:border-danger';
+  'w-full rounded-lg border border-line-strong bg-surface px-3.5 text-base text-ink shadow-[0_1px_2px_rgb(16_24_40/0.05)] transition-[border-color,box-shadow] placeholder:text-muted/70 hover:border-ink/60 focus-visible:border-forest disabled:bg-canvas disabled:text-muted aria-[invalid=true]:border-danger';
 
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={cn(fieldBase, 'h-11', className)} {...props} />;
@@ -23,7 +23,7 @@ export function Select({ className, children, ...props }: SelectHTMLAttributes<H
 
 export function Label({ htmlFor, children, className }: { htmlFor?: string; children: ReactNode; className?: string }) {
   return (
-    <label htmlFor={htmlFor} className={cn('text-sm font-medium text-ink', className)}>
+    <label htmlFor={htmlFor} className={cn('text-sm font-medium text-ink/90', className)}>
       {children}
     </label>
   );
@@ -99,8 +99,8 @@ export function RadioCards<T extends string>({
         <label
           key={o.value}
           className={cn(
-            'flex cursor-pointer items-start gap-3 rounded-lg border bg-surface p-3',
-            value === o.value ? 'border-forest ring-1 ring-forest' : 'border-line-strong',
+            'flex cursor-pointer items-start gap-3 rounded-xl border bg-surface p-3.5 transition-colors',
+            value === o.value ? 'border-forest bg-leaf-50/60 ring-1 ring-forest' : 'border-line hover:border-line-strong/70',
           )}
         >
           <input type="radio" name={name} value={o.value} checked={value === o.value} onChange={() => onChange(o.value)} className="mt-1 size-4 accent-[var(--color-forest)]" />

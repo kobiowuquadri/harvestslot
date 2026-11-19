@@ -37,6 +37,8 @@ export interface NavItem {
   icon: LucideIcon;
   /** Shown in the phone bottom bar (max 4 + "More"). */
   mobile?: boolean;
+  /** Listed under "More" in the sidebar, after the main areas. */
+  secondary?: boolean;
 }
 
 export function navFor(w: Workspace | undefined, devTools: boolean): NavItem[] {
@@ -47,26 +49,26 @@ export function navFor(w: Workspace | undefined, devTools: boolean): NavItem[] {
         return [
           { href: '/app', label: 'Home', labelKey: 'nav.home', icon: Home, mobile: true },
           { href: '/farmer/harvests', label: 'Harvests', labelKey: 'nav.harvests', icon: Sprout, mobile: true },
-          { href: '/bookings', label: 'Bookings', labelKey: 'nav.bookings', icon: ClipboardCheck, mobile: true },
+          { href: '/bookings', label: 'My plans', icon: ClipboardCheck, mobile: true },
           { href: '/invoices', label: 'Payments', labelKey: 'nav.payments', icon: Receipt, mobile: true },
-          { href: '/farmer/locations', label: 'Farm locations', labelKey: 'nav.locations', icon: MapPin },
-          { href: '/farmer/permissions', label: 'Cooperative permissions', labelKey: 'nav.permissions', icon: KeyRound },
-          { href: '/disputes', label: 'Disputes', labelKey: 'nav.disputes', icon: Scale },
+          { href: '/farmer/locations', label: 'Farm locations', labelKey: 'nav.locations', icon: MapPin, secondary: true },
+          { href: '/disputes', label: 'Problems reported', icon: Scale, secondary: true },
+          { href: '/farmer/permissions', label: 'Cooperative permissions', labelKey: 'nav.permissions', icon: KeyRound, secondary: true },
         ] satisfies NavItem[];
       case 'processor':
         return [
-          { href: '/app', label: 'Dashboard', icon: Gauge, mobile: true },
-          can(w, 'processor.offer.manage') && { href: '/processor/inbox', label: 'Harvest inbox', labelKey: 'nav.inbox', icon: Inbox, mobile: true },
-          can(w, 'processor.offer.manage') && { href: '/processor/offers', label: 'Offers', labelKey: 'nav.offers', icon: Handshake },
-          can(w, 'processor.slot.manage') && { href: '/processor/capacity', label: 'Capacity', labelKey: 'nav.capacity', icon: CalendarRange },
-          { href: '/processor/intake', label: 'Intake schedule', labelKey: 'nav.intake', icon: ListChecks, mobile: true },
-          can(w, 'processor.receiving.record') && { href: '/processor/receiving', label: 'Receiving', labelKey: 'nav.receiving', icon: Scale, mobile: true },
-          { href: '/bookings', label: 'Bookings', labelKey: 'nav.bookings', icon: ClipboardCheck },
-          can(w, 'processor.invoice.view') && { href: '/invoices', label: 'Invoices', labelKey: 'nav.invoices', icon: Receipt },
-          { href: '/disputes', label: 'Disputes', labelKey: 'nav.disputes', icon: ShieldAlert },
-          can(w, 'processor.facility.manage') && { href: '/processor/facilities', label: 'Facilities', labelKey: 'nav.facilities', icon: Building2 },
-          can(w, 'processor.analytics.view') && { href: '/reports', label: 'Reports', labelKey: 'nav.reports', icon: BarChart3 },
-          { href: '/organisation', label: 'Organisation & staff', labelKey: 'nav.organisation', icon: Landmark },
+          // Three main areas: Buying slots, Requests and Bookings (weights and payments are recorded from a booking).
+          { href: '/app', label: 'Home', icon: Gauge, mobile: true },
+          can(w, 'processor.slot.manage') && { href: '/processor/capacity', label: 'Buying slots', icon: CalendarRange, mobile: true },
+          can(w, 'processor.offer.manage') && { href: '/processor/inbox', label: 'Requests', icon: Inbox, mobile: true },
+          { href: '/bookings', label: 'Bookings', labelKey: 'nav.bookings', icon: ClipboardCheck, mobile: true },
+          can(w, 'processor.invoice.view') && { href: '/invoices', label: 'Payments', icon: Receipt, secondary: true },
+          { href: '/processor/intake', label: 'Intake schedule', labelKey: 'nav.intake', icon: ListChecks, secondary: true, mobile: !can(w, 'processor.slot.manage') },
+          can(w, 'processor.offer.manage') && { href: '/processor/offers', label: 'All offers sent', icon: Handshake, secondary: true },
+          { href: '/disputes', label: 'Problems reported', icon: ShieldAlert, secondary: true },
+          can(w, 'processor.facility.manage') && { href: '/processor/facilities', label: 'Facilities', labelKey: 'nav.facilities', icon: Building2, secondary: true },
+          can(w, 'processor.analytics.view') && { href: '/reports', label: 'Reports', labelKey: 'nav.reports', icon: BarChart3, secondary: true },
+          { href: '/organisation', label: 'Business & staff', icon: Landmark, secondary: true },
         ];
       case 'transporter': {
         const manager = can(w, 'transport.quote.manage');

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, request, type APIRequestContext, type Browser, type BrowserContext, type Page } from '@playwright/test';
-import { BASE_URL } from './env.mjs';
+import pg from 'pg';
+import { BASE_URL, e2eDatabaseUrl } from './env.mjs';
 
 export const PASSWORD = 'E2e-Cassava-Route-2026';
 const HOUR = 3_600_000;
@@ -88,7 +89,8 @@ export function lagosDate(days: number): string {
   return new Date(Date.now() + days * 24 * HOUR + HOUR).toISOString().slice(0, 10);
 }
 
-export async function register(type: 'FARMER' | 'PROCESSOR' | 'TRANSPORTER' | 'COOPERATIVE' | 'STAFF', label: string) {
+/** Public registration offers two ways to start (sell or buy); staff join through an invitation. */
+export async function register(type: 'FARMER' | 'PROCESSOR' | 'STAFF', label: string) {
   const api = await Api.create();
   const email = `${label}-${uid()}@e2e.example`;
   await api.post('/auth/register', {
@@ -96,8 +98,7 @@ export async function register(type: 'FARMER' | 'PROCESSOR' | 'TRANSPORTER' | 'C
     displayName: `${label} ${uid()}`,
     email,
     password: PASSWORD,
-    ...(type === 'STAFF' ? {} : { lga: 'Akinyele' }),
-    ...(['PROCESSOR', 'TRANSPORTER', 'COOPERATIVE'].includes(type) ? { organisationName: `E2E ${label} ${uid()}` } : {}),
+    ...(type === 'PROCESSOR' ? { organisationName: `E2E ${label} ${uid()}` } : {}),
     acceptTerms: true,
     acceptPrivacy: true,
     contactConsentEmail: false,
@@ -126,7 +127,7 @@ export interface Processor {
   slot: { id: string; startsAt: string };
 }
 
-export async function makeProcessor(opts: { capacityKg?: string; slotDays?: number } = {}): Promise<Processor> {
+export async function makeProcessor(opts: { capacityKg?: string; slotDays?: number; indicativePriceKoboPerKg?: number } = {}): Promise<Processor> {
   const p = await register('PROCESSOR', 'processor');
   await approve(p.orgId!);
   const facility = await p.api.post(`/organisations/${p.orgId}/facilities`, {
@@ -136,7 +137,7 @@ export async function makeProcessor(opts: { capacityKg?: string; slotDays?: numb
     qualityCriteria: { maxHoursHarvestToDelivery: 48, soilAndStemsRemoved: true, maxVisibleRotPercent: 5, varietiesAccepted: [] },
     minOrderKg: '500',
     maxPickupDistanceKm: 100,
-    indicativePriceKoboPerKg: 25_000,
+    indicativePriceKoboPerKg: opts.indicativePriceKoboPerKg ?? 25_000,
     defaultToleranceBps: 500,
     defaultPaymentTermsDays: 7,
     rejectionHandling: 'RETURNED_AT_PROCESSOR_COST',
@@ -148,28 +149,6 @@ export async function makeProcessor(opts: { capacityKg?: string; slotDays?: numb
   const startsAt = new Date(`${day}T07:00:00+01:00`).toISOString();
   const slot = await p.api.post('/slots', { lineId, startsAt, endsAt: new Date(new Date(startsAt).getTime() + 10 * HOUR).toISOString(), processingCapacityKg: opts.capacityKg ?? '5000', purchaseLimitKg: opts.capacityKg ?? '5000', publish: true });
   return { api: p.api, email: p.email, orgId: p.orgId!, facilityId: facility.id, lineId, slot: { id: slot.id, startsAt: slot.startsAt } };
-}
-
-export interface Transporter {
-  api: Api;
-  email: string;
-  orgId: string;
-  vehicleId: string;
-  vehiclePlate: string;
-  driver: { id: string; email: string; name: string };
-}
-
-export async function makeTransporter(): Promise<Transporter> {
-  const t = await register('TRANSPORTER', 'dispatcher');
-  await approve(t.orgId!);
-  const plate = `E2E-${uid().slice(0, 4).toUpperCase()}`;
-  const vehicles = await t.api.post(`/organisations/${t.orgId}/vehicles`, { registrationPlate: plate, type: 'MEDIUM_TRUCK', capacityKg: '6000' });
-  await t.api.put(`/organisations/${t.orgId}/service-areas`, { lgas: ['Akinyele'] });
-  await t.api.post(`/organisations/${t.orgId}/availability`, { vehicleId: vehicles[0].id, startsAt: new Date(Date.now() - 24 * HOUR).toISOString(), endsAt: new Date(Date.now() + 30 * 24 * HOUR).toISOString() });
-  const driverUser = await register('STAFF', 'driver');
-  const name = `Driver ${uid()}`;
-  const drivers = await t.api.post(`/organisations/${t.orgId}/drivers`, { emailOrPhone: driverUser.email, displayName: name });
-  return { api: t.api, email: t.email, orgId: t.orgId!, vehicleId: vehicles[0].id, vehiclePlate: plate, driver: { id: drivers.find((d: { displayName: string }) => d.displayName === name).id, email: driverUser.email, name } };
 }
 
 export interface Farmer {
@@ -196,83 +175,57 @@ export async function makeHarvest(farmer: Farmer, quantityKg = '2000') {
   });
 }
 
-/** Offer terms that fit a processor slot: pickup the evening before, delivery inside the slot. */
-export function offerTerms(slot: { id: string; startsAt: string }, quantityKg = '2000', priceKoboPerKg = 25_000) {
+/**
+ * Offer terms that fit a processor slot: the buyer collects from the farm (or the farmer delivers)
+ * on the slot day, 09:00–13:00 Lagos time.
+ */
+export function offerTerms(slot: { id: string; startsAt: string }, quantityKg = '2000', priceKoboPerKg = 25_000, handoverArrangement: 'COLLECT_FROM_FARM' | 'FARMER_DELIVERS' = 'COLLECT_FROM_FARM') {
   const s = new Date(slot.startsAt).getTime();
   return {
     slotId: slot.id,
     quantityKg,
     priceKoboPerKg,
-    plannedHarvestDate: new Date(s - 20 * HOUR + HOUR).toISOString().slice(0, 10),
-    pickupWindowStart: new Date(s - 16 * HOUR).toISOString(),
-    pickupWindowEnd: new Date(s - 12 * HOUR).toISOString(),
-    deliveryWindowStart: new Date(s).toISOString(),
-    deliveryWindowEnd: new Date(s + 4 * HOUR).toISOString(),
-    qualityTerms: { maxHoursHarvestToDelivery: 48, soilAndStemsRemoved: true, varietiesAccepted: [] },
-    toleranceBps: 500,
-    paymentTermsDays: 7,
-    freightPayer: 'PROCESSOR',
-    rejectionHandling: 'RETURNED_AT_PROCESSOR_COST',
-    cancellationTerms: 'Either party may cancel before harvest starts without penalty.',
+    handoverArrangement,
+    plannedHarvestDate: new Date(s + HOUR).toISOString().slice(0, 10),
+    handoverWindowStart: new Date(s + 2 * HOUR).toISOString(),
+    handoverWindowEnd: new Date(s + 6 * HOUR).toISOString(),
   };
 }
 
-export function quoteTerms(bookingId: string, vehicleId: string, slot: { startsAt: string }, priceKobo = 3_500_000, driverId?: string) {
-  const s = new Date(slot.startsAt).getTime();
-  return {
-    bookingId,
-    vehicleId,
-    ...(driverId ? { driverId } : {}),
-    pickupWindowStart: new Date(s - 15 * HOUR).toISOString(),
-    pickupWindowEnd: new Date(s - 13 * HOUR).toISOString(),
-    deliveryWindowStart: new Date(s).toISOString(),
-    deliveryWindowEnd: new Date(s + 3 * HOUR).toISOString(),
-    priceKobo,
-    includedServices: ['LOADING', 'OFFLOADING'],
-    cancellationTerms: 'Free cancellation up to 12 hours before pickup.',
-    validForHours: 24,
-  };
-}
-
-/** Drives a booking through the API to CONFIRMED (offer accepted, transport assigned). */
-export async function confirmedBooking(opts: { processor?: Processor; transporter?: Transporter } = {}) {
+/** Drives a sale through the API to CONFIRMED: offer (the buyer collects) → the farmer accepts. */
+export async function confirmedBooking(opts: { processor?: Processor; priceKoboPerKg?: number } = {}) {
   const processor = opts.processor ?? (await makeProcessor());
-  const transporter = opts.transporter ?? (await makeTransporter());
   const farmer = await makeFarmer();
   const harvest = await makeHarvest(farmer);
-  const offer = await processor.api.post('/offers', { harvestRequestId: harvest.id, ...offerTerms(processor.slot) });
+  const offer = await processor.api.post('/offers', { harvestRequestId: harvest.id, ...offerTerms(processor.slot, '2000', opts.priceKoboPerKg) });
   const accepted = await farmer.api.post(`/offers/${offer.id}/accept`, { expectedVersionNo: 1 });
-  const quote = await transporter.api.post(`/organisations/${transporter.orgId}/quotes`, quoteTerms(accepted.bookingId, transporter.vehicleId, processor.slot));
-  await processor.api.post(`/quotes/${quote.id}/accept`, { expectedVersion: quote.version });
-  await transporter.api.post('/assignments/accept', { quoteId: quote.id, driverId: transporter.driver.id });
   const booking = await farmer.api.get(`/bookings/${accepted.bookingId}`);
   expect(booking.status).toBe('CONFIRMED');
-  return { processor, transporter, farmer, harvestId: harvest.id as string, bookingId: accepted.bookingId as string, quoteId: quote.id as string };
+  return { processor, farmer, harvestId: harvest.id as string, offerId: offer.id as string, bookingId: accepted.bookingId as string };
 }
 
-/** Continues a confirmed booking through harvest, collection, handover and delivery (via the API). */
-export async function deliveredBooking() {
+/** Continues a confirmed sale: the buyer records the weight received and accepted. */
+export async function weighedBooking(receivedKg: string, acceptedKg: string, rejectionReasons: string[] = []) {
   const f = await confirmedBooking();
-  const b = await f.farmer.api.get(`/bookings/${f.bookingId}`);
-  await f.farmer.api.post(`/bookings/${f.bookingId}/start-harvest`, { expectedVersion: b.version });
-  await f.farmer.api.post(`/bookings/${f.bookingId}/ready-for-pickup`, { reportedHarvestedKg: '2000' });
-  const driver = await Api.create();
-  await driver.login(f.transporter.driver.email);
-  const jobs = await f.transporter.api.get(`/organisations/${f.transporter.orgId}/jobs`);
-  let job = jobs.find((j: { bookingId: string }) => j.bookingId === f.bookingId);
-  job = await driver.post(`/shipments/${job.shipmentId}/depart`, { expectedVersion: job.version });
-  job = await driver.post(`/shipments/${job.shipmentId}/arrive-pickup`, { expectedVersion: job.version });
-  job = await driver.post(`/shipments/${job.shipmentId}/collection`, { expectedVersion: job.version, quantityKg: '1950' });
-  await f.farmer.api.post(`/shipments/${job.shipmentId}/confirm-pickup`, { agree: true });
-  job = await driver.get(`/shipments/${job.shipmentId}`);
-  job = await driver.post(`/shipments/${job.shipmentId}/leave-pickup`, { expectedVersion: job.version });
-  job = await driver.post(`/shipments/${job.shipmentId}/arrive-facility`, { expectedVersion: job.version });
-  await f.processor.api.post(`/shipments/${job.shipmentId}/confirm-delivery`);
-  return { ...f, driver, shipmentId: job.shipmentId as string };
+  const b = await f.processor.api.get(`/bookings/${f.bookingId}`);
+  const rec = await f.processor.api.post(`/bookings/${f.bookingId}/receiving/accepted-weight`, { expectedVersion: b.version, receivedKg, acceptedKg, rejectionReasons });
+  return { ...f, rec };
 }
 
-/** Opens a page signed in as the given account (sign-in through the API, sharing the browser's cookies). */
-export async function signedInPage(browser: Browser, identifier: string, opts: { mobile?: boolean; persona?: string; geo?: boolean } = {}): Promise<Page> {
+/** Test-only: moves an offer's (or just its hold's) expiry into the past in the E2E database. */
+export async function backdateOffer(offerId: string, which: 'offer-and-hold' | 'hold-only' = 'offer-and-hold') {
+  const client = new pg.Client({ connectionString: e2eDatabaseUrl() });
+  await client.connect();
+  try {
+    const past = new Date(Date.now() - 60_000);
+    if (which === 'offer-and-hold') await client.query('UPDATE offers SET "expiresAt" = $1 WHERE id = $2', [past, offerId]);
+    await client.query('UPDATE reservations SET "expiresAt" = $1 WHERE "offerId" = $2', [past, offerId]);
+  } finally {
+    await client.end();
+  }
+}
+
+/** Opens a page signed in as the given account (sign-in through the API, sharing the browser's cookies). */export async function signedInPage(browser: Browser, identifier: string, opts: { mobile?: boolean; persona?: string; geo?: boolean } = {}): Promise<Page> {
   const context = await browser.newContext({
     baseURL: BASE_URL,
     ...(opts.mobile ? { viewport: { width: 375, height: 780 }, isMobile: true, hasTouch: true } : { viewport: { width: 1280, height: 900 } }),

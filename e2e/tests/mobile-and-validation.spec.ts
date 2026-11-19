@@ -36,8 +36,21 @@ test('phone navigation: bottom bar, menu dialog with focus handling, and Escape 
   await expect(menu).toBeHidden();
 });
 
-test('registration shows field errors instead of submitting an invalid form', async ({ page }) => {
+test('registration asks what you want to do first, then shows field errors instead of submitting', async ({ page }) => {
   await page.goto('/register');
+  await expect(page.getByLabel(/Local government area/)).toHaveCount(0);
+  await page.getByText('Buy cassava', { exact: true }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Create your buyer account' })).toBeVisible();
+  await expect(page.getByLabel('Business name')).toBeVisible();
+  // Changing your mind keeps what you typed.
+  await page.getByLabel('Your name').fill('Bisi Buyer');
+  await page.getByRole('button', { name: /change/ }).click();
+  await page.getByText('Sell cassava', { exact: true }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Create your seller account' })).toBeVisible();
+  await expect(page.getByLabel('Your name')).toHaveValue('Bisi Buyer');
+  await expect(page.getByLabel('Business name')).toHaveCount(0);
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page.getByText('You must accept the terms to continue')).toBeVisible();
   await page.getByRole('textbox', { name: 'Password', exact: true }).fill('password');
@@ -46,25 +59,24 @@ test('registration shows field errors instead of submitting an invalid form', as
   await expect(page).toHaveURL(/\/register/);
 });
 
-test('harvest wizard validates each step before moving on', async ({ browser }) => {
+test('harvest wizard checks each step before moving on and keeps answers', async ({ browser }) => {
   const farmer = await makeFarmer();
   const page = await signedInPage(browser, farmer.email, { mobile: true });
   await page.goto('/farmer/harvests/new');
   await page.getByRole('button', { name: 'Next' }).click();
-  await expect(page.getByText('Choose a farm location')).toBeVisible();
-  await page.getByRole('radio', { name: /River farm/ }).check();
+  await expect(page.getByText('Choose where the cassava is')).toBeVisible();
+  await page.getByText('River farm', { exact: true }).click();
   await page.getByRole('button', { name: 'Next' }).click();
-  await page.getByLabel(/How much cassava/).fill('abc');
+  await page.getByText('Kilograms (kg)', { exact: true }).click();
+  await page.getByLabel('How many kilograms?').fill('abc');
   await page.getByRole('button', { name: 'Next' }).click();
-  await expect(page.getByText('Enter kilograms as a number with at most 3 decimal places')).toBeVisible();
-  await page.getByLabel(/How much cassava/).fill('2000');
-  await page.getByLabel(/How much of it is for sale/).fill('2500');
+  await expect(page.getByText('Enter kilograms like 2000')).toBeVisible();
+  await page.getByLabel('How many kilograms?').fill('2000');
+  await expect(page.getByText('2,000 kg', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Next' }).click();
-  await expect(page.getByText('Quantity for sale cannot exceed the estimated harvest')).toBeVisible();
-  await page.getByLabel(/How much of it is for sale/).fill('1500');
+  await page.getByLabel('Ready from').fill('2020-01-01');
   await page.getByRole('button', { name: 'Next' }).click();
-  await page.getByLabel('Earliest harvest date').fill('2026-12-10');
-  await page.getByLabel('Latest harvest date').fill('2026-12-01');
-  await page.getByRole('button', { name: 'Next' }).click();
-  await expect(page.getByText('Latest date must be on or after the earliest date')).toBeVisible();
+  await expect(page.getByText('Choose today or a later date')).toBeVisible();
+  await page.getByRole('button', { name: 'Back' }).click();
+  await expect(page.getByLabel('How many kilograms?')).toHaveValue('2000');
 });

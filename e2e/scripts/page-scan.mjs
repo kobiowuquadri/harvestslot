@@ -7,7 +7,6 @@ const OUT = process.argv[2];
 const plan = {
   farmer: ['/app', '/farmer/harvests', '/farmer/harvests/new', '/bookings', '/invoices', '/farmer/locations', '/farmer/permissions', '/notifications', '/settings', '/settings/security', '/settings/privacy', '/disputes'],
   'processor-manager': ['/app', '/processor/inbox', '/processor/offers', '/processor/capacity', '/processor/facilities', '/processor/intake', '/processor/receiving', '/bookings', '/invoices', '/reports', '/organisation'],
-  transporter: ['/app', '/transport/opportunities', '/transport/quotes', '/transport/jobs', '/transport/fleet', '/invoices'],
   cooperative: ['/app', '/coop/members', '/coop/members/new', '/bookings', '/reports'],
   admin: ['/admin', '/admin/organisations', '/admin/users', '/admin/incidents', '/admin/disputes', '/admin/policies', '/admin/locations', '/admin/integrations', '/admin/outbox', '/admin/audit', '/admin/exports', '/admin/data-requests', '/admin/analytics', '/bookings', '/dev/mailbox'],
 };

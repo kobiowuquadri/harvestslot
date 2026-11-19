@@ -1,0 +1,97 @@
+---
+marp: true
+title: HarvestSlot — Harvest with a confirmed plan
+paginate: true
+---
+
+# HarvestSlot
+### Harvest with a confirmed plan
+
+A cassava farmer in Oyo State asks one question:
+**“Who will buy my cassava, how much will they take, and when and where should it be ready?”**
+
+HarvestSlot answers it before a single root is pulled.
+
+---
+
+## The problem
+
+- Fresh cassava starts spoiling within about 48 hours of harvest.
+- Farmers often harvest first and look for a buyer after, with no agreed price, quantity, date or place.
+- Processors can't see which harvests are coming, so their capacity sits idle or gets overbooked.
+- When the farm and the factory don't know the plan, they lose produce, money and trust.
+
+---
+
+## The solution: one simple sale
+
+1. **Add my harvest**: where it is, roughly how much (kg or tonnes), and when it will be ready.
+2. **Find a buyer**: only buyers whose location, dates and free space fit, each explained in one sentence.
+3. **Review the offer**: price per kg, **estimated total**, date, place, who brings the cassava, any cost to the farmer.
+4. **Accept**: capacity is reserved and the plan reads
+   *“Oluyole Cassava will collect 2,000 kg at your farm on Thu 26 Nov for ₦100 per kg.”*
+5. **Finish the sale**: the buyer records the weight accepted and the payment, and the farmer confirms the money arrived.
+
+---
+
+## Two ways to start
+
+| Sell cassava (farmer) | Buy cassava (processor) |
+|---|---|
+| Phone-first app that also works offline | **Buying slots**: “how much, where, which dates” |
+| One main action: *Add my harvest* | **Requests**: review, then send a prefilled offer |
+| “What happens next” on every screen | **Bookings**: record the weight and the payment |
+
+There is no driver registration, freight quote or dispatch step. Each offer settles **“How will the cassava get there?”**: the buyer collects from the farm, or the farmer delivers to the buyer.
+
+---
+
+## Trust built into the engine
+
+- **No double booking**: capacity is held with database row locks, which concurrency tests confirm.
+- **Ready to harvest** only when both sides have agreed the current terms, capacity is reserved and the handover is complete.
+- **Changes need re-agreement**: price, quantity, date or handover changes don't take effect until the other side agrees.
+- **Payment reported ≠ payment received**: a payment counts as received only once the farmer confirms it.
+- **Problems can be reported**: weight disputes go to an audited resolution, and the accepted part is still invoiced.
+
+---
+
+## Worked example (tested end to end)
+
+- Farmer in Akinyele: **2,000 kg** ready.
+- The processor offers **₦100/kg**, full quantity, and will collect from the farm.
+- The farmer sees **₦200,000 estimated** before accepting.
+- The buyer records **1,900 kg accepted**, so the **final amount is ₦190,000**, with “100 kg less” flagged.
+- The buyer records the payment, and the farmer confirms receipt: **Paid — sale complete**.
+
+No driver, vehicle, freight quote or cooperative is needed.
+
+---
+
+## Built for real use
+
+- **Stack**: Next.js PWA · NestJS API · PostgreSQL (Prisma) · background worker · OpenAPI.
+- **Security**: CSRF protection, rate limits, admin MFA, audit log, private uploads, and roles enforced by the server.
+- **Accessibility**: WCAG 2.1 AA automated checks, usable at 360 px phone width, readable language.
+- **Honest integrations**: email, SMS and payments are marked *simulated* or *awaiting credentials* until they are connected for real.
+- **Tests**: unit tests, integration tests on real PostgreSQL, Playwright browser tests and a race/load test.
+
+---
+
+## Business model
+
+- The **buyer** pays a small platform fee per completed sale. The farmer never pays it.
+- HarvestSlot never holds produce money: buyers pay farmers directly, and the farmer confirms receipt.
+- Next: cooperatives acting for members, integration with transport partners, and road-distance routing.
+
+*All figures in the demo are fictional. No pilots, partnerships or impact numbers are claimed.*
+
+---
+
+## Ask
+
+- Pilot partners: processors and farmer groups in Oyo State.
+- Feedback on the farmer journey from extension workers.
+- Support connecting real payment and SMS providers.
+
+**HarvestSlot: harvest only when the sale is planned.**

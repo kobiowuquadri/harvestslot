@@ -1,8 +1,8 @@
 # HarvestSlot
 
-**Harvest with a confirmed plan.** HarvestSlot coordinates fresh cassava harvests in Oyo State, Nigeria: before a farmer harvests, the platform confirms a buyer (processor), a processing slot with real capacity, and transport — and only then shows *Ready to harvest*. It then records collection, delivery, weighing, quality decisions, invoices, payment confirmations and disputes.
+**Harvest with a confirmed plan.** HarvestSlot answers one question for a cassava farmer in Oyo State, Nigeria: *“Who will buy my cassava, how much will they take, and when and where should it be ready?”* The farmer adds a harvest, finds a buyer (a processor) whose buying slot fits, and reviews the buyer's offer: price, quantity, estimated total, date, place and who brings the cassava (the buyer collects, or the farmer delivers). Once both sides agree, capacity is reserved and the plan says *Ready to harvest*. The buyer then records the weight accepted and the payment, and the farmer confirms the money arrived.
 
-Roles: farmers (mobile-first PWA), processors (owner, manager, receiving officer, finance officer), transporters (dispatcher, driver), cooperatives (acting for members with recorded consent) and platform administrators.
+Two ways to start: **Sell cassava** (farmer, mobile-first PWA) or **Buy cassava** (processor: owner, manager, receiving officer, finance officer). Platform administrators review businesses. Cooperatives acting for members, and transporter and driver accounts from earlier versions, keep working for existing records but are not part of public sign-up or the demo journey.
 
 > Demonstration data is fictional. No real business, farmer or partnership is implied, and the app makes no impact claims.
 
@@ -52,14 +52,11 @@ Password: **`HarvestSlot-Demo-2026`** (demo environments only).
 
 | Role | Email |
 |---|---|
-| Farmer | farmer.adunni@demo.harvestslot.example |
-| Processor manager | manager@ibadan-starch.demo.harvestslot.example |
-| Receiving officer | receiving@ibadan-starch.demo.harvestslot.example |
-| Finance officer | finance@ibadan-starch.demo.harvestslot.example |
-| Transport dispatcher | dispatch@oke-ogun-haulage.demo.harvestslot.example |
-| Driver | driver.tunde@demo.harvestslot.example |
-| Cooperative representative | rep@akinyele-coop.demo.harvestslot.example |
+| Farmer (sells) | farmer.adunni@demo.harvestslot.example |
+| Buyer — processor manager | manager@ibadan-starch.demo.harvestslot.example |
 | Administrator | admin@demo.harvestslot.example |
+
+These three are the one-click demo personas. Also seeded (sign in by email): the buyer's receiving and finance officers (`receiving@…`, `finance@ibadan-starch.demo.harvestslot.example`), other farmers, a second buyer (`owner@akinyele-flour.demo.harvestslot.example`) and a cooperative representative (`rep@akinyele-coop.demo.harvestslot.example`).
 
 The walkthrough is in [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
 
@@ -72,7 +69,7 @@ The walkthrough is in [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
 | `pnpm lint` · `pnpm typecheck` | ESLint · TypeScript across the workspace |
 | `pnpm test` | Unit tests (contracts, core, db, config, api) |
 | `pnpm test:integration` | API integration tests on a real, disposable PostgreSQL (embedded, or `TEST_DATABASE_URL`) |
-| `pnpm test:e2e` | Playwright browser tests on an isolated stack (fresh `<db>_e2e` database; run `pnpm build` first and stop `pnpm dev`) |
+| `pnpm test:e2e` | Playwright browser tests on an isolated stack (fresh `<db>_e2e` database; run `pnpm build` first and stop `pnpm dev`, or use other ports — see [TEST_RESULTS](docs/TEST_RESULTS.md#running-beside-pnpm-dev)) |
 | `pnpm test:load` | Booking race and read-load test (`tests/load/booking-race.mjs`; needs a running stack with `APP_ENV=test`, e.g. `node e2e/stack.mjs`) |
 | `pnpm db:migrate` · `pnpm db:migrate:create` | Apply committed migrations · create a new one |
 | `pnpm db:seed` | Load demo data (refused outside local/demo/test, or if demo data exists) |
@@ -118,6 +115,10 @@ docs            Architecture, domain, decisions, API, security, deployment, demo
 * [API](docs/API.md) (+ [openapi.json](docs/openapi.json)) · [Security and privacy](docs/SECURITY_AND_PRIVACY.md)
 * [Deployment](docs/DEPLOYMENT.md) · [Demo script](docs/DEMO_SCRIPT.md) · [Test results](docs/TEST_RESULTS.md)
 * [Implementation status](docs/IMPLEMENTATION_STATUS.md) · [Progress log](docs/PROGRESS.md)
+
+## Design and photographs
+
+The interface uses one green brand colour on cool greys, Poppins headings and Inter body text (self-hosted). Photographs on the public pages and dashboards come from Wikimedia Commons under open licences and are credited at `/credits` (source: `apps/web/src/content/photos.ts`). The people shown are not HarvestSlot users or endorsers. Signed-in users land on a role dashboard built from live data: KPIs, what needs their attention, schedules, a booking pipeline, recent activity and, for processors, a 14-day capacity chart. `node e2e/scripts/design-shots.mjs <dir>` captures desktop and phone screenshots of key screens from a running, seeded stack.
 
 ## Known limitations
 

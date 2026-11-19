@@ -9,7 +9,7 @@ import {
   type MatchRequestInput,
   type Policies,
 } from '@harvestslot/core';
-import { gramsToKgString, lagosStartOfDay, qualityTermsSchema, toGrams, type MatchResponse } from '@harvestslot/contracts';
+import { formatKg, gramsToKgString, lagosStartOfDay, qualityTermsSchema, toGrams, type MatchResponse } from '@harvestslot/contracts';
 import type { Db } from '@harvestslot/db';
 import { PrismaService } from '../../common/prisma.service.js';
 import { ENV, type Env } from '../../common/tokens.js';
@@ -30,6 +30,16 @@ export interface RequestFacts {
 }
 
 /** Loads candidate slots and computes deterministic, explainable matches. A match never reserves anything. */
+const MATCH_DAY = new Intl.DateTimeFormat('en-NG', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Africa/Lagos' });
+
+/** "Can receive your full 2,000 kg on Thu 20 Nov" — one sentence a farmer can act on. */
+export function matchHeadline(fitG: bigint, remainingG: bigint, startsAt: Date, endsAt: Date): string {
+  const start = MATCH_DAY.format(startsAt).replace(',', '');
+  const end = MATCH_DAY.format(new Date(endsAt.getTime() - 1)).replace(',', '');
+  const when = start === end ? `on ${start}` : `between ${start} and ${end}`;
+  return fitG >= remainingG ? `Can receive your full ${formatKg(remainingG)} ${when}` : `Can receive ${formatKg(fitG)} of your ${formatKg(remainingG)} ${when}`;
+}
+
 @Injectable()
 export class MatchingService {
   constructor(
@@ -162,18 +172,18 @@ export class MatchingService {
         costs: {
           estimatedProduceAmountKobo: koboOrNull(m.estimatedProduceAmountKobo),
           freightPayer: 'PROCESSOR',
-          freightNote: 'By default the processor arranges and pays for transport. Any farmer-paid transport must be shown to you and accepted separately.',
+          freightNote: 'The offer says whether the buyer collects from your farm or you deliver, and any cost to you, before you accept.',
           estimatedFarmerNetKobo: koboOrNull(m.estimatedProduceAmountKobo),
         },
         score: m.score,
         factors: m.factors,
         reliability: { completedBookings: m.candidate.reliability.completed, onTimeRate: m.onTimeRate, label: m.reliabilityLabel },
+        headline: matchHeadline(m.fitG, r.remainingG, m.candidate.slot.startsAt, m.candidate.slot.endsAt),
         explanation: m.explanation,
         remainingSteps: [
-          'The processor sends you an offer (this match reserves nothing)',
-          'You review and accept the exact terms',
-          'A transport quote is accepted and a driver assigned',
-          'Every party confirms — then your harvest is ready to start',
+          'Send a request: the buyer replies with an offer (a request reserves nothing)',
+          'You review the offer — price, date, and who brings the cassava — and accept or decline',
+          'Your plan is confirmed and you can harvest',
         ],
         qualityCriteria: m.candidate.facility.qualityCriteria,
         invited: m.candidate.invited,

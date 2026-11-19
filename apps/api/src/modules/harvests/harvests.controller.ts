@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   closeHarvestSchema,
   createHarvestSchema,
+  declineRequestSchema,
   harvestListQuerySchema,
   harvestSchema,
   inboxItemSchema,
@@ -86,5 +87,17 @@ export class HarvestsController {
   @ApiOk(z.array(inboxItemSchema))
   inbox(@CurrentActor() actor: Actor, @Param('orgId', uuid()) orgId: string) {
     return this.harvests.inbox(actor, orgId);
+  }
+
+  /** "Can't buy this time": answers a farmer's request so they are not left waiting. */
+  @Post('organisations/:orgId/requests/:harvestRequestId/decline')
+  @HttpCode(200)
+  declineRequest(
+    @CurrentActor() actor: Actor,
+    @Param('orgId', uuid()) orgId: string,
+    @Param('harvestRequestId', uuid()) harvestRequestId: string,
+    @ZodBody(declineRequestSchema) body: z.infer<typeof declineRequestSchema>,
+  ) {
+    return this.harvests.declineRequest(actor, orgId, harvestRequestId, body);
   }
 }

@@ -4,6 +4,31 @@ You are the lead product engineer, backend architect, frontend designer, and QA 
 
 Read this entire specification before coding. Treat it as the product specification and acceptance contract. Build a complete, connected, deployable first release with persistent data, tested business rules, polished interfaces, and honest integration status.
 
+## 0. Updated MVP scope (2026-11-18) — takes precedence over later sections where they conflict
+
+The MVP answers one question for a cassava farmer in Oyo State before harvesting: **"Who will buy my cassava, how much will they take, and when and where should it be ready?"**
+
+**Two ways to start.** Public registration asks "What would you like to do?" with two cards: *Sell cassava* (farmer) and *Buy cassava* (processor). It asks only for what an account needs: name, email or phone, password and, for buyers, a business name. Farm details are asked for when the farmer adds a harvest, and facility details when the buyer publishes their first buying slot. Transporter, driver, cooperative and staff options are removed from public registration and from the main demo. Staff still join through an organisation's invitation link. Existing accounts, permissions and historical records (including transport records) stay intact.
+
+**Selling is one guided journey.**
+1. *Add my harvest*: where the cassava is (saved farm or a searchable place), roughly how much (kg or tonnes, with the kg figure shown immediately), and when it will be ready. A summary comes before *Find buyers*.
+2. *Find a buyer*: buyers whose location, buying dates and free capacity fit the harvest, each explained in one sentence (e.g. "Can receive your full 2,000 kg on Thu 20 Nov"). The farmer sends a request from the card. With no match, the harvest stays saved and the screen offers a next step, such as changing the dates.
+3. *Review the offer*: buyer, quantity, price per kg, estimated total, date, handover place, who brings or collects the cassava, and any cost to the farmer, all on one screen with *Accept offer* and *Decline*. Declining keeps the harvest available.
+4. *Confirmed plan*: a sentence the farmer could read aloud, e.g. "[Buyer] will collect 2,000 kg at [place] on [date] for ₦[price] per kg", with the current status and the next action. It stays at the top of the farmer's home screen.
+5. *Finish the sale*: the buyer records the weight accepted. The farmer sees the final amount for that weight, with any difference from the offer flagged, and can report a problem. The buyer records payment ("Payment reported") and the farmer confirms receipt ("Payment received").
+
+**Buying is a short workflow** with three main areas: *Buying slots* ("Tell farmers how much cassava you can receive, where, and on which dates"), *Requests* (review a harvest request and send an offer prefilled from the request and slot) and *Bookings* (the schedule, where accepted weight and payment are recorded from the booking itself).
+
+**Transport is one decision in the offer.** "How will the cassava get there?" has two answers: *We'll collect from the farm* or *The farmer will deliver to our facility*. The offer states the handover place and time window, and any estimated delivery cost the farmer pays. An offer without a handover decision can only be saved as a draft; it cannot be sent. Driver registration, vehicle selection, freight quotes, dispatch, trip tracking and driver confirmation are not part of the core journey.
+
+**Readiness (replaces the transport checks in §10).** A booking is *Ready to harvest* when both parties have agreed to the current terms, the buyer's capacity is reserved, the handover details are complete, and the booking is still valid (windows feasible, participants eligible, nothing blocking). No driver or vehicle record is needed. Double-booking protection is unchanged, and any change to a material term, including the handover arrangement, needs agreement again. Bookings made before this change that carry transport terms keep their transport checks.
+
+**Receiving (simplifies §16 for new bookings).** For bookings with a handover arrangement, the buyer records the weight received and accepted in one step from the booking; no shipment record is needed. The produce invoice for the accepted weight is issued immediately. If the accepted weight differs materially from the offer, the farmer can agree or report a problem (a dispute). Nothing is accepted on the farmer's behalf.
+
+**Every screen says what happens next.** Each status names who acts next (e.g. "Waiting for the buyer's offer" for the farmer and "Review harvest request" for the buyer), and each screen has one prominent next action. Short choices use selectable cards, places use searchable suggestions and dates use date pickers. Entered values survive going back or fixing an error, and repeated taps cannot submit twice. The whole journey works on a narrow phone screen.
+
+**Demo and acceptance.** The main demo has a farmer, a buyer and an administrator. The acceptance sale: a farmer in Akinyele lists 2 tonnes, and a processor offers ₦100/kg for the full quantity with farm collection. The farmer sees ₦200,000 estimated before accepting, with no driver, vehicle, freight quote or cooperative account involved. The buyer records 1,900 kg accepted, so the produce amount is ₦190,000. The buyer reports payment and the farmer confirms receipt. Also check what each side sees when there is no match, an offer expires, or capacity is taken before acceptance.
+
 ## 1. Product purpose and positioning
 
 HarvestSlot helps cassava farmers in Oyo State, Nigeria arrange a buyer, processing capacity, and transport before harvesting.

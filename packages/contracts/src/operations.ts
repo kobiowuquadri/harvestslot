@@ -40,6 +40,22 @@ export const recordWeighingSchema = z
   })
   .refine((v) => Number(v.grossKg) >= Number(v.tareKg), { message: 'Gross weight must be at least the tare', path: ['tareKg'] });
 
+/** One step from the booking: what arrived and what the buyer accepts. Payment is for the accepted weight. */
+export const recordAcceptedWeightSchema = z
+  .object({
+    expectedVersion: z.number().int().min(1),
+    receivedKg: positiveKgString,
+    acceptedKg: kgString,
+    weighingMethod: WeighingMethodE.schema.default('PLATFORM_SCALE'),
+    rejectionReasons: z.array(RejectionReasonE.schema).default([]),
+    note: optionalText(1000),
+  })
+  .refine((v) => Number(v.acceptedKg) <= Number(v.receivedKg), { message: 'Accepted weight cannot be more than the weight received', path: ['acceptedKg'] })
+  .refine((v) => Number(v.acceptedKg) === Number(v.receivedKg) || v.rejectionReasons.length > 0, {
+    message: 'Say why some cassava was not accepted',
+    path: ['rejectionReasons'],
+  });
+
 export const addWeightEvidenceSchema = z.object({
   kind: WeightEvidenceKindE.schema,
   attachmentId: uuid.optional(),

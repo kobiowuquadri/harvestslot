@@ -110,6 +110,8 @@ export class QuotesService {
     if (!area) throw new DomainError('NOT_FOUND', 'Booking not found');
     if (!['AWAITING_CONFIRMATIONS', 'CONFIRMED', 'ACTIVE'].includes(b.status)) throw new DomainError('INVALID_STATE_TRANSITION', 'This booking is not open for transport quotes');
     const { content } = await this.engine.currentTerms(this.prisma.db as never, b.id);
+    // The buyer collects or the farmer delivers: these bookings take no transport quotes.
+    if (content.handover) throw new DomainError('INVALID_STATE_TRANSITION', 'This booking has an agreed handover (buyer collects or farmer delivers); it needs no transport quote');
     const vehicle = await this.prisma.db.vehicle.findUnique({ where: { id: input.vehicleId } });
     if (!vehicle || vehicle.organisationId !== orgId) throw new DomainError('NOT_FOUND', 'Vehicle not found');
     if (vehicle.status !== 'ACTIVE') throw new DomainError('INVALID_STATE_TRANSITION', 'This vehicle is not active');

@@ -27,8 +27,10 @@ export const BOOKING_MACHINE: Machine<BookingStatus, BookingAction> = {
   EXPIRED: {},
 };
 
-export type OfferAction = 'revise' | 'counter' | 'accept' | 'acceptCounter' | 'decline' | 'withdraw' | 'expire' | 'lapse';
+export type OfferAction = 'send' | 'revise' | 'counter' | 'accept' | 'acceptCounter' | 'decline' | 'withdraw' | 'expire' | 'lapse';
 export const OFFER_MACHINE: Machine<OfferStatus, OfferAction> = {
+  // A draft is private to the buyer and reserves nothing; sending it creates the capacity hold.
+  DRAFT: { revise: 'DRAFT', send: 'OPEN', withdraw: 'WITHDRAWN', lapse: 'LAPSED' },
   OPEN: { revise: 'OPEN', counter: 'COUNTERED', accept: 'ACCEPTED', decline: 'DECLINED', withdraw: 'WITHDRAWN', expire: 'EXPIRED', lapse: 'LAPSED' },
   COUNTERED: { revise: 'OPEN', acceptCounter: 'ACCEPTED', decline: 'DECLINED', withdraw: 'WITHDRAWN', expire: 'EXPIRED', lapse: 'LAPSED' },
   ACCEPTED: {},

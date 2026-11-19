@@ -68,7 +68,7 @@ export default function AdminOrganisations() {
                 <Card>
                   <CardContent className="flex flex-col gap-3 text-sm">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold text-forest">{o.name}</span>
+                      <span className="font-semibold text-ink">{o.name}</span>
                       <Badge tone="neutral">{o.type.toLowerCase()}</Badge>
                       <StatusBadge kind="generic" status={o.status} label={ORG_STATUS_LABELS[o.status]} />
                       {o.isDemo ? <DemoTag /> : null}

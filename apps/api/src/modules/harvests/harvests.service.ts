@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   createHarvestSchema,
   dbDateToString,
+  declineRequestSchema,
   formatKg,
   gramsToKgString,
   harvestListQuerySchema,
@@ -25,6 +26,7 @@ import {
   lockRow,
   nextReference,
   notify,
+  farmerRecipients,
   orgRecipients,
   rankMatches,
   requestAllocation,
@@ -38,18 +40,36 @@ import type { Prisma, Tx } from '@harvestslot/db';
 import { AccessService } from '../../common/access.service.js';
 import { PrismaService } from '../../common/prisma.service.js';
 import { iso, kobo } from '../../common/serialize.js';
+import { approxFor } from '../farmers/farmers.service.js';
 import { MatchingService, type RequestFacts } from './matching.service.js';
-
-type HarvestRow = Prisma.HarvestRequestGetPayload<{
-  include: { farmLocation: true; farmerProfile: { select: { displayName: true } }; offers: { select: { status: true } }; bookings: { select: { status: true } } };
-}>;
 
 const include = {
   farmLocation: true,
   farmerProfile: { select: { displayName: true } },
-  offers: { select: { status: true } },
+  offers: { select: { id: true, status: true, facilityId: true, createdAt: true } },
   bookings: { select: { status: true } },
+  invitations: { include: { facility: { select: { name: true, organisation: { select: { name: true } } } } }, orderBy: { createdAt: 'asc' as const } },
 } as const;
+type HarvestRow = Prisma.HarvestRequestGetPayload<{ include: typeof include }>;
+
+const DAY_LABEL = new Intl.DateTimeFormat('en-NG', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Africa/Lagos' });
+
+/** What happens next for a harvest request, in the farmer's words. */
+function harvestNextStep(r: HarvestRow, remainingG: bigint, today: string, requests: HarvestDto['requests']): HarvestDto['nextStep'] {
+  const openOffers = r.offers.filter((o) => o.status === 'OPEN' || o.status === 'COUNTERED').length;
+  const liveBookings = r.bookings.filter((b) => !['CANCELLED', 'EXPIRED'].includes(b.status)).length;
+  if (r.status === 'DRAFT') return { stage: 'Not shared with buyers yet', forFarmer: 'Find buyers for this harvest' };
+  if (r.status === 'WITHDRAWN') return { stage: 'Withdrawn', forFarmer: 'Add a new harvest when you have cassava to sell' };
+  if (r.status === 'CLOSED') return { stage: 'Closed to new offers', forFarmer: liveBookings ? 'See your confirmed plan' : 'Add a new harvest when you have cassava to sell' };
+  if (openOffers) return { stage: openOffers === 1 ? 'Offer received' : `${openOffers} offers received`, forFarmer: openOffers === 1 ? 'Review the offer' : 'Review and compare the offers' };
+  if (remainingG === 0n && liveBookings) return { stage: 'Fully booked', forFarmer: 'See your confirmed plan' };
+  if (dbDateToString(r.latestHarvestDate) < today) return { stage: 'Harvest dates have passed', forFarmer: 'Change the dates to find buyers again' };
+  const waiting = requests.filter((q) => q.status === 'WAITING_FOR_OFFER');
+  if (waiting.length) {
+    return { stage: 'Waiting for the buyer’s offer', forFarmer: `Waiting for ${waiting.map((w) => w.processorName).join(' and ')} to send an offer. You can ask other buyers too.` };
+  }
+  return { stage: liveBookings ? 'Part booked — more for sale' : 'Looking for a buyer', forFarmer: 'Send a request to a buyer that fits' };
+}
 
 @Injectable()
 export class HarvestsService {
@@ -66,10 +86,25 @@ export class HarvestsService {
       where: { id: { in: rows.map((r) => r.actingDelegationId).filter((x): x is string => !!x) } },
       include: { cooperative: { select: { name: true } } },
     });
+    const today = lagosDateString(now);
     return rows.map((r) => {
       const eligible = toGrams(r.eligibleQuantityKg);
       const allocated = alloc.get(r.id) ?? 0n;
       const remaining = eligible > allocated ? eligible - allocated : 0n;
+      const requests: HarvestDto['requests'] = r.invitations.map((inv) => {
+        const offer = r.offers
+          .filter((o) => o.facilityId === inv.facilityId && o.status !== 'DRAFT' && o.createdAt >= inv.createdAt)
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+        return {
+          facilityId: inv.facilityId,
+          facilityName: inv.facility.name,
+          processorName: inv.facility.organisation.name,
+          sentAt: inv.createdAt.toISOString(),
+          status: offer ? 'OFFER_RECEIVED' : inv.declinedAt ? 'DECLINED' : 'WAITING_FOR_OFFER',
+          declineReason: inv.declineReason,
+          offerId: offer?.id ?? null,
+        };
+      });
       return {
         id: r.id,
         reference: r.reference,
@@ -90,6 +125,8 @@ export class HarvestsService {
         allocation: { eligibleKg: gramsToKgString(eligible), allocatedKg: gramsToKgString(allocated), remainingKg: gramsToKgString(remaining), state: allocationState(eligible, allocated) },
         openOffers: r.offers.filter((o) => o.status === 'OPEN' || o.status === 'COUNTERED').length,
         bookings: r.bookings.filter((b) => !['CANCELLED', 'EXPIRED'].includes(b.status)).length,
+        requests,
+        nextStep: harvestNextStep(r, remaining, today, requests),
         createdBy: {
           userId: r.createdByUserId,
           displayName: creators.find((c) => c.id === r.createdByUserId)?.displayName ?? 'Unknown',
@@ -157,12 +194,45 @@ export class HarvestsService {
     }
     const profile = await this.prisma.db.farmerProfile.findUniqueOrThrow({ where: { id: farmerProfileId } });
     const id = await withTransaction(this.prisma.db, async (tx) => {
-      await this.assertLocation(tx, farmerProfileId, input.farmLocationId);
+      let farmLocationId = input.farmLocationId;
+      if (farmLocationId) {
+        await this.assertLocation(tx, farmerProfileId, farmLocationId);
+      } else {
+        // "Where is the cassava?" answered in the same step: save it as a farm location for next time.
+        const nl = input.newLocation!;
+        const approx = await approxFor(tx, nl.lga, nl.point);
+        const source = !nl.point ? 'DESCRIPTION_ONLY' : authority.mode === 'DELEGATE' ? 'COOPERATIVE_REPORTED' : nl.source === 'DESCRIPTION_ONLY' ? 'SELF_REPORTED_PIN' : nl.source;
+        const loc = await tx.farmLocation.create({
+          data: {
+            farmerProfileId,
+            label: nl.label ?? `Farm at ${nl.community ?? nl.lga}`,
+            lga: nl.lga,
+            community: nl.community ?? null,
+            exactLat: nl.point?.lat ?? null,
+            exactLng: nl.point?.lng ?? null,
+            approxLat: approx?.lat ?? null,
+            approxLng: approx?.lng ?? null,
+            accuracyM: nl.accuracyM ?? null,
+            source,
+            directions: nl.directions ?? null,
+            isDemo: profile.isDemo,
+          },
+        });
+        farmLocationId = loc.id;
+        await tx.farmerProfile.update({
+          where: { id: farmerProfileId },
+          data: {
+            ...(profile.lga ? {} : { lga: nl.lga, community: profile.community ?? nl.community ?? null }),
+            ...(source === 'DEVICE_GPS' && authority.mode === 'SELF' && !profile.locationConsentAt ? { locationConsentAt: new Date() } : {}),
+          },
+        });
+        await audit(tx, { actor, farmer: authority, action: 'farmer.location-added', entityType: 'farm_location', entityId: loc.id });
+      }
       const row = await tx.harvestRequest.create({
         data: {
           reference: await nextReference(tx, 'harvest'),
           farmerProfileId,
-          farmLocationId: input.farmLocationId,
+          farmLocationId,
           createdByUserId: actor.userId,
           actingDelegationId: authority.mode === 'DELEGATE' ? authority.delegationId : null,
           status: input.publish ? 'PUBLISHED' : 'DRAFT',
@@ -265,8 +335,12 @@ export class HarvestsService {
         where: { id },
         data: { status: mode === 'WITHDRAW' ? 'WITHDRAWN' : 'CLOSED', closedAt: now, closeReason: reason, version: { increment: 1 } },
       });
-      const open = await tx.offer.findMany({ where: { harvestRequestId: id, status: { in: ['OPEN', 'COUNTERED'] } }, include: { reservation: true } });
+      const open = await tx.offer.findMany({ where: { harvestRequestId: id, status: { in: ['DRAFT', 'OPEN', 'COUNTERED'] } }, include: { reservation: true } });
       for (const o of open) {
+        if (o.status === 'DRAFT') {
+          await tx.offer.update({ where: { id: o.id }, data: { status: 'LAPSED', decidedAt: now, decisionReason: `Request ${mode === 'WITHDRAW' ? 'withdrawn' : 'closed'} by the farmer`, version: { increment: 1 } } });
+          continue;
+        }
         await tx.offer.update({ where: { id: o.id }, data: { status: 'LAPSED', decidedAt: now, decisionReason: `Request ${mode === 'WITHDRAW' ? 'withdrawn' : 'closed'} by the farmer`, version: { increment: 1 } } });
         if (o.reservation?.status === 'HELD') {
           await tx.reservation.update({ where: { id: o.reservation.id }, data: { status: 'RELEASED', releasedAt: now, releaseReason: 'Harvest request closed', version: { increment: 1 } } });
@@ -330,17 +404,50 @@ export class HarvestsService {
     const facility = await this.prisma.db.facility.findUnique({ where: { id: facilityId }, include: { organisation: true } });
     if (!facility || facility.organisation.status !== 'APPROVED') throw new DomainError('NOT_FOUND', 'Facility not found');
     await withTransaction(this.prisma.db, async (tx) => {
-      await tx.offerInvitation.createMany({ data: [{ harvestRequestId: id, facilityId, invitedByUserId: actor.userId }], skipDuplicates: true });
+      const existing = await tx.offerInvitation.findUnique({ where: { harvestRequestId_facilityId: { harvestRequestId: id, facilityId } } });
+      if (existing && !existing.declinedAt) throw new DomainError('DUPLICATE', `You already sent ${facility.organisation.name} a request. Waiting for their offer.`);
+      if (existing) {
+        // Asking again after a "can't buy this time": start a fresh request.
+        await tx.offerInvitation.update({ where: { id: existing.id }, data: { declinedAt: null, declinedByUserId: null, declineReason: null, createdAt: new Date(), invitedByUserId: actor.userId } });
+      } else {
+        await tx.offerInvitation.create({ data: { harvestRequestId: id, facilityId, invitedByUserId: actor.userId } });
+      }
       await notify(tx, {
         userIds: await orgRecipients(tx, facility.organisationId, ['OWNER', 'MANAGER']),
         type: 'offer.invited',
         category: 'offers',
-        title: `Offer requested for ${row.reference}`,
-        body: `A farmer asked ${facility.name} for an offer on ${formatKg(row.eligibleQuantityKg.toString())} of cassava.`,
+        title: `Review harvest request ${row.reference}`,
+        body: `A farmer asked ${facility.name} to buy ${formatKg(row.eligibleQuantityKg.toString())} of cassava, ready ${DAY_LABEL.format(row.earliestHarvestDate)} – ${DAY_LABEL.format(row.latestHarvestDate)}. Send an offer or say you can't buy this time.`,
         link: `/processor/inbox?request=${id}`,
-        dedupeKey: `offer-invited:${id}:${facilityId}`,
+        dedupeKey: `offer-invited:${id}:${facilityId}:${Date.now()}`,
       });
       await audit(tx, { actor, farmer: authority, action: 'harvest.offer-invited', entityType: 'harvest_request', entityId: id, organisationId: facility.organisationId });
+    });
+    return { ok: true };
+  }
+
+  /** The buyer cannot buy this request now: the farmer is told at once, so they are not left waiting. */
+  async declineRequest(actor: Actor, orgId: string, harvestRequestId: string, input: z.infer<typeof declineRequestSchema>) {
+    await this.access.requireOrg(actor, orgId, 'processor.offer.manage');
+    const row = await this.prisma.db.harvestRequest.findUnique({ where: { id: harvestRequestId } });
+    if (!row) throw new DomainError('NOT_FOUND', 'Harvest request not found');
+    const org = await this.prisma.db.organisation.findUniqueOrThrow({ where: { id: orgId } });
+    await withTransaction(this.prisma.db, async (tx) => {
+      const r = await tx.offerInvitation.updateMany({
+        where: { harvestRequestId, declinedAt: null, facility: { organisationId: orgId }, ...(input.facilityId ? { facilityId: input.facilityId } : {}) },
+        data: { declinedAt: new Date(), declinedByUserId: actor.userId, declineReason: input.reason },
+      });
+      if (r.count === 0) throw new DomainError('NOT_FOUND', 'There is no open request from this farmer to your organisation');
+      await notify(tx, {
+        userIds: await farmerRecipients(tx, row.farmerProfileId, undefined, new Date()),
+        type: 'offer.request-declined',
+        category: 'offers',
+        title: `${org.name} can't buy ${row.reference} this time`,
+        body: `${input.reason} Your harvest is still listed — send a request to another buyer.`,
+        link: `/farmer/harvests/${harvestRequestId}`,
+        dedupeKey: `request-declined:${harvestRequestId}:${orgId}:${Date.now()}`,
+      });
+      await audit(tx, { actor, organisationId: orgId, action: 'harvest.request-declined', entityType: 'harvest_request', entityId: harvestRequestId, reason: input.reason });
     });
     return { ok: true };
   }
@@ -361,7 +468,11 @@ export class HarvestsService {
     // Treat our own org as eligible for inbox purposes even before approval, so staff can prepare.
     candidates.forEach((c) => (c.org.status = 'APPROVED'));
     const invitations = await this.prisma.db.offerInvitation.findMany({ where: { harvestRequestId: { in: requests.map((r) => r.id) }, facility: { organisationId: orgId } } });
-    const offers = await this.prisma.db.offer.findMany({ where: { harvestRequestId: { in: requests.map((r) => r.id) }, processorOrgId: orgId, status: { in: ['OPEN', 'COUNTERED'] } } });
+    const offers = await this.prisma.db.offer.findMany({
+      where: { harvestRequestId: { in: requests.map((r) => r.id) }, processorOrgId: orgId },
+      include: { booking: { select: { id: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
     const policies = await this.prisma.policies();
     const items: InboxItem[] = [];
     for (const r of requests) {
@@ -380,10 +491,30 @@ export class HarvestsService {
         minPriceKoboPerKg: null, // processors may still offer above the farmer's minimum
         variety: r.variety,
       };
+      const invitation = invitations.find((i) => i.harvestRequestId === r.id) ?? null;
+      // A declined request disappears unless an offer was sent after all.
+      const offer = offers.find((o) => o.harvestRequestId === r.id && !['WITHDRAWN', 'LAPSED'].includes(o.status)) ?? null;
+      if (invitation?.declinedAt && !offer) continue;
       const eligibleCandidates = candidates.filter((c) => checkEligibility(input, c, { now, weights: policies.matchingWeights, roadFactor: 1.4, reliabilityMinHistory: 5 }) === null);
-      if (!eligibleCandidates.length) continue;
-      const { matches } = rankMatches(input, eligibleCandidates, { now, weights: policies.matchingWeights, roadFactor: 1.4, reliabilityMinHistory: policies.reliabilityMinHistory });
-      const best = matches[0]!;
+      if (!eligibleCandidates.length && !invitation && !offer) continue;
+      const ranked = eligibleCandidates.length ? rankMatches(input, eligibleCandidates, { now, weights: policies.matchingWeights, roadFactor: 1.4, reliabilityMinHistory: policies.reliabilityMinHistory }).matches : [];
+      const best = ranked[0] ?? null;
+      const fallback = candidates[0] ?? null;
+      const facilityOf = best?.candidate.facility ?? fallback?.facility ?? null;
+      if (!facilityOf) continue;
+      const nextStep = !offer
+        ? 'Review harvest request'
+        : offer.status === 'DRAFT'
+          ? 'Offer draft — finish and send'
+          : offer.status === 'OPEN'
+            ? 'Offer sent — waiting for the farmer'
+            : offer.status === 'COUNTERED'
+              ? 'The farmer proposed changes'
+              : offer.status === 'ACCEPTED'
+                ? 'Accepted — see the booking'
+                : offer.status === 'EXPIRED'
+                  ? 'Your offer expired — send a new one'
+                  : 'The farmer declined — send a new offer if you can';
       items.push({
         harvestRequestId: r.id,
         reference: r.reference,
@@ -397,18 +528,33 @@ export class HarvestsService {
         minPriceKoboPerKg: kobo(r.minPriceKoboPerKg),
         transportPreference: r.transportPreference,
         variety: r.variety,
-        invited: invitations.some((i) => i.harvestRequestId === r.id),
+        invited: Boolean(invitation),
         bestFacility: {
-          facilityId: best.candidate.facility.id,
-          facilityName: best.candidate.facility.name,
-          straightLineKm: approx ? round1(haversineKm(approx, best.candidate.facility.point)) : 0,
-          score: best.score,
+          facilityId: facilityOf.id,
+          facilityName: facilityOf.name,
+          straightLineKm: approx ? round1(haversineKm(approx, facilityOf.point)) : 0,
+          score: best?.score ?? 0,
         },
-        existingOfferId: offers.find((o) => o.harvestRequestId === r.id)?.id ?? null,
+        existingOfferId: offer && ['DRAFT', 'OPEN', 'COUNTERED'].includes(offer.status) ? offer.id : null,
+        farmLabel: r.farmLocation.label,
+        request: invitation ? { sentAt: invitation.createdAt.toISOString(), declinedAt: iso(invitation.declinedAt) } : null,
+        offer: offer ? { id: offer.id, status: offer.status, versionNo: offer.currentVersionNo, bookingId: offer.booking?.id ?? null } : null,
+        bestSlot: best
+          ? {
+              slotId: best.candidate.slot.id,
+              startsAt: best.candidate.slot.startsAt.toISOString(),
+              endsAt: best.candidate.slot.endsAt.toISOString(),
+              availableKg: gramsToKgString(best.candidate.usage.availableG),
+              lineName: best.candidate.slot.lineName,
+            }
+          : null,
+        nextStep,
       });
     }
     void membership;
-    return items.sort((a, b) => Number(b.invited) - Number(a.invited) || a.earliestHarvestDate.localeCompare(b.earliestHarvestDate));
+    // Requests sent to us that still need an answer first, then everything else by harvest date.
+    const needsAnswer = (i: InboxItem) => (i.request && !i.offer ? 2 : !i.offer ? 1 : 0);
+    return items.sort((a, b) => needsAnswer(b) - needsAnswer(a) || a.earliestHarvestDate.localeCompare(b.earliestHarvestDate));
   }
 
   farmerAuthorityLabel(a: FarmerAuthority): string {

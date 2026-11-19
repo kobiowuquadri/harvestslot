@@ -140,6 +140,7 @@ enum TransportPreference {
 }
 
 enum OfferStatus {
+  DRAFT
   OPEN
   COUNTERED
   ACCEPTED
@@ -147,6 +148,12 @@ enum OfferStatus {
   WITHDRAWN
   EXPIRED
   LAPSED
+}
+
+/// How the cassava changes hands (offer and booking terms).
+enum HandoverArrangement {
+  COLLECT_FROM_FARM
+  FARMER_DELIVERS
 }
 
 enum ProposerParty {
@@ -629,7 +636,7 @@ model Organisation {
   registrationNumber String?
   contactEmail       String?
   contactPhone       String?
-  lga                String
+  lga                String?
   state              String    @default("Oyo")
   address            String?
   description        String?
@@ -705,7 +712,7 @@ model FarmerProfile {
   phone             String?
   email             String?
   preferredLanguage String            @default("en")
-  lga               String
+  lga               String?
   community         String?
   claimStatus       FarmerClaimStatus @default(SELF_REGISTERED)
   createdByUserId   String?           @db.Uuid
@@ -952,6 +959,10 @@ model OfferInvitation {
   facility         Facility       @relation(fields: [facilityId], references: [id], onDelete: Restrict)
   invitedByUserId  String         @db.Uuid
   createdAt        DateTime       @default(now()) @db.Timestamptz(3)
+  /// Set when the buyer says they cannot buy this request, so the farmer is not left waiting.
+  declinedAt       DateTime?      @db.Timestamptz(3)
+  declinedByUserId String?        @db.Uuid
+  declineReason    String?
 
   @@unique([harvestRequestId, facilityId])
   @@map("offer_invitations")
@@ -1011,31 +1022,35 @@ model Offer {
 }
 
 model OfferVersion {
-  id                  String            @id @default(uuid(7)) @db.Uuid
-  offerId             String            @db.Uuid
-  offer               Offer             @relation(fields: [offerId], references: [id], onDelete: Restrict)
-  versionNo           Int
-  proposedBy          ProposerParty
-  proposedByUserId    String            @db.Uuid
-  actingForFarmerId   String?           @db.Uuid
-  delegationId        String?           @db.Uuid
-  slotId              String            @db.Uuid
-  slot                ProcessingSlot    @relation(fields: [slotId], references: [id], onDelete: Restrict)
-  quantityKg          Decimal           @db.Decimal(14, 3)
-  priceKoboPerKg      BigInt
-  plannedHarvestDate  DateTime          @db.Date
-  pickupWindowStart   DateTime          @db.Timestamptz(3)
-  pickupWindowEnd     DateTime          @db.Timestamptz(3)
-  deliveryWindowStart DateTime          @db.Timestamptz(3)
-  deliveryWindowEnd   DateTime          @db.Timestamptz(3)
-  qualityTerms        Json
-  toleranceBps        Int
-  paymentTermsDays    Int
-  freightPayer        FreightPayer      @default(PROCESSOR)
-  rejectionHandling   RejectionHandling
-  cancellationTerms   String
-  note                String?
-  createdAt           DateTime          @default(now()) @db.Timestamptz(3)
+  id                     String               @id @default(uuid(7)) @db.Uuid
+  offerId                String               @db.Uuid
+  offer                  Offer                @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  versionNo              Int
+  proposedBy             ProposerParty
+  proposedByUserId       String               @db.Uuid
+  actingForFarmerId      String?              @db.Uuid
+  delegationId           String?              @db.Uuid
+  slotId                 String               @db.Uuid
+  slot                   ProcessingSlot       @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  quantityKg             Decimal              @db.Decimal(14, 3)
+  priceKoboPerKg         BigInt
+  plannedHarvestDate     DateTime             @db.Date
+  pickupWindowStart      DateTime             @db.Timestamptz(3)
+  pickupWindowEnd        DateTime             @db.Timestamptz(3)
+  deliveryWindowStart    DateTime             @db.Timestamptz(3)
+  deliveryWindowEnd      DateTime             @db.Timestamptz(3)
+  qualityTerms           Json
+  toleranceBps           Int
+  paymentTermsDays       Int
+  freightPayer           FreightPayer         @default(PROCESSOR)
+  /// Null only while the offer is a draft: an offer cannot be sent without a handover decision.
+  handoverArrangement    HandoverArrangement?
+  /// Estimated delivery cost the farmer pays when they deliver (information shown before acceptance).
+  farmerDeliveryCostKobo BigInt?
+  rejectionHandling      RejectionHandling
+  cancellationTerms      String
+  note                   String?
+  createdAt              DateTime             @default(now()) @db.Timestamptz(3)
 
   @@unique([offerId, versionNo])
   @@map("offer_versions")

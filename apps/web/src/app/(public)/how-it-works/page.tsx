@@ -1,39 +1,52 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { PageIntro } from '@/components/domain/marketing';
+import { Button } from '@/components/ui/button';
 
 export const metadata: Metadata = { title: 'How it works' };
 
-const steps = [
-  ['Post your harvest', 'The farmer (or their cooperative, with permission) says how much cassava will be ready, between which dates, and where to collect it. Drafts can be saved on the phone without a signal.'],
-  ['See who could buy it', 'HarvestSlot lists processors with open capacity in those dates, explaining why each one fits — distance (marked as straight-line unless a road route is available), capacity, price indication and track record. A match is not an offer and reserves nothing.'],
-  ['Receive offers that hold capacity', 'A processor sends an offer with exact terms: price per kg, quantity, harvest and pickup times, quality rules and what happens to rejected roots. The offer holds their capacity until it expires.'],
-  ['Accept the exact terms', 'The farmer reviews a plain-language summary and accepts a specific version. Viewing an offer never accepts it. Accepting reserves the quantity so it cannot be sold twice.'],
-  ['Arrange transport', 'Transporters serving the area quote with a named vehicle. The freight payer (the processor, unless the farmer explicitly agrees otherwise) accepts a quote; the transporter confirms a driver.'],
-  ['Ready to harvest', 'When every party has confirmed the same version of the terms, capacity is committed and the booking shows Ready to harvest, with every check listed. If anything changes — a cancellation, an expired hold, a transport problem — readiness is lost immediately and everyone is told.'],
-  ['Harvest, pickup and delivery', 'The farmer records harvest start. The driver records arrival and loading; the farmer confirms the handover in the app or gives the driver a one-time code. Receiving staff confirm delivery the same way.'],
-  ['Weighing and quality', 'The facility records gross, tare and net weight with evidence, then the accepted and rejected quantity with reasons. If anything differs materially, the farmer reviews it and can accept or dispute — it is never accepted automatically.'],
-  ['Invoices and payment', 'The produce invoice is for the accepted quantity at the agreed price. The payer records each payment; it counts only when the recipient confirms it arrived. Freight and the HarvestSlot service fee are separate invoices.'],
+const steps: Array<[string, string]> = [
+  ['Choose what you want to do', 'Create a free account to sell cassava (farmers) or buy it (processors). Only the details needed for the account are asked; farm or facility details come when they are first needed.'],
+  ['The buyer publishes buying slots', 'A processor says how much cassava it can receive, where, and on which dates. Farmers are matched against these slots.'],
+  ['The farmer adds a harvest', 'Where the cassava is, roughly how much (in kg or tonnes, shown in kg to check) and when it will be ready. Drafts can be kept on the phone without a signal.'],
+  ['Find a buyer and send a request', 'Buyers whose location, buying dates and free space fit are listed, each with one sentence such as “Can receive your full 2,000 kg on Thursday”. A request reserves nothing.'],
+  ['The buyer sends an offer', 'Price per kg, quantity, date and time, and how the cassava gets there: “We’ll collect from the farm” or “The farmer will deliver to our facility”, with any delivery cost to the farmer. Sending the offer holds the buyer’s space until it expires. An offer without a handover decision stays a draft.'],
+  ['The farmer accepts or declines', 'Every material term is on one screen. Accepting confirms the plan at once — “[Buyer] will collect 2,000 kg at [place] on [date] for ₦100 per kg” — and it is ready to harvest. Declining keeps the harvest available.'],
+  ['Harvest and hand over', 'The cassava changes hands at the agreed place and time. No driver or vehicle needs to be registered. If anything material changes, both sides agree again.'],
+  ['The buyer records the weight', 'What arrived and what was accepted, with reasons for any difference. The farmer sees the final amount for the accepted weight and can agree or report a problem.'],
+  ['Payment reported, then received', 'The buyer records the payment (“Payment reported”). It counts as paid only when the farmer confirms the money arrived (“Payment received”).'],
 ];
 
 export default function HowItWorks() {
   return (
-    <div className="mx-auto max-w-3xl px-4 py-12">
-      <h1 className="text-3xl font-semibold text-forest">How HarvestSlot works</h1>
-      <p className="mt-2 text-muted">Nine steps from an expected harvest to a confirmed payment.</p>
-      <ol className="mt-8 flex flex-col gap-4">
-        {steps.map(([title, body], i) => (
-          <li key={title} className="flex gap-4 rounded-xl border border-line bg-surface p-5">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-forest font-semibold text-white">{i + 1}</span>
-            <div>
-              <h2 className="font-semibold text-forest">{title}</h2>
-              <p className="mt-1 text-sm text-muted">{body}</p>
-            </div>
-          </li>
-        ))}
-      </ol>
-      <p className="mt-8 text-sm text-muted">
-        Ready to start? <Link href="/register" className="font-medium text-leaf underline">Create an account</Link> or read <Link href="/roles" className="font-medium text-leaf underline">what each role does</Link>.
-      </p>
-    </div>
+    <>
+      <PageIntro eyebrow="How it works" title="From expected harvest to confirmed payment">
+        Nine steps, each confirmed by the person responsible. Nothing is assumed, and nothing is harvested on a promise.
+      </PageIntro>
+      <div className="mx-auto max-w-3xl px-4 py-14 sm:px-6">
+        <ol className="relative flex flex-col gap-8 before:absolute before:bottom-6 before:left-5 before:top-6 before:w-px before:bg-line">
+          {steps.map(([title, body], i) => (
+            <li key={title} className="relative flex gap-5">
+              <span className="z-10 flex size-10 shrink-0 items-center justify-center rounded-full bg-surface font-display text-sm font-semibold text-ink ring-1 ring-line shadow-[var(--shadow-card)]">{i + 1}</span>
+              <div className="pt-1.5">
+                <h2 className="font-display text-lg font-semibold text-ink">{title}</h2>
+                <p className="mt-1.5 text-[15px] leading-relaxed text-muted">{body}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+        <div className="mt-14 flex flex-col items-start gap-4 rounded-2xl border border-line bg-canvas p-6 sm:flex-row sm:items-center sm:justify-between">
+          <p className="font-display text-lg font-semibold text-ink">Ready to plan a harvest?</p>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild>
+              <Link href="/register">Create an account</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/roles">What each role does</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }

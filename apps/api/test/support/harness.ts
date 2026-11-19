@@ -217,10 +217,14 @@ export async function makeHarvest(db: PrismaClient, farmer: Awaited<ReturnType<t
   });
 }
 
-/** Offer terms that fit a fixture slot (pickup the evening before, delivery inside the slot). */
-export function offerTerms(slot: { id: string; startsAt: Date }, quantityKg = '2000', priceKoboPerKg = 25_000) {
+/**
+ * Offer terms that fit a fixture slot: the buyer collects from the farm the evening before (pickup
+ * window), and the cassava reaches the facility inside the slot.
+ */
+export function offerTerms(slot: { id: string; startsAt: Date }, quantityKg = '2000', priceKoboPerKg = 25_000, handoverArrangement: 'COLLECT_FROM_FARM' | 'FARMER_DELIVERS' = 'COLLECT_FROM_FARM') {
   const s = slot.startsAt.getTime();
   return {
+    handoverArrangement,
     slotId: slot.id,
     quantityKg,
     priceKoboPerKg,
@@ -258,36 +262,49 @@ export function quoteTerms(bookingId: string, vehicleId: string, slot: { startsA
 export interface Flow {
   farmer: Awaited<ReturnType<typeof makeFarmer>>;
   processor: Awaited<ReturnType<typeof makeProcessor>>;
-  transporter: Awaited<ReturnType<typeof makeTransporter>>;
   harvestId: string;
   offerId: string;
   bookingId: string;
-  quoteId?: string;
   farmerClient: Client;
   manager: Client;
-  dispatcher: Client;
 }
 
-/** Drives a fresh booking through HTTP up to the requested stage. */
-export async function bookingFlow(t: TestApp, stage: 'AWAITING' | 'QUOTE_ACCEPTED' | 'CONFIRMED', opts: { quantityKg?: string; capacityKg?: string; processor?: Flow['processor']; transporter?: Flow['transporter'] } = {}): Promise<Flow> {
+/**
+ * Drives a fresh booking through HTTP: offer (the buyer collects) → the farmer accepts. Because the
+ * offer has a handover, acceptance confirms the booking at once — no transporter, vehicle or driver.
+ */
+export async function bookingFlow(t: TestApp, opts: { quantityKg?: string; capacityKg?: string; priceKoboPerKg?: number; processor?: Flow['processor'] } = {}): Promise<Flow> {
   const farmer = await makeFarmer(t.db);
   const processor = opts.processor ?? (await makeProcessor(t.db, { capacityKg: opts.capacityKg ?? '5000' }));
-  const transporter = opts.transporter ?? (await makeTransporter(t.db));
   const harvest = await makeHarvest(t.db, farmer, opts.quantityKg ?? '2000');
   const farmerClient = new Client(t.app);
   await farmerClient.login(farmer.user!.email!);
   const manager = new Client(t.app);
   await manager.login(processor.manager.email!);
-  const dispatcher = new Client(t.app);
-  await dispatcher.login(transporter.owner.email!);
-  const offer = expectOk(await manager.post('/offers', { harvestRequestId: harvest.id, ...offerTerms(processor.slot, opts.quantityKg ?? '2000') }, { idem: true }));
+  const offer = expectOk(await manager.post('/offers', { harvestRequestId: harvest.id, ...offerTerms(processor.slot, opts.quantityKg ?? '2000', opts.priceKoboPerKg) }, { idem: true }));
   const accepted = expectOk(await farmerClient.post(`/offers/${offer.id}/accept`, { expectedVersionNo: 1 }, { idem: true }));
-  const flow: Flow = { farmer, processor, transporter, harvestId: harvest.id, offerId: offer.id, bookingId: accepted.bookingId, farmerClient, manager, dispatcher };
-  if (stage === 'AWAITING') return flow;
-  const quote = expectOk(await dispatcher.post(`/organisations/${transporter.org.id}/quotes`, quoteTerms(accepted.bookingId, transporter.vehicles[0]!.id, processor.slot), { idem: true }));
-  expectOk(await manager.post(`/quotes/${quote.id}/accept`, { expectedVersion: quote.version }, { idem: true }));
-  flow.quoteId = quote.id;
-  if (stage === 'QUOTE_ACCEPTED') return flow;
-  expectOk(await dispatcher.post('/assignments/accept', { quoteId: quote.id, driverId: transporter.driver.id }, { idem: true }));
-  return flow;
+  return { farmer, processor, harvestId: harvest.id, offerId: offer.id, bookingId: accepted.bookingId, farmerClient, manager };
+}
+
+/**
+ * A booking still waiting for confirmation: a cooperative representative prepared the acceptance,
+ * holding capacity until the confirmation deadline; `rep` may approve it (APPROVE_SALE).
+ */
+export async function preparedFlow(t: TestApp) {
+  const processor = await makeProcessor(t.db);
+  const farmer = await makeFarmer(t.db, { withAccount: false });
+  const repUser = await makeUser(t.db, 'rep');
+  const coop = await makeOrg(t.db, 'COOPERATIVE', repUser.id, ['REPRESENTATIVE']);
+  await t.db.cooperativeMembership.create({ data: { cooperativeId: coop.id, farmerProfileId: farmer.profile.id } });
+  await t.db.delegationConsent.create({
+    data: { cooperativeId: coop.id, farmerProfileId: farmer.profile.id, scopes: ['ASSIST_DATA_ENTRY', 'APPROVE_SALE'], method: 'RECORDED_BY_REPRESENTATIVE', recordedByUserId: repUser.id, witnessName: 'Witness' },
+  });
+  const harvest = await makeHarvest(t.db, farmer);
+  const manager = new Client(t.app);
+  await manager.login(processor.manager.email!);
+  const offer = expectOk(await manager.post('/offers', { harvestRequestId: harvest.id, ...offerTerms(processor.slot) }, { idem: true }));
+  const rep = new Client(t.app);
+  await rep.login(repUser.email!);
+  const prepared = expectOk(await rep.post(`/offers/${offer.id}/prepare-acceptance`, { expectedVersionNo: 1 }, { idem: true }));
+  return { processor, farmer, rep, manager, bookingId: prepared.bookingId as string, offerId: offer.id as string };
 }

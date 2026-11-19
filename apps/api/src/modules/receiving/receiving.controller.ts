@@ -7,6 +7,7 @@ import {
   farmerReceivingReviewSchema,
   processingSchema,
   receivingSchema,
+  recordAcceptedWeightSchema,
   recordLossSchema,
   recordWeighingSchema,
   startProcessingSchema,
@@ -28,6 +29,14 @@ export class ReceivingController {
   @ApiOk(receivingSchema.nullable())
   get(@CurrentActor() actor: Actor, @Param('id', uuid()) id: string) {
     return this.receiving.get(actor, id);
+  }
+
+  /** One step from the booking: weight received and accepted (bookings with a handover arrangement). */
+  @Post('bookings/:id/receiving/accepted-weight')
+  @HttpCode(200)
+  @ApiOk(receivingSchema)
+  recordAcceptedWeight(@CurrentActor() actor: Actor, @Param('id', uuid()) id: string, @ZodBody(recordAcceptedWeightSchema) body: z.infer<typeof recordAcceptedWeightSchema>) {
+    return this.receiving.recordAcceptedWeight(actor, id, body);
   }
 
   @Post('bookings/:id/receiving/weighing')

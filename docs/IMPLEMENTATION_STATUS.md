@@ -4,6 +4,19 @@ Legend: `[x]` implemented **and** exercised by a check that was actually run (se
 
 Integration words: **working** (real adapter exercised end to end here), **simulated** (development-only stand-in, visibly labelled, refused in production), **awaiting credentials** (real adapter implemented, not exercised because no credentials/service were available).
 
+## Updated MVP scope (2026-11-18) — one simple sale (brief §0, DECISIONS #33)
+- [x] Registration asks “What would you like to do?” — *Sell cassava* / *Buy cassava* cards, then account details only; farm and facility details asked when first needed. Transporter, driver and cooperative sign-up removed from the public flow (API refuses those account types); existing accounts, permissions and records unchanged
+- [x] Farmer home with one main action, *Add my harvest*; four-step harvest form (where — farm or LGA/village suggestions; how much in kg or tonnes with an immediate “2,000 kg” readout; when; check) that keeps answers on Back and on errors
+- [x] *Find a buyer*: buyers whose location, dates and free space fit, each explained in one sentence; *Send request* from the card; requests reserve nothing; no-match keeps the harvest and suggests changing the dates
+- [x] Buyer workspace reduced to *Buying slots* (plain-English slot form), *Requests* (review → prefilled offer, or “can’t buy this time”) and *Bookings*
+- [x] Offers answer “How will the cassava get there?” (buyer collects / farmer delivers, with any farmer-paid delivery cost); undecided offers stay private drafts with no reservation
+- [x] Farmer offer review: buyer, quantity, price/kg, estimated total, date, place, who brings it, cost to the farmer; *Accept offer* / *Decline* (harvest stays available)
+- [x] Readiness without driver or vehicle: `HANDOVER_AGREED` replaces the transport checks for new bookings; acceptance confirms at once; material changes need re-agreement; double-booking prevention unchanged
+- [x] Plan sentence and “What happens next” on every harvest and booking (`describePlan`), one prominent action per screen, short sale timeline on the single booking page
+- [x] Finishing the sale: buyer records weight received/accepted in one step (invoice issued at once); farmer sees the final amount and any difference and can report a problem; buyer records payment; *Payment reported* and *Payment received* stay distinct until the farmer confirms
+- [x] Demo data, personas (farmer, buyer, admin), navigation, docs and tests updated to the simplified journey
+- [~] Transport, quotes, trips, shipments and the receiving workbench remain in the code for older bookings only; they are hidden from the new journey and not covered by new browser tests
+
 ## Phase 1 — Foundation
 - [x] Repository audit, architecture plan, decisions log (§2) — ARCHITECTURE.md, DECISIONS.md
 - [x] pnpm workspaces, pinned versions, committed lockfile (§4)
@@ -19,9 +32,9 @@ Integration words: **working** (real adapter exercised end to end here), **simul
 - [x] Farmer profile, farm locations (approximate vs exact, GPS with accuracy), harvest request wizard, draft/publish/edit/close/withdraw (§13)
 - [x] Facilities, processing lines, slots (non-overlap), series creation, capacity adjustments with reasons, capacity list by day (§14)
 - [x] Deterministic explainable matching + infeasibility explanations (§12)
-- [x] Offers: create/revise/counter/accept/decline/withdraw/expire/lapse with DB-backed holds (§5)
+- [x] Offers: draft/send/create/revise/counter/accept/decline/withdraw/expire/lapse with DB-backed holds (§5)
 - [x] Bookings: DRAFT/AWAITING/CONFIRMED/ACTIVE/COMPLETED/CANCELLED/EXPIRED, immutable hashed terms versions, confirmations with carry-forward (§9, §10)
-- [x] Transport: vehicles, drivers, availability, service areas, quotes, acceptance, assignment, conflict checks with buffer (§15)
+- [~] Transport: vehicles, drivers, availability, service areas, quotes, acceptance, assignment, conflict checks with buffer (§15) — kept for older bookings only (DECISIONS #33); the driver-overlap constraint is still tested
 - [x] Readiness computation + readiness events, live updates (SSE) (§10)
 - [x] Idempotency keys + optimistic versions (§11)
 

@@ -6,7 +6,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import pg from 'pg';
-import { e2eDatabaseUrl, repoRoot, stackEnv } from './support/env.mjs';
+import { BASE_URL, e2eDatabaseUrl, repoRoot, stackEnv } from './support/env.mjs';
 
 const url = new URL(e2eDatabaseUrl());
 const dbName = url.pathname.slice(1);
@@ -39,7 +39,7 @@ execFileSync(node, [join(repoRoot, 'apps/api/dist/cli/seed.js')], { cwd: repoRoo
 const children = [
   spawn(node, ['--enable-source-maps', 'dist/main.js'], { cwd: join(repoRoot, 'apps/api'), env, stdio: 'inherit' }),
   spawn(node, ['--enable-source-maps', 'dist/main.js'], { cwd: join(repoRoot, 'apps/worker'), env, stdio: 'inherit' }),
-  spawn(node, [createRequire(join(repoRoot, 'apps/web/package.json')).resolve('next/dist/bin/next'), 'start', '--port', '3000'], { cwd: join(repoRoot, 'apps/web'), env, stdio: 'inherit' }),
+  spawn(node, [createRequire(join(repoRoot, 'apps/web/package.json')).resolve('next/dist/bin/next'), 'start', '--port', new URL(BASE_URL).port || '3000'], { cwd: join(repoRoot, 'apps/web'), env, stdio: 'inherit' }),
 ];
 
 let stopping = false;

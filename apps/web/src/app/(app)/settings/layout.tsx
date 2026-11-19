@@ -18,9 +18,14 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Settings" />
-      <nav aria-label="Settings" className="flex gap-1 overflow-x-auto border-b border-line">
+      <nav aria-label="Settings" className="flex gap-6 overflow-x-auto border-b border-line max-sm:scroll-fade-x">
         {TABS.map((t) => (
-          <Link key={t.href} href={t.href} aria-current={pathname === t.href ? 'page' : undefined} className={cn('whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium', pathname === t.href ? 'border-forest text-forest' : 'border-transparent text-muted')}>
+          <Link
+            key={t.href}
+            href={t.href}
+            aria-current={pathname === t.href ? 'page' : undefined}
+            className={cn('-mb-px whitespace-nowrap border-b-2 px-0.5 py-3 text-sm font-medium transition-colors', pathname === t.href ? 'border-forest text-ink' : 'border-transparent text-muted hover:text-ink')}
+          >
             {t.label}
           </Link>
         ))}

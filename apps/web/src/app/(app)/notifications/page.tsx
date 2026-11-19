@@ -66,7 +66,7 @@ export default function NotificationsPage() {
           return (
             <li key={n.id}>
               {n.link ? (
-                <Link href={n.link} onClick={() => markRead(n)} className={`block rounded-xl border p-4 hover:border-leaf ${n.readAt ? 'border-line bg-surface' : 'border-leaf-100 bg-leaf-50'}`}>
+                <Link href={n.link} onClick={() => markRead(n)} className={`block rounded-xl border p-4 transition-[border-color,box-shadow] hover:border-line-strong/40 hover:shadow-[var(--shadow-raised)] ${n.readAt ? 'border-line bg-surface' : 'border-leaf-100 bg-leaf-50'}`}>
                   {content}
                 </Link>
               ) : (

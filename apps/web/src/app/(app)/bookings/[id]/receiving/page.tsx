@@ -111,7 +111,7 @@ function EvidenceUpload({ bookingId }: { bookingId: string }) {
       <Field label="Reference (optional)">
         <Input value={reference} onChange={(e) => setReference(e.target.value)} />
       </Field>
-      <label className="inline-flex h-11 cursor-pointer items-center justify-center rounded-lg border border-line-strong bg-surface px-4 text-sm font-medium hover:bg-leaf-50">
+      <label className="inline-flex h-11 cursor-pointer items-center justify-center rounded-lg border border-line-strong bg-surface px-4 text-sm font-medium hover:bg-canvas">
         {busy ? 'Uploading…' : 'Upload photo or PDF'}
         <input
           type="file"

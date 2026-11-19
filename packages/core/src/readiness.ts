@@ -6,6 +6,8 @@ export interface ReadinessFacts {
   bookingStatus: BookingStatus;
   currentVersionNo: number;
   hasTransportTerms: boolean;
+  /** Handover terms of the current version (bookings made without a transporter). */
+  handover: { arrangement: string; placeLabel: string; windowStart: Date; windowEnd: Date } | null;
   confirmedParties: BookingParty[];
   pickupWindowEnd: Date;
   deliveryWindowStart: Date;
@@ -26,9 +28,10 @@ const LABELS: Record<ReadinessCheckCode, string> = {
   FARMER_ACCEPTED: 'Farmer accepted the current terms',
   PROCESSOR_ACCEPTED: 'Processor accepted the current terms',
   CAPACITY_RESERVED: 'Quantity and processing capacity reserved',
+  HANDOVER_AGREED: 'How and where the cassava changes hands is agreed',
   TRANSPORT_ACCEPTED: 'Transport quote and payer accepted',
   VEHICLE_DRIVER_CONFIRMED: 'Vehicle and driver confirmed',
-  WINDOWS_FEASIBLE: 'Pickup and delivery windows still feasible',
+  WINDOWS_FEASIBLE: 'Agreed dates and times still workable',
   PARTICIPANTS_ELIGIBLE: 'All participants eligible',
   NO_BLOCKING_ISSUES: 'No blocking amendment, cancellation or incident',
 };
@@ -85,8 +88,17 @@ export function evaluateReadiness(f: ReadinessFacts): Readiness {
               ? 'The vehicle and driver are held but not yet confirmed.'
               : 'Vehicle and driver are confirmed with no overlapping commitments.';
 
+  const handoverOk = Boolean(f.handover && f.handover.placeLabel.trim().length > 0 && f.handover.windowEnd > f.handover.windowStart);
+  const handoverExplanation = handoverOk
+    ? f.handover!.arrangement === 'COLLECT_FROM_FARM'
+      ? `The buyer collects at ${f.handover!.placeLabel}.`
+      : `The farmer delivers to ${f.handover!.placeLabel}.`
+    : 'How the cassava gets to the buyer has not been agreed yet.';
+
   const windowProblems: string[] = [];
-  if (f.pickupWindowEnd <= f.now && !['ACTIVE', 'COMPLETED'].includes(f.bookingStatus)) windowProblems.push('the pickup window has passed');
+  if (f.pickupWindowEnd <= f.now && !['ACTIVE', 'COMPLETED'].includes(f.bookingStatus)) {
+    windowProblems.push(f.handover ? 'the agreed handover time has passed' : 'the pickup window has passed');
+  }
   if (['CANCELLED', 'CLOSED'].includes(f.slot.status)) windowProblems.push(`the processing slot is ${f.slot.status.toLowerCase()}`);
   if (f.deliveryWindowStart < f.slot.startsAt || f.deliveryWindowEnd > f.slot.endsAt) windowProblems.push('the delivery window falls outside the processing slot');
   if (f.reservation?.status === 'HELD' && f.reservation.expiresAt && f.reservation.expiresAt <= f.now) windowProblems.push('the confirmation deadline has passed');
@@ -113,12 +125,18 @@ export function evaluateReadiness(f: ReadinessFacts): Readiness {
     ),
     check('PROCESSOR_ACCEPTED', processor, processor ? `Accepted ${v}.` : `Waiting for the processor to accept ${v}.`, 'PROCESSOR'),
     check('CAPACITY_RESERVED', reservationOk, reservationExplanation, 'PROCESSOR'),
-    check('TRANSPORT_ACCEPTED', transportAccepted, transportExplanation, f.hasTransportTerms ? 'TRANSPORTER' : 'PROCESSOR'),
-    check('VEHICLE_DRIVER_CONFIRMED', tripOk, tripExplanation, 'TRANSPORTER'),
+    // Bookings made with a transporter (before handover arrangements) keep their transport checks;
+    // every other booking needs only an agreed handover — no vehicle or driver record.
+    ...(f.hasTransportTerms
+      ? [
+          check('TRANSPORT_ACCEPTED', transportAccepted, transportExplanation, 'TRANSPORTER'),
+          check('VEHICLE_DRIVER_CONFIRMED', tripOk, tripExplanation, 'TRANSPORTER'),
+        ]
+      : [check('HANDOVER_AGREED', handoverOk, handoverExplanation, 'PROCESSOR')]),
     check(
       'WINDOWS_FEASIBLE',
       windowProblems.length === 0,
-      windowProblems.length === 0 ? 'Pickup and delivery windows are in the future and inside the slot.' : `Not feasible: ${windowProblems.join('; ')}.`,
+      windowProblems.length === 0 ? 'The agreed dates are still ahead and inside the buying slot.' : `Not workable: ${windowProblems.join('; ')}.`,
       'PROCESSOR',
     ),
     check(

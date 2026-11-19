@@ -2,273 +2,215 @@
 
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
-import { Info, MapPin, Send } from 'lucide-react';
-import type { HarvestDto, MatchResponse, MatchResult, OfferDto } from '@harvestslot/contracts';
+import { CalendarDays, CheckCircle2, Clock, MapPin, Send, Truck, XCircle } from 'lucide-react';
+import { formatKg, HANDOVER_ARRANGEMENT_LABELS, type HarvestDto, type MatchResponse, type MatchResult, type OfferDto } from '@harvestslot/contracts';
 import { ConfirmActionButton, ReasonActionDialog } from '@/components/domain/dialogs';
-import {
-  DateOnly,
-  DemoTag,
-  Kg,
-  Money,
-  Price,
-  ReviewedTag,
-  StatusBadge,
-  When,
-} from '@/components/domain/display';
+import { DateOnly, DemoTag, Money, Price, ReviewedTag, StatusBadge, When } from '@/components/domain/display';
 import { FarmerGate } from '@/components/domain/farmer-gate';
-import { AllocationBar, OfferCards } from '@/components/domain/lists';
-import { EmptyState, PageHeader, QueryView } from '@/components/domain/states';
+import { NextStepCard } from '@/components/domain/next-step';
+import { PageHeader, QueryView } from '@/components/domain/states';
 import { Button } from '@/components/ui/button';
-import {
-  Alert,
-  Badge,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  DescriptionList,
-  Table,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-  Td,
-  Th,
-} from '@/components/ui/primitives';
+import { Alert } from '@/components/ui/primitives';
 import { farmerCan, useApi, withFarmer, type FarmerContext } from '@/lib/hooks';
 
-function MatchCard({ m, harvestId, canAsk }: { m: MatchResult; harvestId: string; canAsk: boolean }) {
+const LIVE = ['OPEN', 'COUNTERED'];
+
+function RequestState({ h, facilityId, canAsk, ctx }: { h: HarvestDto; facilityId: string; canAsk: boolean; ctx: FarmerContext }) {
+  const req = h.requests.find((r) => r.facilityId === facilityId);
+  const ask = (label: string) =>
+    canAsk ? (
+      <ConfirmActionButton
+        label={
+          <>
+            <Send className="size-4" aria-hidden /> {label}
+          </>
+        }
+        path={`/harvests/${h.id}/offer-requests`}
+        body={{ facilityId }}
+        invalidate={[['harvest', h.id], ['matches', h.id], ['harvests']]}
+        success="Request sent. You will be told when the buyer replies."
+      />
+    ) : null;
+  if (!req) return ask('Send request');
+  if (req.status === 'WAITING_FOR_OFFER') {
+    return (
+      <p className="flex items-center gap-2 rounded-xl bg-canvas px-3.5 py-2.5 text-sm font-medium text-ink">
+        <Clock className="size-4 text-muted" aria-hidden /> Request sent — waiting for their offer
+      </p>
+    );
+  }
+  if (req.status === 'OFFER_RECEIVED' && req.offerId) {
+    return (
+      <Button asChild variant="secondary">
+        <Link href={withFarmer(`/offers/${req.offerId}`, ctx)}>See their offer</Link>
+      </Button>
+    );
+  }
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-center gap-2">
-          <CardTitle>{m.processorName}</CardTitle>
-          <ReviewedTag approved={m.processorReviewed} />
-          <Badge tone="neutral">Score {Math.round(m.score)}/100</Badge>
-        </div>
-        <p className="text-sm text-muted">
-          {m.facilityName} · {m.lga} · {m.slot.lineName} ({m.slot.product.toLowerCase()})
-        </p>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <DescriptionList
-          items={[
-            [
-              'Indicative price',
-              m.indicativePriceKoboPerKg ? (
-                <Price key="p" kobo={m.indicativePriceKoboPerKg} />
-              ) : (
-                'Not published — ask for an offer'
-              ),
-            ],
-            ['Could take', <Kg key="k" kg={m.fitKg} tonnes />],
-            ['Processing slot', <When key="s" at={m.slot.startsAt} />],
-            ['Distance', m.distance.label],
-            [
-              'Estimated value to you',
-              m.costs.estimatedFarmerNetKobo !== null ? (
-                <Money key="v" kobo={m.costs.estimatedFarmerNetKobo} />
-              ) : (
-                '—'
-              ),
-            ],
-            ['Track record', m.reliability.label],
-          ]}
-        />
-        <p className="text-xs text-muted">{m.costs.freightNote}</p>
-        <details className="rounded-lg border border-line p-3 text-sm">
-          <summary className="cursor-pointer font-medium">Why this match is ranked here</summary>
-          <ul className="mt-2 list-disc pl-5">
-            {m.explanation.map((e) => (
-              <li key={e}>{e}</li>
-            ))}
-          </ul>
-          <Table caption="Ranking factors" className="mt-3 min-w-0">
-            <thead>
-              <tr>
-                <Th>Factor</Th>
-                <Th>Weight</Th>
-                <Th>Score</Th>
-                <Th>Why</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {m.factors.map((f) => (
-                <tr key={f.key}>
-                  <Td>{f.label}</Td>
-                  <Td>{Math.round(f.weight * 100)}%</Td>
-                  <Td>{f.score === null ? 'n/a' : Math.round(f.score * 100)}</Td>
-                  <Td className="text-muted">{f.explanation}</Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-          <p className="mt-2 text-xs text-muted">
-            Still needed before harvest: {m.remainingSteps.join(' → ')}
-          </p>
-        </details>
-        <p className="text-xs text-muted">
-          Quality asked for: delivered within {m.qualityCriteria.maxHoursHarvestToDelivery} h of harvest
-          {m.qualityCriteria.soilAndStemsRemoved ? ', soil and stems removed' : ''}. Availability as of{' '}
-          <When at={m.availabilityAsOf} />.
-        </p>
-        {m.invited ? (
-          <Badge tone="info">Offer requested — waiting for the processor</Badge>
-        ) : canAsk ? (
-          <ConfirmActionButton
-            label={
-              <>
-                <Send className="size-4" aria-hidden /> Ask for an offer
-              </>
-            }
-            path={`/harvests/${harvestId}/offer-requests`}
-            body={{ facilityId: m.facilityId }}
-            invalidate={[['matches', harvestId]]}
-            success="The processor has been asked for an offer"
-            variant="secondary"
-          />
-        ) : null}
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-2">
+      <p className="flex items-start gap-2 text-sm text-muted">
+        <XCircle className="mt-0.5 size-4 shrink-0" aria-hidden /> They can’t buy this time{req.declineReason ? `: ${req.declineReason}` : '.'}
+      </p>
+      {ask('Ask again')}
+    </div>
   );
 }
 
-function Matches({ harvest, ctx }: { harvest: HarvestDto; ctx: FarmerContext }) {
-  const q = useApi<MatchResponse>(
-    ['matches', harvest.id],
-    harvest.status === 'PUBLISHED' ? `/harvests/${harvest.id}/matches` : null,
-  );
-  if (harvest.status !== 'PUBLISHED')
-    return <Alert tone="info">Publish the request to see which processors could take your cassava.</Alert>;
+function MatchCard({ m, h, canAsk, ctx }: { m: MatchResult; h: HarvestDto; canAsk: boolean; ctx: FarmerContext }) {
   return (
-    <QueryView query={q}>
-      {(r) => (
-        <div className="flex flex-col gap-4">
-          <Alert tone="info" title="These are recommendations, not offers">
-            {r.disclaimer} Computed <When at={r.computedAt} />.
-          </Alert>
-          {r.infeasible ? (
-            <Alert tone="warning" title="No processor can take this request right now">
-              <ul className="list-disc pl-5">
-                {r.infeasible.reasons.map((x) => (
-                  <li key={x}>{x}</li>
-                ))}
-              </ul>
-              {r.infeasible.suggestions.length ? (
-                <>
-                  <p className="mt-2 font-medium">You could:</p>
-                  <ul className="list-disc pl-5">
-                    {r.infeasible.suggestions.map((s) => (
-                      <li key={s.text}>{s.text}</li>
+    <li className="flex flex-col gap-4 rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow-card)]">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="flex flex-wrap items-center gap-2">
+            <span className="text-[15px] font-semibold text-ink">{m.processorName}</span>
+            <ReviewedTag approved={m.processorReviewed} />
+          </p>
+          <p className="text-[13px] text-muted">
+            {m.facilityName}, {m.lga} · {m.distance.label}
+          </p>
+        </div>
+        {m.indicativePriceKoboPerKg ? (
+          <p className="text-right text-sm">
+            <span className="block text-xs text-muted">Usually pays</span>
+            <span className="font-semibold text-ink">
+              <Price kobo={m.indicativePriceKoboPerKg} />
+            </span>
+          </p>
+        ) : null}
+      </div>
+      <p className="flex items-start gap-2 text-[15px] font-medium text-forest-800">
+        <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-forest" aria-hidden /> {m.headline}.
+      </p>
+      <RequestState h={h} facilityId={m.facilityId} canAsk={canAsk} ctx={ctx} />
+      <details className="text-sm">
+        <summary className="cursor-pointer font-medium text-muted hover:text-ink">Why this buyer?</summary>
+        <ul className="mt-2 list-disc pl-5 text-muted">
+          {m.explanation.map((e) => (
+            <li key={e}>{e}</li>
+          ))}
+          <li>{m.costs.freightNote}</li>
+          <li>
+            Quality: delivered within {m.qualityCriteria.maxHoursHarvestToDelivery} h of harvest{m.qualityCriteria.soilAndStemsRemoved ? ', soil and stems removed' : ''}.
+          </li>
+          <li>{m.reliability.label}</li>
+        </ul>
+        <p className="mt-2 text-xs text-muted">
+          Space checked <When at={m.availabilityAsOf} />. A request reserves nothing; the buyer replies with an offer.
+        </p>
+      </details>
+    </li>
+  );
+}
+
+function Buyers({ h, ctx }: { h: HarvestDto; ctx: FarmerContext }) {
+  const q = useApi<MatchResponse>(['matches', h.id], h.status === 'PUBLISHED' ? `/harvests/${h.id}/matches` : null);
+  const canAsk = farmerCan(ctx, 'harvest.edit');
+  if (h.status !== 'PUBLISHED') return null;
+  return (
+    <section aria-labelledby="buyers" className="flex flex-col gap-3">
+      <div>
+        <h2 id="buyers" className="text-lg font-semibold text-ink">
+          Buyers that fit
+        </h2>
+        <p className="text-[13px] text-muted">Location, buying dates and free space checked against your harvest.</p>
+      </div>
+      <QueryView query={q}>
+        {(r) => {
+          const shown = new Set(r.results.map((m) => m.facilityId));
+          const otherRequests = h.requests.filter((x) => !shown.has(x.facilityId));
+          return (
+            <div className="flex flex-col gap-4">
+              {r.results.length === 0 ? (
+                <Alert tone="warning" title="No buyer fits right now — your harvest is still saved">
+                  {r.infeasible?.reasons.length ? (
+                    <ul className="list-disc pl-5">
+                      {r.infeasible.reasons.map((x) => (
+                        <li key={x}>{x}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <p className="mt-2">
+                    {r.infeasible?.suggestions[0]?.text ?? 'Changing the dates often helps.'} Buyers who publish new buying slots will see your harvest too.
+                  </p>
+                  {canAsk ? (
+                    <Button asChild size="sm" variant="outline" className="mt-3">
+                      <Link href={withFarmer(`/farmer/harvests/${h.id}/edit`, ctx)}>
+                        <CalendarDays className="size-4" aria-hidden /> Change the dates
+                      </Link>
+                    </Button>
+                  ) : null}
+                </Alert>
+              ) : (
+                <ul className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                  {r.results.map((m) => (
+                    <MatchCard key={`${m.facilityId}-${m.slot.id}`} m={m} h={h} canAsk={canAsk} ctx={ctx} />
+                  ))}
+                </ul>
+              )}
+              {otherRequests.length ? (
+                <div className="rounded-2xl border border-line bg-surface p-5">
+                  <h3 className="text-[15px] font-semibold text-ink">Requests you sent</h3>
+                  <ul className="mt-3 flex flex-col gap-3">
+                    {otherRequests.map((x) => (
+                      <li key={x.facilityId} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                        <span className="font-medium text-ink">{x.processorName}</span>
+                        <RequestState h={h} facilityId={x.facilityId} canAsk={canAsk} ctx={ctx} />
+                      </li>
                     ))}
                   </ul>
-                </>
+                </div>
               ) : null}
-            </Alert>
-          ) : null}
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            {r.results.map((m) => (
-              <MatchCard
-                key={`${m.facilityId}-${m.slot.id}`}
-                m={m}
-                harvestId={harvest.id}
-                canAsk={farmerCan(ctx, 'harvest.edit')}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-    </QueryView>
+            </div>
+          );
+        }}
+      </QueryView>
+    </section>
   );
 }
 
-function OffersCompare({ harvestId, ctx }: { harvestId: string; ctx: FarmerContext }) {
-  const q = useApi<OfferDto[]>(['offers', 'harvest', harvestId], `/harvests/${harvestId}/offers`);
+function Offers({ h, ctx }: { h: HarvestDto; ctx: FarmerContext }) {
+  const q = useApi<OfferDto[]>(['offers', 'harvest', h.id], `/harvests/${h.id}/offers`);
+  const offers = q.data ?? [];
+  if (!offers.length) return null;
   return (
-    <QueryView
-      query={q}
-      isEmpty={(d) => d.length === 0}
-      empty={
-        <EmptyState title="No offers yet">
-          Processors you asked, and processors who find your request, can send offers. You will get a
-          notification.
-        </EmptyState>
-      }
-    >
-      {(offers) => (
-        <>
-          <div className="md:hidden">
-            <OfferCards items={offers} perspective="farmer" />
-          </div>
-          <div className="hidden md:block">
-            <Table caption="Offers for this harvest">
-              <thead>
-                <tr>
-                  <Th>Processor</Th>
-                  <Th>Status</Th>
-                  <Th>Quantity</Th>
-                  <Th>Price</Th>
-                  <Th>Est. value</Th>
-                  <Th>Harvest date</Th>
-                  <Th>Transport</Th>
-                  <Th>Expires</Th>
-                  <Th>
-                    <span className="sr-only">Open</span>
-                  </Th>
-                </tr>
-              </thead>
-              <tbody>
-                {offers.map((o) => (
-                  <tr key={o.id}>
-                    <Td>
-                      <span className="font-medium">{o.processorName}</span>
-                      <span className="block text-xs text-muted">
-                        {o.facility.name}
-                        {o.straightLineKm !== null
-                          ? ` · ${Math.round(o.straightLineKm)} km straight-line`
-                          : ''}
-                      </span>
-                    </Td>
-                    <Td>
-                      <StatusBadge kind="offer" status={o.status} />
-                      {o.awaiting === 'FARMER' ? (
-                        <span className="mt-1 block text-xs font-semibold text-amber-ink">
-                          Your reply needed
-                        </span>
-                      ) : null}
-                    </Td>
-                    <Td>
-                      <Kg kg={o.current.quantityKg} />
-                    </Td>
-                    <Td>
-                      <Price kobo={o.current.priceKoboPerKg} />
-                    </Td>
-                    <Td>
-                      <Money kobo={o.current.estimatedProduceAmountKobo} />
-                    </Td>
-                    <Td>
-                      <DateOnly date={o.current.plannedHarvestDate} />
-                    </Td>
-                    <Td>{o.current.freightPayer === 'PROCESSOR' ? 'Processor pays' : 'You pay'}</Td>
-                    <Td>
-                      <When at={o.expiresAt} relative />
-                    </Td>
-                    <Td>
-                      <Link
-                        className="font-medium text-leaf underline"
-                        href={withFarmer(`/offers/${o.id}`, ctx)}
-                      >
-                        View
-                      </Link>
-                    </Td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          </div>
-        </>
-      )}
-    </QueryView>
+    <section aria-labelledby="offers" className="flex flex-col gap-3">
+      <h2 id="offers" className="text-lg font-semibold text-ink">
+        Offers
+      </h2>
+      <ul className="flex flex-col gap-3">
+        {offers.map((o) => {
+          const live = LIVE.includes(o.status);
+          return (
+            <li key={o.id}>
+              <Link
+                href={withFarmer(`/offers/${o.id}`, ctx)}
+                className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow-card)] transition-[border-color,box-shadow] hover:border-line-strong/40 hover:shadow-[var(--shadow-raised)] sm:flex-row sm:items-center"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="flex flex-wrap items-center gap-2">
+                    <span className="text-[15px] font-semibold text-ink">{o.processorName}</span>
+                    <StatusBadge kind="offer" status={o.status} />
+                  </p>
+                  <p className="mt-1 text-sm text-ink">
+                    <Price kobo={o.current.priceKoboPerKg} /> for {formatKg(o.current.quantityKg)} · <DateOnly date={o.current.plannedHarvestDate} />
+                  </p>
+                  <p className="mt-0.5 flex items-center gap-1.5 text-[13px] text-muted">
+                    <Truck className="size-3.5" aria-hidden /> {o.current.handoverArrangement ? HANDOVER_ARRANGEMENT_LABELS[o.current.handoverArrangement] : 'Transport arranged separately'}
+                  </p>
+                </div>
+                <div className="flex items-center justify-between gap-4 sm:block sm:text-right">
+                  <p className="text-lg font-semibold tabular text-ink">
+                    <Money kobo={o.current.estimatedProduceAmountKobo} />
+                  </p>
+                  <p className="text-[13px] text-muted">{live ? <>Answer before <When at={o.expiresAt} /></> : 'Estimated total'}</p>
+                </div>
+                {live ? <span className="inline-flex h-10 items-center justify-center rounded-lg bg-forest px-4 text-sm font-semibold text-white">Review offer</span> : null}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 
@@ -276,130 +218,116 @@ function HarvestDetail({ ctx }: { ctx: FarmerContext }) {
   const { id } = useParams<{ id: string }>();
   const params = useSearchParams();
   const q = useApi<HarvestDto>(['harvest', id], `/harvests/${id}`);
+  const offers = useApi<OfferDto[]>(['offers', 'harvest', id], `/harvests/${id}/offers`);
   const editable = farmerCan(ctx, 'harvest.edit');
   return (
     <QueryView query={q}>
-      {(h) => (
-        <div className="flex flex-col gap-6">
-          <PageHeader
-            eyebrow={
-              <Link href={withFarmer('/farmer/harvests', ctx)} className="underline">
-                Harvest requests
-              </Link>
-            }
-            title={
-              <span className="flex flex-wrap items-center gap-2">
-                {h.reference} <StatusBadge kind="harvest" status={h.status} /> {h.isDemo ? <DemoTag /> : null}
-              </span>
-            }
-            actions={
-              editable ? (
-                <>
-                  {h.status === 'DRAFT' ? (
-                    <ConfirmActionButton
-                      label="Publish to processors"
-                      path={`/harvests/${h.id}/publish`}
-                      body={{ expectedVersion: h.version }}
-                      invalidate={[['harvest', id], ['harvests']]}
-                      success="Published — processors can now see it"
-                    />
-                  ) : null}
+      {(h) => {
+        const firstOpen = (offers.data ?? []).find((o) => LIVE.includes(o.status));
+        const fullyBooked = h.allocation.state === 'FULL';
+        const datesPassed = h.nextStep.stage === 'Harvest dates have passed';
+        const action =
+          h.status === 'DRAFT' && editable ? (
+            <ConfirmActionButton
+              label="Find buyers"
+              size="lg"
+              path={`/harvests/${h.id}/publish`}
+              body={{ expectedVersion: h.version }}
+              invalidate={[['harvest', id], ['harvests'], ['matches', id]]}
+              success="Your harvest is listed. Buyers that fit are shown below."
+            />
+          ) : firstOpen ? (
+            <Button asChild size="lg">
+              <Link href={withFarmer(`/offers/${firstOpen.id}`, ctx)}>Review the offer</Link>
+            </Button>
+          ) : fullyBooked && h.bookings ? (
+            <Button asChild size="lg">
+              <Link href={withFarmer('/bookings', ctx)}>See your plan</Link>
+            </Button>
+          ) : datesPassed && editable ? (
+            <Button asChild size="lg">
+              <Link href={withFarmer(`/farmer/harvests/${h.id}/edit`, ctx)}>Change the dates</Link>
+            </Button>
+          ) : null;
+        return (
+          <div className="flex flex-col gap-6">
+            <PageHeader
+              eyebrow={
+                <Link href={withFarmer('/farmer/harvests', ctx)} className="underline">
+                  Your harvests
+                </Link>
+              }
+              title={
+                <span className="flex flex-wrap items-center gap-2">
+                  {formatKg(h.eligibleQuantityKg)} of cassava <StatusBadge kind="harvest" status={h.status} /> {h.isDemo ? <DemoTag /> : null}
+                </span>
+              }
+              description={
+                <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="inline-flex items-center gap-1">
+                    <MapPin className="size-4" aria-hidden /> {h.farmLocation.label}, {h.farmLocation.lga}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <CalendarDays className="size-4" aria-hidden /> Ready <DateOnly date={h.earliestHarvestDate} /> – <DateOnly date={h.latestHarvestDate} />
+                  </span>
+                  <span>{h.reference}</span>
+                </span>
+              }
+            />
+            {params.get('saved') ? (
+              <Alert tone="success" title="Saved">
+                {h.status === 'PUBLISHED' ? 'Your harvest is listed. Send a request to a buyer below.' : 'Saved. Choose “Find buyers” when you are ready.'}
+              </Alert>
+            ) : null}
+            <NextStepCard stage={h.nextStep.stage} forYou={h.nextStep.forFarmer} action={action}>
+              {h.allocation.state !== 'UNALLOCATED' ? (
+                <p className="text-sm text-muted">
+                  {formatKg(h.allocation.allocatedKg)} of {formatKg(h.allocation.eligibleKg)} booked · {formatKg(h.allocation.remainingKg)} still for sale
+                </p>
+              ) : null}
+            </NextStepCard>
+            <Offers h={h} ctx={ctx} />
+            <Buyers h={h} ctx={ctx} />
+            {editable && ['DRAFT', 'PUBLISHED', 'CLOSED'].includes(h.status) ? (
+              <details className="rounded-2xl border border-line bg-surface p-5">
+                <summary className="cursor-pointer text-sm font-medium text-ink">Change or stop this harvest</summary>
+                <div className="mt-4 flex flex-wrap gap-2">
                   {['DRAFT', 'PUBLISHED'].includes(h.status) ? (
                     <Button asChild variant="outline">
-                      <Link href={withFarmer(`/farmer/harvests/${h.id}/edit`, ctx)}>Edit</Link>
+                      <Link href={withFarmer(`/farmer/harvests/${h.id}/edit`, ctx)}>Change details or dates</Link>
                     </Button>
                   ) : null}
                   {h.status === 'PUBLISHED' ? (
                     <ReasonActionDialog
                       trigger="Stop taking offers"
-                      title="Close this request?"
-                      description="Open offers lapse. Agreed bookings are not affected."
-                      confirmLabel="Close request"
+                      title="Stop taking offers?"
+                      description="Open offers lapse. Agreed plans are not affected."
+                      confirmLabel="Stop taking offers"
                       path={`/harvests/${h.id}/close`}
                       body={{ expectedVersion: h.version }}
                       invalidate={[['harvest', id], ['harvests']]}
-                      success="Request closed"
+                      success="No new offers will come in"
                     />
                   ) : null}
-                  {['DRAFT', 'PUBLISHED'].includes(h.status) && h.bookings === 0 ? (
+                  {h.bookings === 0 ? (
                     <ReasonActionDialog
-                      trigger="Withdraw"
-                      title="Withdraw this request?"
+                      trigger="Remove this harvest"
+                      title="Remove this harvest?"
                       description="Use this if the cassava is no longer for sale."
-                      confirmLabel="Withdraw request"
+                      confirmLabel="Remove harvest"
                       path={`/harvests/${h.id}/withdraw`}
                       body={{ expectedVersion: h.version }}
                       invalidate={[['harvest', id], ['harvests']]}
-                      success="Request withdrawn"
+                      success="Harvest removed"
                     />
                   ) : null}
-                </>
-              ) : null
-            }
-          />
-          {params.get('published') ? (
-            <Alert tone="success" title="Published">
-              Matching processors are listed below. You will be notified when an offer arrives.
-            </Alert>
-          ) : null}
-          <Card>
-            <CardContent className="flex flex-col gap-4">
-              <DescriptionList
-                items={[
-                  [
-                    'Farm',
-                    <span key="f" className="inline-flex items-center gap-1">
-                      <MapPin className="size-4" aria-hidden /> {h.farmLocation.label},{' '}
-                      {h.farmLocation.community ? `${h.farmLocation.community}, ` : ''}
-                      {h.farmLocation.lga}
-                    </span>,
-                  ],
-                  ['Estimated harvest', <Kg key="e" kg={h.estimatedQuantityKg} tonnes />],
-                  ['For sale', <Kg key="s" kg={h.eligibleQuantityKg} tonnes />],
-                  [
-                    'Harvest window',
-                    <span key="w">
-                      <DateOnly date={h.earliestHarvestDate} /> – <DateOnly date={h.latestHarvestDate} />
-                    </span>,
-                  ],
-                  ['Minimum price', <Price key="p" kobo={h.minPriceKoboPerKg} />],
-                  [
-                    'Transport',
-                    h.transportPreference === 'PROCESSOR_PAYS' ? 'Processor pays' : 'Farmer may pay',
-                  ],
-                  ['Variety', h.variety ?? '—'],
-                  [
-                    'Created by',
-                    `${h.createdBy.displayName}${h.createdBy.viaCooperative ? ` (for ${h.farmerName}, via ${h.createdBy.viaCooperative})` : ''}`,
-                  ],
-                ]}
-              />
-              <AllocationBar allocated={h.allocation.allocatedKg} eligible={h.allocation.eligibleKg} />
-              {h.bookings ? (
-                <Link
-                  className="inline-flex items-center gap-1 text-sm font-medium text-leaf underline"
-                  href={withFarmer('/bookings', ctx)}
-                >
-                  <Info className="size-4" aria-hidden /> {h.bookings} booking{h.bookings > 1 ? 's' : ''} from
-                  this request
-                </Link>
-              ) : null}
-            </CardContent>
-          </Card>
-          <Tabs defaultValue={h.openOffers ? 'offers' : 'matches'}>
-            <TabsList>
-              <TabsTrigger value="matches">Matching processors</TabsTrigger>
-              <TabsTrigger value="offers">Offers ({h.openOffers} open)</TabsTrigger>
-            </TabsList>
-            <TabsContent value="matches">
-              <Matches harvest={h} ctx={ctx} />
-            </TabsContent>
-            <TabsContent value="offers">
-              <OffersCompare harvestId={h.id} ctx={ctx} />
-            </TabsContent>
-          </Tabs>
-        </div>
-      )}
+                </div>
+              </details>
+            ) : null}
+            {h.createdBy.viaCooperative ? <p className="text-xs text-muted">Added by {h.createdBy.displayName} for {h.farmerName}, via {h.createdBy.viaCooperative}.</p> : null}
+          </div>
+        );
+      }}
     </QueryView>
   );
 }

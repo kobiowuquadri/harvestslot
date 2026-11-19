@@ -8,7 +8,9 @@ import {
   gramsToKgString,
   kgToGrams,
   koboToNumber,
+  formatNaira,
   produceAmountKobo,
+  recordAcceptedWeightSchema,
   recordLossSchema,
   recordWeighingSchema,
   startProcessingSchema,
@@ -137,6 +139,101 @@ export class ReceivingService {
     this.access.requireProcessorRole(access, [...RECEIVING_ROLES], 'record receiving');
   }
 
+  /**
+   * The short sale journey's receiving step, from the booking: what arrived and what is accepted.
+   * For bookings with a handover arrangement no shipment record is needed. The produce invoice for the
+   * accepted weight is issued at once; a material difference still goes to the farmer, who can agree or
+   * report a problem — nothing is accepted on their behalf.
+   */
+  async recordAcceptedWeight(actor: Actor, bookingId: string, input: z.infer<typeof recordAcceptedWeightSchema>) {
+    const access = await this.access.booking(actor, bookingId);
+    this.requireReceiving(access);
+    const now = new Date();
+    const policies = await this.prisma.policies();
+    await withTransaction(this.prisma.db, async (tx) => {
+      await this.engine.lockGraph(tx, bookingId);
+      const b = await tx.booking.findUniqueOrThrow({ where: { id: bookingId }, include: { receivingRecord: true, harvestLot: true, reservation: true } });
+      if (b.version !== input.expectedVersion) throw new DomainError('VERSION_CONFLICT', 'The booking changed. Reload and try again.');
+      const { content } = await this.engine.currentTerms(tx, bookingId);
+      if (!content.handover) throw new DomainError('INVALID_STATE_TRANSITION', 'This booking uses a transporter; record receiving on the receiving workbench.');
+      if (b.receivingRecord) throw new DomainError('DUPLICATE', 'The weight for this booking has already been recorded.');
+      if (!['CONFIRMED', 'ACTIVE'].includes(b.status)) throw new DomainError('INVALID_STATE_TRANSITION', `The weight can be recorded once the plan is confirmed (this booking is ${b.status.toLowerCase().replace(/_/g, ' ')}).`);
+      if (b.status === 'CONFIRMED') {
+        // The handover has happened: the booking moves on to its active stage.
+        await tx.booking.update({ where: { id: bookingId }, data: { status: transition(BOOKING_MACHINE, b.status, 'startHarvest', 'booking'), activatedAt: now, version: { increment: 1 } } });
+      }
+      const receivedG = kgToGrams(input.receivedKg);
+      const acceptedG = kgToGrams(input.acceptedKg);
+      const rejectedG = receivedG - acceptedG;
+      const contractedG = toGrams(content.quantityKg);
+      const maxAccept = contractedG + toleranceGrams(contractedG, content.toleranceBps);
+      if (acceptedG > maxAccept) {
+        throw new DomainError('OVER_TOLERANCE', `Accepting ${formatKg(acceptedG)} is more than the agreed ${formatKg(contractedG)} plus tolerance (${formatKg(maxAccept)}). Agree the extra quantity with the farmer first, or record it as not accepted.`);
+      }
+      if (b.harvestLot) {
+        await tx.harvestLot.update({ where: { id: b.harvestLot.id }, data: { status: 'DELIVERED', harvestStartedAt: b.harvestLot.harvestStartedAt ?? now, version: { increment: 1 } } });
+      }
+      const record = await tx.receivingRecord.create({
+        data: {
+          bookingId,
+          facilityId: b.facilityId,
+          grossKg: gramsToKgString(receivedG),
+          tareKg: '0',
+          netKg: gramsToKgString(receivedG),
+          weighingMethod: input.weighingMethod,
+          note: input.note ?? null,
+          recordedByUserId: actor.userId,
+          recordedAt: now,
+        },
+      });
+      // Shortfall against the agreed quantity counts as a material difference just like rejected cassava.
+      const reasons = this.discrepancy(contractedG, content.toleranceBps, receivedG, acceptedG, rejectedG);
+      const lower = contractedG - toleranceGrams(contractedG, content.toleranceBps);
+      if (acceptedG < lower && !reasons.some((r) => r.startsWith('delivered'))) reasons.push(`accepted ${formatKg(acceptedG)} is below the agreed ${formatKg(contractedG)}`);
+      const material = reasons.length > 0;
+      const to = transition(RECEIVING_MACHINE, 'DRAFT', material ? 'submitWithDiscrepancy' : 'submitNoDiscrepancy', 'receiving record');
+      await tx.qualityAssessment.create({
+        data: {
+          receivingRecordId: record.id,
+          assessedByUserId: actor.userId,
+          acceptedKg: gramsToKgString(acceptedG),
+          rejectedKg: gramsToKgString(rejectedG),
+          rejectionReasons: input.rejectionReasons,
+          rejectionNote: input.note ?? null,
+          rejectedDisposition: rejectedG > 0n ? 'RETURNED_TO_FARMER' : 'NONE',
+          criteriaResults: {},
+        },
+      });
+      const reviewDeadline = material ? new Date(now.getTime() + policies.receivingReviewHours * 3_600_000) : null;
+      await tx.receivingRecord.update({
+        where: { id: record.id },
+        data: { status: to, decisionSubmittedAt: now, decisionSubmittedByUserId: actor.userId, reviewDeadline, finalisedAt: material ? null : now, version: { increment: 1 } },
+      });
+      if (b.reservation && b.reservation.status === 'CONFIRMED') {
+        await tx.reservation.update({ where: { id: b.reservation.id }, data: { status: 'CONSUMED', consumedAt: now, version: { increment: 1 } } });
+      }
+      await audit(tx, { actor, organisationId: b.processorOrgId, action: 'receiving.accepted-weight-recorded', entityType: 'booking', entityId: bookingId, data: { receivedKg: input.receivedKg, acceptedKg: input.acceptedKg, material } });
+      // Payment for the accepted weight is owed now; a disputed difference is settled separately.
+      await issueReceivingInvoices(tx, bookingId, gramsToKgString(acceptedG), now);
+      const amount = produceAmountKobo(acceptedG, BigInt(content.priceKoboPerKg));
+      if (material) {
+        await notify(tx, {
+          userIds: await bookingRecipients(tx, bookingId, { farmer: 'APPROVE_SALE' }, now),
+          type: 'receiving.review-needed',
+          category: 'receiving',
+          title: `${b.reference}: check the weight`,
+          body: `${content.processor.name} accepted ${formatKg(acceptedG)} of the agreed ${formatKg(contractedG)} (${reasons.join('; ')}). Final amount ${formatNaira(amount)}. Agree, or report a problem.`,
+          link: `/bookings/${bookingId}`,
+          bookingId,
+          dedupeKey: `receiving-review:${record.id}`,
+        });
+      } else {
+        await this.finalise(tx, bookingId, gramsToKgString(acceptedG), actor, now);
+      }
+    });
+    return this.get(actor, bookingId);
+  }
+
   async recordWeighing(actor: Actor, bookingId: string, input: z.infer<typeof recordWeighingSchema>) {
     const access = await this.access.booking(actor, bookingId);
     this.requireReceiving(access);
@@ -144,8 +241,11 @@ export class ReceivingService {
     await withTransaction(this.prisma.db, async (tx) => {
       await this.engine.lockGraph(tx, bookingId);
       const b = await tx.booking.findUniqueOrThrow({ where: { id: bookingId }, include: { shipments: { where: { status: { in: ['ARRIVED_AT_FACILITY', 'DELIVERED'] } } }, receivingRecord: true } });
-      if (b.status !== 'ACTIVE') throw new DomainError('INVALID_STATE_TRANSITION', 'Receiving is recorded for active bookings');
-      if (!b.shipments.length) throw new DomainError('INVALID_STATE_TRANSITION', 'The load has not arrived at the facility');
+      const { content } = await this.engine.currentTerms(tx, bookingId);
+      if (content.handover && b.status === 'CONFIRMED') {
+        await tx.booking.update({ where: { id: bookingId }, data: { status: transition(BOOKING_MACHINE, b.status, 'startHarvest', 'booking'), activatedAt: now, version: { increment: 1 } } });
+      } else if (b.status !== 'ACTIVE') throw new DomainError('INVALID_STATE_TRANSITION', 'Receiving is recorded for active bookings');
+      if (!content.handover && !b.shipments.length) throw new DomainError('INVALID_STATE_TRANSITION', 'The load has not arrived at the facility');
       const gross = kgToGrams(input.grossKg);
       const tare = kgToGrams(input.tareKg);
       if (gross < tare) throw new DomainError('VALIDATION_FAILED', 'Gross weight must be at least the tare');
@@ -212,8 +312,8 @@ export class ReceivingService {
       const r = await tx.receivingRecord.findUnique({ where: { bookingId }, include: { booking: { include: { shipments: true, pickupRecords: true, reservation: true } } } });
       if (!r) throw new DomainError('INVALID_STATE_TRANSITION', 'Record the weighing first');
       if (r.version !== input.expectedVersion) throw new DomainError('VERSION_CONFLICT', 'The receiving record changed. Reload and try again.');
-      if (!r.booking.shipments.some((s) => s.status === 'DELIVERED')) throw new DomainError('INVALID_STATE_TRANSITION', 'Confirm delivery receipt before recording the quality decision');
       const { content } = await this.engine.currentTerms(tx, bookingId);
+      if (!content.handover && !r.booking.shipments.some((s) => s.status === 'DELIVERED')) throw new DomainError('INVALID_STATE_TRANSITION', 'Confirm delivery receipt before recording the quality decision');
       const netG = toGrams(r.netKg);
       const acceptedG = kgToGrams(input.acceptedKg);
       const rejectedG = kgToGrams(input.rejectedKg);
@@ -293,7 +393,9 @@ export class ReceivingService {
   private async finalise(tx: Tx, bookingId: string, acceptedKg: string, actor: Actor, now: Date) {
     await issueReceivingInvoices(tx, bookingId, acceptedKg, now);
     const b = await tx.booking.findUniqueOrThrow({ where: { id: bookingId }, include: { receivingRecord: true, shipments: true } });
-    if (b.status === 'ACTIVE' && b.receivingRecord?.status === 'FINAL' && b.shipments.some((s) => s.status === 'DELIVERED')) {
+    const { content } = await this.engine.currentTerms(tx, bookingId);
+    // Handover bookings are complete when receiving is final; older ones also need the delivered shipment.
+    if (b.status === 'ACTIVE' && b.receivingRecord?.status === 'FINAL' && (content.handover || b.shipments.some((s) => s.status === 'DELIVERED'))) {
       await tx.booking.update({ where: { id: bookingId }, data: { status: transition(BOOKING_MACHINE, b.status, 'complete', 'booking'), completedAt: now, version: { increment: 1 } } });
       await audit(tx, { actor, action: 'booking.completed', entityType: 'booking', entityId: bookingId });
     }
@@ -302,7 +404,7 @@ export class ReceivingService {
       type: 'receiving.final',
       category: 'receiving',
       title: `${b.reference}: receiving decision final`,
-      body: `${formatKg(acceptedKg)} accepted. The produce invoice has been issued. Delivery is complete; payment is tracked separately.`,
+      body: `${formatKg(acceptedKg)} accepted. The produce invoice has been issued; payment is tracked separately.`,
       link: `/bookings/${bookingId}`,
       bookingId,
       dedupeKey: `receiving-final:${bookingId}`,
@@ -472,7 +574,11 @@ export class ReceivingService {
     return rows.map((b) => {
       const c = b.termsVersions.find((v) => v.versionNo === b.currentTermsVersionNo)!.content as unknown as BookingTermsContent;
       const shipment = b.shipments[0];
-      const delayed = !shipment || !['ARRIVED_AT_FACILITY', 'DELIVERED'].includes(shipment.status) ? new Date(c.deliveryWindow.end) < now : false;
+      const delayed = c.handover
+        ? !b.receivingRecord && new Date(c.handover.window.end) < now
+        : !shipment || !['ARRIVED_AT_FACILITY', 'DELIVERED'].includes(shipment.status)
+          ? new Date(c.deliveryWindow.end) < now
+          : false;
       return {
         bookingId: b.id,
         reference: b.reference,
@@ -482,7 +588,7 @@ export class ReceivingService {
         lineName: b.slot.line.name,
         deliveryWindow: c.deliveryWindow,
         ready: b.lastReadiness,
-        transportStatus: shipment?.status ?? (c.transport ? 'AGREED' : 'NOT_ARRANGED'),
+        transportStatus: c.handover?.arrangement ?? shipment?.status ?? (c.transport ? 'AGREED' : 'NOT_ARRANGED'),
         harvestStatus: b.harvestLot?.status ?? null,
         receivingStatus: b.receivingRecord?.status ?? null,
         delayed,

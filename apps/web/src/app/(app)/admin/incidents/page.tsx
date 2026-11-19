@@ -44,7 +44,7 @@ export default function AdminIncidents() {
             {d.incidents.length === 0 ? <EmptyState title="No open incidents" /> : null}
             <ul className="flex flex-col gap-2">
               {d.incidents.map((i) => (
-                <li key={i.id} className="rounded-xl border border-line bg-surface p-4 text-sm">
+                <li key={i.id} className="rounded-2xl border border-line bg-surface p-4 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
                     <Link className="font-mono font-semibold text-leaf underline" href={`/bookings/${i.bookingId}`}>
                       {i.bookingReference}

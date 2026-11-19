@@ -17,9 +17,9 @@ function Jobs({ orgId }: { orgId: string }) {
           <ul className="flex flex-col gap-3">
             {jobs.map((j) => (
               <li key={j.shipmentId}>
-                <Link href={`/transport/jobs/${j.shipmentId}`} className="block rounded-xl border border-line bg-surface p-4 hover:border-leaf">
+                <Link href={`/transport/jobs/${j.shipmentId}`} className="block rounded-2xl border border-line bg-surface p-4 transition-[border-color,box-shadow] hover:border-line-strong/40 hover:shadow-[var(--shadow-raised)]">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-sm font-semibold text-forest">{j.bookingReference}</span>
+                    <span className="font-mono text-sm font-semibold text-ink">{j.bookingReference}</span>
                     <StatusBadge kind="shipment" status={j.status} />
                   </div>
                   <p className="mt-2 text-base font-medium">
