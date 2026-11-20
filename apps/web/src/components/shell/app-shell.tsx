@@ -28,14 +28,6 @@ function initials(name: string): string {
     .join('');
 }
 
-function WorkspaceAvatar({ label }: { label: string }) {
-  return (
-    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-leaf-50 font-display text-xs font-semibold text-ink ring-1 ring-inset ring-leaf-100" aria-hidden>
-      {initials(label) || '•'}
-    </span>
-  );
-}
-
 function isActive(pathname: string, href: string) {
   return href === '/app' || href === '/admin' ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -47,7 +39,6 @@ function WorkspaceSwitcher() {
   if (workspaces.length < 2) {
     return (
       <span className="hidden min-w-0 items-center gap-2 text-sm sm:inline-flex">
-        <WorkspaceAvatar label={workspace.label} />
         <span className="min-w-0 truncate font-medium text-ink">{workspace.label}</span>
         <span className="rounded-full bg-canvas px-2 py-0.5 text-[11px] font-medium text-muted ring-1 ring-inset ring-line">{KIND_LABEL[workspace.kind]}</span>
       </span>
@@ -55,8 +46,7 @@ function WorkspaceSwitcher() {
   }
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex min-w-0 items-center gap-2 rounded-2xl border border-line bg-surface py-1.5 pl-1.5 pr-2.5 text-sm shadow-[0_1px_2px_rgb(16_24_40/0.05)] transition-colors hover:bg-canvas" aria-label="Switch workspace">
-        <WorkspaceAvatar label={workspace.label} />
+      <DropdownMenuTrigger className="flex min-w-0 items-center gap-2 rounded-2xl border border-line bg-surface py-1.5 pl-3 pr-2.5 text-sm shadow-[0_1px_2px_rgb(16_24_40/0.05)] transition-colors hover:bg-canvas" aria-label="Switch workspace">
         <span className="min-w-0 truncate text-left">
           <span className="block truncate font-medium leading-tight text-ink">{workspace.label}</span>
           <span className="block text-[11px] leading-tight text-muted">{KIND_LABEL[workspace.kind]}</span>
