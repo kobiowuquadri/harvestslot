@@ -49,13 +49,22 @@ export const envSchema = z
     SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 characters'),
     DATA_ENCRYPTION_KEY: z
       .string()
-      .regex(/^[A-Za-z0-9+/=]{43,44}$/, 'DATA_ENCRYPTION_KEY must be 32 bytes, base64 encoded'),
+      // 32 bytes in standard or URL-safe base64 (hosts such as Render generate either).
+      .regex(/^[A-Za-z0-9+/_-]{43}=?$/, 'DATA_ENCRYPTION_KEY must be 32 bytes, base64 encoded'),
     SESSION_IDLE_TIMEOUT_MINUTES: int(720, 5, 60 * 24 * 7),
     SESSION_ABSOLUTE_TIMEOUT_DAYS: int(14, 1, 90),
     COOKIE_SECURE: bool(false),
     ADMIN_REQUIRE_MFA: bool(true),
 
-    STORAGE_DRIVER: z.enum(['s3', 'filesystem']).default('s3'),
+    /** cloudinary (default) or s3 (any S3-compatible service) for production; filesystem for development only. */
+    STORAGE_DRIVER: z.enum(['cloudinary', 's3', 'filesystem']).default('cloudinary'),
+    /** cloudinary://<api_key>:<api_secret>@<cloud_name>, as shown in the Cloudinary console; or set the three values below. */
+    CLOUDINARY_URL: optionalString,
+    CLOUDINARY_CLOUD_NAME: optionalString,
+    CLOUDINARY_API_KEY: optionalString,
+    CLOUDINARY_API_SECRET: optionalString,
+    /** Folder (public ID prefix) for HarvestSlot files in the Cloudinary account. */
+    CLOUDINARY_FOLDER: z.string().default('harvestslot'),
     S3_ENDPOINT: optionalString,
     S3_REGION: z.string().default('us-east-1'),
     S3_BUCKET: z.string().default('harvestslot-private'),
@@ -121,6 +130,9 @@ export const envSchema = z
     const issue = (path: string, message: string) => ctx.addIssue({ code: 'custom', path: [path], message });
     const isProd = env.NODE_ENV === 'production' || env.APP_ENV === 'production';
 
+    if (env.STORAGE_DRIVER === 'cloudinary' && !cloudinaryCredentials(env)) {
+      issue('CLOUDINARY_URL', 'Cloudinary storage requires CLOUDINARY_URL, or CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET');
+    }
     if (env.STORAGE_DRIVER === 's3' && (!env.S3_ACCESS_KEY_ID || !env.S3_SECRET_ACCESS_KEY)) {
       issue('S3_ACCESS_KEY_ID', 'S3 storage requires S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY');
     }
@@ -163,7 +175,7 @@ export const envSchema = z
     if (!env.ADMIN_REQUIRE_MFA) issue('ADMIN_REQUIRE_MFA', 'Production requires ADMIN_REQUIRE_MFA=true');
     if (env.DEMO_MODE) issue('DEMO_MODE', 'Demo mode (demo logins, role switching) is not allowed in production');
     if (env.DEV_TOOLS_ENABLED) issue('DEV_TOOLS_ENABLED', 'Development mail/OTP tools are not allowed in production');
-    if (env.STORAGE_DRIVER !== 's3') issue('STORAGE_DRIVER', 'Production requires S3-compatible object storage');
+    if (env.STORAGE_DRIVER === 'filesystem') issue('STORAGE_DRIVER', 'Production requires Cloudinary or S3-compatible object storage');
     if (env.MAIL_TRANSPORT !== 'smtp') issue('MAIL_TRANSPORT', 'Production requires a real SMTP transport');
     if (env.MAIL_LOCAL_CAPTURE) issue('MAIL_LOCAL_CAPTURE', 'MAIL_LOCAL_CAPTURE must be false in production');
     if (env.PAYMENT_PROVIDER === 'simulated') issue('PAYMENT_PROVIDER', 'The payment simulator cannot run in production');
@@ -171,6 +183,24 @@ export const envSchema = z
   });
 
 export type Env = z.infer<typeof envSchema>;
+
+export interface CloudinaryCredentials {
+  cloudName: string;
+  apiKey: string;
+  apiSecret: string;
+}
+
+/** Cloudinary credentials from CLOUDINARY_URL or the three separate values; null when incomplete. */
+export function cloudinaryCredentials(env: Pick<Env, 'CLOUDINARY_URL' | 'CLOUDINARY_CLOUD_NAME' | 'CLOUDINARY_API_KEY' | 'CLOUDINARY_API_SECRET'>): CloudinaryCredentials | null {
+  if (env.CLOUDINARY_URL) {
+    const m = /^cloudinary:\/\/([^:@\s]+):([^@\s]+)@([^/?\s]+)\/?$/.exec(env.CLOUDINARY_URL);
+    return m ? { apiKey: decodeURIComponent(m[1]!), apiSecret: decodeURIComponent(m[2]!), cloudName: m[3]! } : null;
+  }
+  if (env.CLOUDINARY_CLOUD_NAME && env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET) {
+    return { cloudName: env.CLOUDINARY_CLOUD_NAME, apiKey: env.CLOUDINARY_API_KEY, apiSecret: env.CLOUDINARY_API_SECRET };
+  }
+  return null;
+}
 
 export function isProduction(env: Pick<Env, 'NODE_ENV' | 'APP_ENV'>): boolean {
   return env.NODE_ENV === 'production' || env.APP_ENV === 'production';

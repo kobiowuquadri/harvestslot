@@ -55,6 +55,12 @@ function guard() {
     console.error(`Refusing to seed demo data with NODE_ENV=${env.NODE_ENV} APP_ENV=${env.APP_ENV}. Demo data is for local/demo environments only.`);
     process.exit(1);
   }
+  // A local .env may point at a hosted (live) database; only a deliberate demo environment may seed one.
+  const host = new URL(env.DATABASE_URL).hostname;
+  if (!['localhost', '127.0.0.1', '::1', '[::1]', 'postgres', 'db'].includes(host) && env.APP_ENV !== 'demo') {
+    console.error(`Refusing to seed demo data into the database at ${host}: it is not a local database. Use a local DATABASE_URL, or APP_ENV=demo for a dedicated demo database.`);
+    process.exit(1);
+  }
 }
 
 interface People {

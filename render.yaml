@@ -1,0 +1,101 @@
+# Render Blueprint for the HarvestSlot backend: the API (web service) and the worker (background jobs:
+# email delivery, hold expiry, reminders). The web app is deployed separately and proxies /api/* to
+# the API (set API_INTERNAL_URL to the API's Render URL when building it).
+#
+# Values marked `sync: false` are entered in the Render dashboard; they never belong in this file.
+# Database migrations run before the API starts; they are safe to repeat.
+
+envVarGroups:
+  - name: harvestslot-shared
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 24.16.0
+      - key: COREPACK_ENABLE_DOWNLOAD_PROMPT
+        value: "0"
+      - key: QUEUE_BACKEND
+        value: postgres
+      - key: TRUST_PROXY
+        value: "true"
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: ADMIN_REQUIRE_MFA
+        value: "true"
+      - key: STORAGE_DRIVER
+        value: cloudinary
+      - key: CLOUDINARY_FOLDER
+        value: harvestslot
+      - key: MAIL_TRANSPORT
+        value: smtp
+      - key: SMTP_HOST
+        value: smtp-relay.brevo.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_SECURE
+        value: "false"
+      - key: MAIL_LOCAL_CAPTURE
+        value: "false"
+      - key: PAYMENT_PROVIDER
+        value: none
+      - key: DEMO_MODE
+        value: "false"
+      - key: DEV_TOOLS_ENABLED
+        value: "false"
+      # Generated once by Render (256-bit, base64) and shared by the API and the worker.
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DATA_ENCRYPTION_KEY
+        generateValue: true
+
+services:
+  - type: web
+    name: harvestslot-api
+    runtime: node
+    plan: free
+    buildCommand: corepack enable && NODE_ENV=development pnpm install --frozen-lockfile && pnpm build:packages && pnpm --filter @harvestslot/api build
+    startCommand: pnpm db:migrate && node apps/api/dist/main.js
+    healthCheckPath: /api/v1/health/live
+    envVars:
+      - fromGroup: harvestslot-shared
+      - key: DATABASE_URL
+        sync: false
+      - key: PUBLIC_BASE_URL # the web app's https address
+        sync: false
+      - key: ALLOWED_ORIGINS # same as PUBLIC_BASE_URL
+        sync: false
+      - key: CLOUDINARY_URL
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: MAIL_FROM # e.g. HarvestSlot <no-reply@your-domain> (a verified Brevo sender)
+        sync: false
+
+  # Background workers are a paid Render instance type. Without the worker the API still works, but
+  # emails are not delivered and scheduled clean-ups only happen when records are read.
+  - type: worker
+    name: harvestslot-worker
+    runtime: node
+    plan: starter
+    buildCommand: corepack enable && NODE_ENV=development pnpm install --frozen-lockfile && pnpm build:packages && pnpm --filter @harvestslot/worker build
+    startCommand: node apps/worker/dist/migrate-queue.js && node apps/worker/dist/main.js
+    envVars:
+      - fromGroup: harvestslot-shared
+      - key: DATABASE_URL
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: CLOUDINARY_URL
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: MAIL_FROM
+        sync: false

@@ -34,7 +34,9 @@ export class ConfigError extends Error {
 }
 
 export function parseEnv(source: Record<string, string | undefined>): Env {
-  const result = envSchema.safeParse(source);
+  // Hosts such as Render tell the service which port to listen on through PORT.
+  const input = !source.API_PORT && source.PORT ? { ...source, API_PORT: source.PORT } : source;
+  const result = envSchema.safeParse(input);
   if (!result.success) {
     throw new ConfigError(result.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`));
   }

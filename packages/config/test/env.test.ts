@@ -65,3 +65,27 @@ describe('production configuration safety', () => {
     expect(devToolsAllowed({ NODE_ENV: 'development', APP_ENV: 'demo', DEV_TOOLS_ENABLED: true })).toBe(false);
   });
 });
+
+describe('Cloudinary storage and hosted ports', () => {
+  const cloudinary = { STORAGE_DRIVER: 'cloudinary', S3_ACCESS_KEY_ID: '', S3_SECRET_ACCESS_KEY: '' };
+  it('accepts Cloudinary in production with CLOUDINARY_URL', () => {
+    expect(problems({ ...cloudinary, CLOUDINARY_URL: 'cloudinary://123:abc@demo-cloud' })).toEqual([]);
+  });
+  it('refuses Cloudinary without credentials', () => {
+    expect(problems(cloudinary).join(' ')).toContain('CLOUDINARY_URL');
+  });
+  it('listens on PORT when API_PORT is not set (Render and similar hosts)', () => {
+    const env = parseEnv({ ...productionBase, PORT: '10000' });
+    expect(env.API_PORT).toBe(10000);
+    expect(parseEnv({ ...productionBase, PORT: '10000', API_PORT: '4000' }).API_PORT).toBe(4000);
+  });
+});
+
+describe('generated secrets', () => {
+  it('accepts a 32-byte encryption key in standard or URL-safe base64', () => {
+    const key = Buffer.alloc(32, 251);
+    expect(problems({ DATA_ENCRYPTION_KEY: key.toString('base64') })).toEqual([]);
+    expect(problems({ DATA_ENCRYPTION_KEY: key.toString('base64url') })).toEqual([]);
+    expect(problems({ DATA_ENCRYPTION_KEY: Buffer.alloc(16, 1).toString('base64') }).join(' ')).toContain('DATA_ENCRYPTION_KEY');
+  });
+});
