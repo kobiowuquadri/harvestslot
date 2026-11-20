@@ -83,9 +83,9 @@ The walkthrough is in [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
 |---|---|---|
 | PostgreSQL | **Working** | All state, locks, constraints and the outbox; exercised by integration, browser and load tests |
 | Background jobs (BullMQ) | **Working** on the PostgreSQL backend | Redis backend implemented and used by the Docker/production configuration; not run on the build machine |
-| Email | **Simulated in development** (captured locally, never sent) | SMTP transport implemented and configured for **Brevo** (`smtp-relay.brevo.com:587`). Real delivery **awaits the Brevo SMTP login and key** |
+| Email | **Brevo API** (`MAIL_TRANSPORT=brevo`); captured locally in development by default | Adapter tested against a stubbed Brevo API; real delivery not yet confirmed from this machine. SMTP remains available as an alternative |
 | SMS (Termii) | **Awaiting credentials** | Adapter implemented; without it SMS is recorded as unavailable and phone recovery/claim are disabled (dev capture can stand in locally) |
-| Payments (Paystack, service-fee invoices only) | **Awaiting credentials** | Initialise/verify/webhook adapter implemented; development uses a clearly labelled **simulator** that exercises the same webhook verification and reconciliation code. Produce and freight payments are always reported by the payer and confirmed by the recipient |
+| Payments (Paystack, service-fee invoices only) | **Awaiting credentials** | Initialise/verify/webhook adapter implemented and selected for local and Render use (`PAYMENT_PROVIDER=paystack`); the labelled **simulator** is kept only for automated tests. Produce payments are always reported by the buyer and confirmed by the farmer |
 | File storage (Cloudinary) | **Awaiting credentials** | Cloudinary driver (private raw files, signed downloads through the API) is the default; an S3 driver remains available. Development can use the local filesystem driver (refused in production) |
 | Malware scanning (ClamAV) | **Awaiting deployment** | Files are labelled *Not scanned* until configured |
 | Maps / road routing | **Not implemented** | No map screen to configure: distances are straight-line with a labelled road-distance factor, and exact pickup points open in OpenStreetMap |

@@ -87,7 +87,7 @@ export class SystemController {
           'email',
           'Email',
           this.messaging.mail.mode === 'dev-capture' ? 'simulated' : 'configured',
-          this.messaging.mail.mode === 'dev-capture' ? 'Captured locally for development; nothing is delivered.' : this.messaging.mail.localOnly ? 'SMTP to a local capture tool (Mailpit).' : 'SMTP delivery.',
+          this.messaging.mail.mode === 'dev-capture' ? 'Captured locally for development; nothing is delivered.' : this.messaging.mail.mode === 'brevo' ? 'Brevo transactional email API.' : this.messaging.mail.localOnly ? 'SMTP to a local capture tool (Mailpit).' : 'SMTP delivery.',
         ),
         cap(
           'sms',

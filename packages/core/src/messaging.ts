@@ -14,7 +14,7 @@ export interface MailMessage {
 }
 
 export interface MailTransport {
-  readonly mode: 'smtp' | 'dev-capture';
+  readonly mode: 'brevo' | 'smtp' | 'dev-capture';
   /** True when messages never leave this machine (Mailpit or the dev mailbox). */
   readonly localOnly: boolean;
   send(msg: MailMessage): Promise<{ messageId: string }>;
@@ -93,6 +93,28 @@ class SmtpMail implements MailTransport {
   }
 }
 
+/** Brevo transactional email API (POST /v3/smtp/email), authenticated with an API key. */
+export class BrevoMail implements MailTransport {
+  readonly mode = 'brevo' as const;
+  readonly localOnly = false;
+  constructor(
+    private readonly apiKey: string,
+    private readonly sender: { email: string; name: string },
+    private readonly fetchImpl: typeof fetch = fetch,
+  ) {}
+  async send(msg: MailMessage) {
+    const res = await this.fetchImpl('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: { 'api-key': this.apiKey, accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify({ sender: this.sender, to: [{ email: msg.to }], subject: msg.subject, textContent: msg.text }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const body = (await res.json().catch(() => ({}))) as { messageId?: string; message?: string };
+    if (!res.ok || !body.messageId) throw new Error(`Brevo rejected the email (${res.status}): ${body.message ?? res.statusText}`);
+    return { messageId: body.messageId };
+  }
+}
+
 /** Termii SMS adapter (POST /api/sms/send). Exercised only when credentials are configured. */
 export class TermiiSms implements SmsTransport {
   readonly mode = 'termii' as const;
@@ -132,7 +154,11 @@ export interface Messaging {
 
 export function createMessaging(env: Env): Messaging {
   const mail: MailTransport =
-    env.MAIL_TRANSPORT === 'dev-capture' && env.NODE_ENV !== 'production' ? new DevCaptureMail() : new SmtpMail(env, env.MAIL_LOCAL_CAPTURE);
+    env.MAIL_TRANSPORT === 'dev-capture' && env.NODE_ENV !== 'production'
+      ? new DevCaptureMail()
+      : env.MAIL_TRANSPORT === 'brevo' && env.BREVO_API_KEY && env.BREVO_SENDER_EMAIL
+        ? new BrevoMail(env.BREVO_API_KEY, { email: env.BREVO_SENDER_EMAIL, name: env.BREVO_SENDER_NAME })
+        : new SmtpMail(env, env.MAIL_LOCAL_CAPTURE);
   let sms: SmsTransport | null = null;
   if (env.SMS_PROVIDER === 'termii' && env.TERMII_API_KEY && env.TERMII_SENDER_ID) {
     sms = new TermiiSms(env.TERMII_BASE_URL, env.TERMII_API_KEY, env.TERMII_SENDER_ID);

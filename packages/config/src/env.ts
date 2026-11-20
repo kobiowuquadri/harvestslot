@@ -76,7 +76,12 @@ export const envSchema = z
     CLAMAV_HOST: optionalString,
     CLAMAV_PORT: int(3310, 1, 65535),
 
-    MAIL_TRANSPORT: z.enum(['smtp', 'dev-capture']).default('smtp'),
+    /** brevo (Brevo transactional email API), smtp, or dev-capture (stored locally, development only). */
+    MAIL_TRANSPORT: z.enum(['brevo', 'smtp', 'dev-capture']).default('smtp'),
+    BREVO_API_KEY: optionalString,
+    /** Sender address verified in Brevo (Senders, domains & dedicated IPs). */
+    BREVO_SENDER_EMAIL: optionalString,
+    BREVO_SENDER_NAME: z.string().default('HarvestSlot'),
     SMTP_HOST: z.string().default('localhost'),
     SMTP_PORT: int(1025, 1, 65535),
     SMTP_SECURE: bool(false),
@@ -136,6 +141,9 @@ export const envSchema = z
     if (env.STORAGE_DRIVER === 's3' && (!env.S3_ACCESS_KEY_ID || !env.S3_SECRET_ACCESS_KEY)) {
       issue('S3_ACCESS_KEY_ID', 'S3 storage requires S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY');
     }
+    if (env.MAIL_TRANSPORT === 'brevo' && (!env.BREVO_API_KEY || !env.BREVO_SENDER_EMAIL)) {
+      issue('BREVO_API_KEY', 'MAIL_TRANSPORT=brevo requires BREVO_API_KEY and BREVO_SENDER_EMAIL');
+    }
     if (env.SMS_PROVIDER === 'termii' && (!env.TERMII_API_KEY || !env.TERMII_SENDER_ID)) {
       issue('TERMII_API_KEY', 'SMS_PROVIDER=termii requires TERMII_API_KEY and TERMII_SENDER_ID');
     }
@@ -176,7 +184,7 @@ export const envSchema = z
     if (env.DEMO_MODE) issue('DEMO_MODE', 'Demo mode (demo logins, role switching) is not allowed in production');
     if (env.DEV_TOOLS_ENABLED) issue('DEV_TOOLS_ENABLED', 'Development mail/OTP tools are not allowed in production');
     if (env.STORAGE_DRIVER === 'filesystem') issue('STORAGE_DRIVER', 'Production requires Cloudinary or S3-compatible object storage');
-    if (env.MAIL_TRANSPORT !== 'smtp') issue('MAIL_TRANSPORT', 'Production requires a real SMTP transport');
+    if (env.MAIL_TRANSPORT === 'dev-capture') issue('MAIL_TRANSPORT', 'Production requires real email delivery (brevo or smtp)');
     if (env.MAIL_LOCAL_CAPTURE) issue('MAIL_LOCAL_CAPTURE', 'MAIL_LOCAL_CAPTURE must be false in production');
     if (env.PAYMENT_PROVIDER === 'simulated') issue('PAYMENT_PROVIDER', 'The payment simulator cannot run in production');
     if (env.ALLOWED_ORIGINS.some((o) => o.includes('localhost'))) issue('ALLOWED_ORIGINS', 'localhost origins are not allowed in production');

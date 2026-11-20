@@ -29,17 +29,13 @@ envVarGroups:
       - key: CLOUDINARY_FOLDER
         value: harvestslot
       - key: MAIL_TRANSPORT
-        value: smtp
-      - key: SMTP_HOST
-        value: smtp-relay.brevo.com
-      - key: SMTP_PORT
-        value: "587"
-      - key: SMTP_SECURE
-        value: "false"
-      - key: MAIL_LOCAL_CAPTURE
-        value: "false"
+        value: brevo
+      - key: BREVO_SENDER_NAME
+        value: HarvestSlot
       - key: PAYMENT_PROVIDER
-        value: none
+        value: paystack
+      - key: PAYSTACK_MODE # test with an sk_test_ key; switch to live with an sk_live_ key
+        value: test
       - key: DEMO_MODE
         value: "false"
       - key: DEV_TOOLS_ENABLED
@@ -68,11 +64,11 @@ services:
         sync: false
       - key: CLOUDINARY_URL
         sync: false
-      - key: SMTP_USER
+      - key: BREVO_API_KEY
         sync: false
-      - key: SMTP_PASSWORD
+      - key: BREVO_SENDER_EMAIL # a sender verified in Brevo
         sync: false
-      - key: MAIL_FROM # e.g. HarvestSlot <no-reply@your-domain> (a verified Brevo sender)
+      - key: PAYSTACK_SECRET_KEY
         sync: false
 
   # Background workers are a paid Render instance type. Without the worker the API still works, but
@@ -93,9 +89,9 @@ services:
         sync: false
       - key: CLOUDINARY_URL
         sync: false
-      - key: SMTP_USER
+      - key: BREVO_API_KEY
         sync: false
-      - key: SMTP_PASSWORD
+      - key: BREVO_SENDER_EMAIL # a sender verified in Brevo
         sync: false
-      - key: MAIL_FROM
+      - key: PAYSTACK_SECRET_KEY
         sync: false
