@@ -15,6 +15,7 @@ import {
 import {
   applyVerifiedPayment,
   assertCanReportPayment,
+  checkoutEmail,
   audit,
   DomainError,
   enqueueOutbox,
@@ -368,7 +369,7 @@ export class FinanceService {
     // The provider is called only after the transaction has committed (no locks held).
     try {
       const { checkoutUrl } = await this.provider.initialize({
-        email: user.email ?? `${user.id}@no-email.harvestslot.example`,
+        email: checkoutEmail(user),
         amountKobo: attempt.amountKobo,
         reference,
         callbackUrl: `${this.env.PUBLIC_BASE_URL}/payments/return?reference=${encodeURIComponent(reference)}`,

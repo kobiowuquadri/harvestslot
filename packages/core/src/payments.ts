@@ -422,3 +422,16 @@ async function applyProviderRefund(prisma: PrismaClient, transactionReference: s
     return 'applied';
   });
 }
+
+const RESERVED_TLDS = new Set(['example', 'test', 'invalid', 'localhost']);
+
+/**
+ * The email Paystack receives for a checkout. Real users keep their own address. Demo accounts use
+ * reserved `.example` addresses and phone-only users have none, which Paystack rejects; they get a
+ * well-formed placeholder on example.com, a domain reserved for documentation that never receives mail.
+ */
+export function checkoutEmail(user: { id: string; email: string | null }): string {
+  const tld = user.email?.split('@')[1]?.split('.').pop()?.toLowerCase();
+  if (user.email && tld && !RESERVED_TLDS.has(tld)) return user.email;
+  return `payer-${user.id.replace(/-/g, '').slice(-12)}@example.com`;
+}
