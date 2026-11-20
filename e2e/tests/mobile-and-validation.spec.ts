@@ -55,7 +55,7 @@ test('registration asks what you want to do first, then shows field errors inste
   await expect(page.getByText('You must accept the terms to continue')).toBeVisible();
   await page.getByRole('textbox', { name: 'Password', exact: true }).fill('password');
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByText('Use at least 10 characters')).toBeVisible();
+  await expect(page.getByText('Use at least 8 characters')).toBeVisible();
   await expect(page).toHaveURL(/\/register/);
 });
 

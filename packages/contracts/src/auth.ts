@@ -24,7 +24,7 @@ const COMMON_PASSWORDS = new Set([
 
 export const password = z
   .string()
-  .min(10, 'Use at least 10 characters')
+  .min(8, 'Use at least 8 characters')
   .max(128, 'Use at most 128 characters')
   .refine((v) => !COMMON_PASSWORDS.has(v.toLowerCase()), 'This password is too common')
   .refine((v) => new Set(v).size >= 4, 'Use a less repetitive password');

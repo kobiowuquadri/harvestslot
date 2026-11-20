@@ -130,7 +130,7 @@ function RegisterForm() {
         <Field label="Phone number (optional)" hint="Like 08012345678. Used for SMS updates only if you agree below and verify it." error={err('phone')}>
           <Input type="tel" autoComplete="tel" inputMode="tel" {...register('phone', { setValueAs: (v: string) => (v === '' ? undefined : v) })} />
         </Field>
-        <Field label="Password" hint="At least 10 characters." error={err('password')} required>
+        <Field label="Password" hint="At least 8 characters." error={err('password')} required>
           <Input type="password" autoComplete="new-password" {...register('password')} />
         </Field>
         <fieldset className="flex flex-col gap-1 rounded-xl border border-line bg-canvas/60 p-4">

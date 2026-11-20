@@ -40,7 +40,7 @@ function ChangePassword() {
           <Field label="Current password">
             <Input type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
           </Field>
-          <Field label="New password" hint="At least 10 characters." error={change.error?.fieldErrors.newPassword}>
+          <Field label="New password" hint="At least 8 characters." error={change.error?.fieldErrors.newPassword}>
             <Input type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} />
           </Field>
           <Button type="submit" loading={change.isPending} className="self-start" disabled={!current || !next}>

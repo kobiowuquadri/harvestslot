@@ -80,7 +80,7 @@ export function ResetPassword() {
         <form onSubmit={s.run} className="flex flex-col gap-4">
           {!token ? <Alert tone="danger">This link is incomplete. Open the link from your email again.</Alert> : null}
           {s.error ? <Alert tone="danger">{s.error}</Alert> : null}
-          <Field label="New password" hint="At least 10 characters.">
+          <Field label="New password" hint="At least 8 characters.">
             <Input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </Field>
           <Button type="submit" loading={s.busy} disabled={!token}>Set password</Button>
@@ -198,7 +198,7 @@ export function ClaimAccount() {
           <Field label="Email (optional)">
             <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </Field>
-          <Field label="Create a password" hint="At least 10 characters.">
+          <Field label="Create a password" hint="At least 8 characters.">
             <Input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </Field>
           <label className="flex items-start gap-2 text-sm">

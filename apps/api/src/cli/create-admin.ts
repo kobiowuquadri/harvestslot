@@ -19,7 +19,7 @@ import { createCliContext } from './context.js';
 async function readPassword(): Promise<string> {
   if (process.env.HS_ADMIN_PASSWORD) return process.env.HS_ADMIN_PASSWORD;
   const rl = createInterface({ input: process.stdin, terminal: false });
-  process.stderr.write('Password (min 10 characters), then Enter: ');
+  process.stderr.write('Password (min 8 characters), then Enter: ');
   for await (const line of rl) {
     rl.close();
     return line.trim();

@@ -4,7 +4,7 @@ HarvestSlot records commercial agreements, farm locations, phone numbers, weight
 
 ## Accounts and sessions
 
-* **Passwords**: Argon2id (`@node-rs/argon2`, 19 MiB, t=2), minimum 10 characters, common/repetitive passwords refused. Unknown accounts take the same time to reject (a dummy hash is verified).
+* **Passwords**: Argon2id (`@node-rs/argon2`, 19 MiB, t=2), minimum 8 characters, common/repetitive passwords refused. Unknown accounts take the same time to reject (a dummy hash is verified).
 * **Lockout**: after 5 failed attempts, sign-in is locked with exponential back-off (15 min doubling, max 24 h), plus per-IP and per-identifier rate limits.
 * **Sessions**: 256-bit opaque tokens; only a SHA-256 hash is stored. HttpOnly, `SameSite=Lax`, `Secure` in production cookies. Idle timeout 12 h and absolute timeout 14 days by default; users can list and revoke sessions; password change/reset revokes other sessions.
 * **Two-factor authentication**: TOTP (RFC 6238, verified against the RFC test vectors) with single-use recovery codes; secrets encrypted at rest with AES-256-GCM (`DATA_ENCRYPTION_KEY`). **Required for administrators in production** (`ADMIN_REQUIRE_MFA=true` is enforced by startup validation).
