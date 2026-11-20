@@ -31,7 +31,8 @@ export async function withTransaction<T>(
       const result = await prisma.$transaction((tx) => fn(tx, ctx), {
         isolationLevel: options.isolationLevel ?? Prisma.TransactionIsolationLevel.ReadCommitted,
         maxWait: 10_000,
-        timeout: options.timeoutMs ?? 20_000,
+        // HS_TX_TIMEOUT_MS lets one-off jobs over a slow network (e.g. seeding a hosted demo database) wait longer.
+        timeout: options.timeoutMs ?? (Number(process.env.HS_TX_TIMEOUT_MS) || 20_000),
       });
       for (const hook of hooks) {
         try {
