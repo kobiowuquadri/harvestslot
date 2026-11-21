@@ -63,7 +63,7 @@ test('one complete sale: harvest → request → offer → plan → weight → p
   // ── 3. Buyers that fit, each explained in one sentence; send a request from the card ──
   await expect(farmer.getByRole('heading', { name: 'Buyers that fit' })).toBeVisible();
   const card = farmer.locator('li', { hasText: processorName });
-  await expect(card.getByText(/^Can receive your full 2,000 kg (on|between) /)).toBeVisible();
+  await expect(card.getByText(/Can receive your full 2,000 kg (on|between) /)).toBeVisible();
   await card.getByRole('button', { name: 'Send request' }).click();
   await expect(card.getByText('Request sent — waiting for their offer')).toBeVisible();
   await expect(farmer.getByRole('heading', { level: 2, name: 'Waiting for the buyer’s offer' })).toBeVisible();

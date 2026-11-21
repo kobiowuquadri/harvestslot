@@ -1,0 +1,60 @@
+1
+00:00:00,350 --> 00:00:06,770
+With HarvestSlot, a cassava farmer can agree on a buyer, a price and a pickup date before harvesting.
+
+2
+00:00:07,450 --> 00:00:09,573
+Adunni signs up as a seller.
+
+3
+00:00:09,573 --> 00:00:13,820
+Only the essentials are asked, and she lands on her own dashboard.
+
+4
+00:00:14,800 --> 00:00:20,670
+She adds her harvest: 2 tonnes of cassava in Akinyele, ready on 24 November.
+
+5
+00:00:23,800 --> 00:00:26,973
+HarvestSlot shows buyers with room on her dates.
+
+6
+00:00:26,973 --> 00:00:32,130
+Moniya Garri Works can take all 2,000 kg, so she sends a request.
+
+7
+00:00:33,100 --> 00:00:38,370
+The buyer offers ₦100 per kg for the full quantity, and will collect from the farm.
+
+8
+00:00:42,800 --> 00:00:46,110
+Adunni sees every term in one place, then accepts.
+
+9
+00:00:49,000 --> 00:00:52,500
+The buyer’s space is now reserved, so it is safe to harvest.
+
+10
+00:00:55,400 --> 00:01:01,190
+At collection, the buyer records the weight received and accepted: 1,900 kg.
+
+11
+00:01:01,600 --> 00:01:06,890
+Adunni is paid for what is accepted: ₦190,000.
+
+12
+00:01:07,600 --> 00:01:11,120
+The buyer pays by bank transfer, then records the transfer.
+
+13
+00:01:13,800 --> 00:01:17,921
+It counts as paid only when Adunni confirms the money arrived.
+
+14
+00:01:17,921 --> 00:01:19,420
+The sale is complete.
+
+15
+00:01:23,400 --> 00:01:27,770
+HarvestSlot. Agree on the sale before you harvest.
+
