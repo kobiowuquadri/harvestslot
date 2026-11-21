@@ -9,6 +9,7 @@ const FOOTER = [
     links: [
       ['How it works', '/how-it-works'],
       ['Who it’s for', '/roles'],
+      ['Team', '/#team'],
       ['FAQ and contact', '/faq'],
       ['Sign in', '/login'],
     ],

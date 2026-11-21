@@ -13,6 +13,7 @@ const PRIMARY = [
   { href: '/how-it-works', label: 'How it works' },
   { href: '/#features', label: 'Features' },
   { href: '/roles', label: 'Who it’s for' },
+  { href: '/#team', label: 'Team' },
 ];
 const SECONDARY = [{ href: '/faq', label: 'FAQ' }];
 

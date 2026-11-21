@@ -13,9 +13,11 @@ import {
   Truck,
   XCircle,
 } from 'lucide-react';
+import Image from 'next/image';
 import { Photo } from '@/components/domain/photo';
 import { Button } from '@/components/ui/button';
 import { photos } from '@/content/photos';
+import { team } from '@/content/team';
 
 const roles = [
   { icon: Sprout, title: 'Sell your harvest', body: 'Cassava or tomatoes: add your harvest, choose a buyer, agree who collects and when — then harvest.' },
@@ -238,13 +240,31 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Team ── */}
+      <section id="team" className="scroll-mt-20 bg-canvas">
+        <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+          <SectionHeading center eyebrow="Team" title="The people building HarvestSlot" body="A small team working on one question: how a fresh harvest can leave the farm with a buyer already waiting." />
+          <ul className="mx-auto mt-12 grid max-w-2xl grid-cols-1 gap-8 sm:grid-cols-2">
+            {team.map((m) => (
+              <li key={m.name} className="flex flex-col items-center text-center">
+                <div className="aspect-[4/5] w-full max-w-[260px] overflow-hidden rounded-[22px] bg-line shadow-[var(--shadow-card)] ring-1 ring-line">
+                  <Image src={m.photo.src} width={m.photo.width} height={m.photo.height} alt={m.photo.alt} sizes="260px" unoptimized className="h-full w-full object-cover" />
+                </div>
+                <h3 className="mt-5 font-display text-lg font-semibold text-ink">{m.name}</h3>
+                <p className="mt-0.5 text-sm font-medium text-forest">{m.role}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
       {/* ── Honesty ── */}
-      <section className="bg-canvas">
+      <section className="bg-surface">
         <div className="mx-auto grid max-w-6xl grid-cols-1 gap-10 px-4 py-20 sm:px-6 lg:grid-cols-[1fr_1.3fr]">
           <SectionHeading eyebrow="Plainly stated" title="What HarvestSlot does not do" body="Trust starts with being clear about the limits of the service." />
           <ul className="grid grid-cols-1 gap-3">
             {notDone.map((t) => (
-              <li key={t} className="flex gap-3 rounded-2xl border border-line bg-surface p-4 text-sm leading-relaxed text-ink">
+              <li key={t} className="flex gap-3 rounded-2xl border border-line bg-canvas p-4 text-sm leading-relaxed text-ink">
                 <XCircle className="mt-0.5 size-5 shrink-0 text-muted" aria-hidden />
                 <span>It does not {t.charAt(0).toLowerCase() + t.slice(1)}</span>
               </li>
@@ -254,7 +274,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── Call to action ── */}
-      <section className="bg-surface px-4 py-20 sm:px-6">
+      <section className="bg-canvas px-4 py-20 sm:px-6">
         <div className="mx-auto max-w-6xl overflow-hidden rounded-[28px] bg-ink">
           <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-[1.4fr_1fr]">
             <div className="px-6 py-12 sm:px-12">

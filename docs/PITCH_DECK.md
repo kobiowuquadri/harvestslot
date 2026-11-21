@@ -12,7 +12,7 @@ A farmer in Oyo State with a crop that spoils fast asks one question:
 
 HarvestSlot answers it before anything is harvested. Starting with cassava and tomatoes.
 
-The editable deck is `docs/HarvestSlot-Pitch-Deck-v3.pptx` (13 slides, with charts and photo credits).
+The editable deck is `docs/HarvestSlot-Pitch-Deck-v3.pptx` (14 slides, with charts, team and photo credits).
 
 ---
 
@@ -108,6 +108,13 @@ No driver, vehicle, freight quote or cooperative is needed.
 - Next: cooperatives acting for members, integration with transport partners, and road-distance routing.
 
 *All figures in the demo are fictional. No pilots, partnerships or impact numbers are claimed.*
+
+---
+
+## Team
+
+- **Quadri Kobiowu** — Full-stack engineer
+- **Babatunde Abdullahi** — Business & research
 
 ---
 
