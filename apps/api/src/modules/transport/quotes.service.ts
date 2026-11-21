@@ -379,7 +379,7 @@ export class QuotesService {
       const trip = await tx.tripReservation.findUniqueOrThrow({ where: { id: tripId }, include: { shipment: true, booking: true } });
       transition(TRIP_MACHINE, trip.status, 'cancel', 'trip');
       if (trip.shipment && !['ASSIGNED', 'EN_ROUTE_TO_PICKUP', 'ARRIVED_AT_PICKUP'].includes(trip.shipment.status)) {
-        throw new DomainError('INVALID_STATE_TRANSITION', 'The cassava has already been collected. Report an incident instead of cancelling.');
+        throw new DomainError('INVALID_STATE_TRANSITION', 'The produce has already been collected. Report an incident instead of cancelling.');
       }
       await tx.tripReservation.update({ where: { id: tripId }, data: { status: 'CANCELLED', cancelledAt: now, cancelledByUserId: actor.userId, cancelReason: reason, version: { increment: 1 } } });
       if (trip.shipment) await tx.shipment.update({ where: { id: trip.shipment.id }, data: { status: 'CANCELLED', cancelledAt: now, cancelReason: reason, version: { increment: 1 } } });

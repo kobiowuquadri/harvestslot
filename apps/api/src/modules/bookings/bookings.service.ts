@@ -219,6 +219,7 @@ export class BookingsService {
           id: b.id,
           reference: b.reference,
           status: b.status,
+          crop: c.harvest.crop ?? 'CASSAVA',
           farmerName: b.farmerProfile.displayName,
           farmerProfileId: b.farmerProfileId,
           processorName: b.processorOrg.name,
@@ -500,7 +501,7 @@ export class BookingsService {
     for (const s of b.shipments) {
       push(s.enRouteAt, 'transport', 'Driver on the way to the farm');
       push(s.arrivedPickupAt, 'transport', 'Driver arrived at the farm');
-      push(s.collectedAt, 'transport', 'Cassava loaded', s.pickupRecord ? `${formatKg(s.pickupRecord.reportedQuantityKg.toString())} reported by driver` : null);
+      push(s.collectedAt, 'transport', 'Produce loaded', s.pickupRecord ? `${formatKg(s.pickupRecord.reportedQuantityKg.toString())} reported by driver` : null);
       push(s.pickupConfirmedAt, 'transport', 'Pickup confirmed', s.pickupRecord?.confirmationMethod?.replace(/_/g, ' ').toLowerCase() ?? null);
       push(s.departedAt, 'transport', 'In transit');
       push(s.arrivedFacilityAt, 'transport', 'Arrived at facility');
@@ -722,7 +723,7 @@ export class BookingsService {
         next.invoiceDueRule = content.invoiceDueRule.replace(/due \d+ day\(s\)/, `due ${input.paymentTermsDays} day(s)`);
       }
       if (input.handoverArrangement || input.handoverWindowStart || input.handoverWindowEnd || input.farmerDeliveryCostKobo !== undefined) {
-        // Changing how or when the cassava changes hands is a material change: both sides agree again.
+        // Changing how or when the produce changes hands is a material change: both sides agree again.
         const arrangement = input.handoverArrangement ?? content.handover?.arrangement;
         if (!arrangement) throw new DomainError('VALIDATION_FAILED', 'Choose whether the buyer collects or the farmer delivers', [{ path: 'handoverArrangement', message: 'Choose one' }]);
         const window = {

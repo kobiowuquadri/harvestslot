@@ -134,9 +134,9 @@ export const DISPUTE_STATUS_LABELS: Record<DisputeStatus, string> = {
 };
 
 export const REJECTION_REASON_LABELS: Record<RejectionReason, string> = {
-  ROTTEN_OR_DAMAGED: 'Rotten or damaged roots',
-  UNDERSIZED: 'Undersized roots',
-  EXCESS_SOIL_OR_STEMS: 'Excess soil or stems',
+  ROTTEN_OR_DAMAGED: 'Rotten or damaged',
+  UNDERSIZED: 'Undersized',
+  EXCESS_SOIL_OR_STEMS: 'Excess soil, stems or debris',
   TOO_LONG_SINCE_HARVEST: 'Too long since harvest',
   OVER_CONTRACT_EXCESS: 'Above the contracted quantity',
   OTHER: 'Other',
@@ -151,9 +151,9 @@ export const DISPOSITION_LABELS: Record<RejectedDisposition, string> = {
 };
 
 export const REJECTION_HANDLING_LABELS: Record<RejectionHandling, string> = {
-  RETURNED_AT_PROCESSOR_COST: 'Rejected cassava is returned to the farmer at the processor’s cost',
-  FARMER_COLLECTS: 'Farmer collects rejected cassava from the facility',
-  AGREED_DISPOSAL: 'Rejected cassava is disposed of as agreed with the farmer',
+  RETURNED_AT_PROCESSOR_COST: 'Rejected produce is returned to the farmer at the processor’s cost',
+  FARMER_COLLECTS: 'Farmer collects rejected produce from the facility',
+  AGREED_DISPOSAL: 'Rejected produce is disposed of as agreed with the farmer',
 };
 
 export const WEIGHING_METHOD_LABELS: Record<WeighingMethod, string> = {

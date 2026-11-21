@@ -34,7 +34,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
         <div className="mx-auto grid max-w-6xl grid-cols-1 gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.5fr_1fr_1fr]">
           <div className="max-w-sm">
             <Logo />
-            <p className="mt-3 text-sm leading-relaxed text-muted">Harvest with a confirmed plan. Cassava harvest coordination between farmers selling and processors buying in Oyo State.</p>
+            <p className="mt-3 text-sm leading-relaxed text-muted">Harvest with a confirmed plan. Harvest coordination for fast-spoiling crops, starting with cassava and tomatoes, between farmers selling and processors buying in Oyo State.</p>
             <p className="mt-3 text-xs text-muted">Aligned with SDG 12 (responsible production), SDG 2 and SDG 8.</p>
           </div>
           {FOOTER.map((col) => (

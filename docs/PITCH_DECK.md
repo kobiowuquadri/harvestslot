@@ -7,16 +7,18 @@ paginate: true
 # HarvestSlot
 ### Harvest with a confirmed plan
 
-A cassava farmer in Oyo State asks one question:
-**“Who will buy my cassava, how much will they take, and when and where should it be ready?”**
+A farmer in Oyo State with a crop that spoils fast asks one question:
+**“Who will buy my harvest, how much will they take, and when and where should it be ready?”**
 
-HarvestSlot answers it before a single root is pulled.
+HarvestSlot answers it before anything is harvested. Starting with cassava and tomatoes.
+
+The editable deck is `docs/HarvestSlot-Pitch-Deck-v3.pptx` (13 slides, with charts and photo credits).
 
 ---
 
 ## The problem
 
-- Fresh cassava starts spoiling within about 48 hours of harvest.
+- The clock starts at harvest: cassava roots start spoiling within about 48 hours; ripe tomatoes bruise and soften within days.
 - Farmers often harvest first and look for a buyer after, with no agreed price, quantity, date or place.
 - Processors can't see which harvests are coming, so their capacity sits idle or gets overbooked.
 - When the farm and the factory don't know the plan, they lose produce, money and trust.
@@ -31,6 +33,27 @@ HarvestSlot answers it before a single root is pulled.
 4. **Accept**: capacity is reserved and the plan reads
    *“Oluyole Cassava will collect 2,000 kg at your farm on Thu 26 Nov for ₦100 per kg.”*
 5. **Finish the sale**: the buyer records the weight accepted and the payment, and the farmer confirms the money arrived.
+
+---
+
+## One engine for fast-spoiling crops
+
+- **Cassava** (live): garri, flour, starch, fufu and chips processors; delivered within 48 h by default.
+- **Tomatoes** (live): tomato paste processors; delivered within 24 h by default.
+- The farmer picks the crop when adding a harvest; each buyer intake line buys one crop; matching, requests and offers only pair the same crop.
+- Next candidates, not built: oil palm fruit, fresh peppers.
+
+---
+
+## Where we fit
+
+| | Today | Storage-led platforms (e.g. YucaChain) | HarvestSlot |
+|---|---|---|---|
+| Answer to spoilage | Harvest first, then find a buyer | Keep the crop fresh for longer (solar storage units) | Agree the buyer, date and handover before harvest |
+| What it is | Informal traders | Integrated cassava company: app, storage, hubs; mills planned | Neutral software: no hardware, no stock |
+| Crops | Any | Cassava | Cassava and tomatoes |
+
+Storage makes cassava last longer; HarvestSlot makes sure the harvest never has to wait. A storage hub or mill could itself publish buying slots on HarvestSlot. (Competitor details from yucachain.com as published on 21 Nov 2026; no partnership implied.)
 
 ---
 

@@ -186,7 +186,7 @@ export class ReceivingService {
           recordedAt: now,
         },
       });
-      // Shortfall against the agreed quantity counts as a material difference just like rejected cassava.
+      // Shortfall against the agreed quantity counts as a material difference just like rejected produce.
       const reasons = this.discrepancy(contractedG, content.toleranceBps, receivedG, acceptedG, rejectedG);
       const lower = contractedG - toleranceGrams(contractedG, content.toleranceBps);
       if (acceptedG < lower && !reasons.some((r) => r.startsWith('delivered'))) reasons.push(`accepted ${formatKg(acceptedG)} is below the agreed ${formatKg(contractedG)}`);

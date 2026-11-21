@@ -97,7 +97,7 @@ export const updateAccountSchema = z.object({
 });
 
 export const demoLoginSchema = z.object({
-  persona: z.enum(['farmer', 'processor-manager', 'receiving-officer', 'cooperative', 'admin', 'finance-officer']),
+  persona: z.enum(['farmer', 'processor-manager', 'tomato-buyer', 'receiving-officer', 'cooperative', 'admin', 'finance-officer']),
 });
 export type DemoPersona = z.infer<typeof demoLoginSchema>['persona'];
 

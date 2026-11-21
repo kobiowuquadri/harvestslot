@@ -121,7 +121,7 @@ function Opportunities({ w }: { w: Extract<Workspace, { kind: 'transporter' }> }
   const [quoting, setQuoting] = useState<OpportunityDto | null>(null);
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Find jobs" description="Confirmed cassava sales in your service areas that need transport. Farm locations are shown by area until you are assigned." />
+      <PageHeader title="Find jobs" description="Confirmed produce sales in your service areas that need transport. Farm locations are shown by area until you are assigned." />
       {w.status !== 'APPROVED' ? <Alert tone="warning">Quoting is available once your organisation has been reviewed.</Alert> : null}
       <QueryView query={q} isEmpty={(d) => d.length === 0} empty={<EmptyState title="No loads need transport in your areas right now">Set your service areas under Fleet to see more.</EmptyState>}>
         {(items) => (

@@ -79,8 +79,8 @@ function RegisterForm() {
             }}
             error={chooseError ?? undefined}
             options={[
-              { value: 'FARMER', label: 'Sell cassava', description: 'I’m a farmer looking for a buyer.', icon: <Sprout className="size-6" /> },
-              { value: 'PROCESSOR', label: 'Buy cassava', description: 'I buy fresh cassava for a processing facility.', icon: <Factory className="size-6" /> },
+              { value: 'FARMER', label: 'Sell produce', description: 'I’m a farmer with cassava or tomatoes, looking for a buyer.', icon: <Sprout className="size-6" /> },
+              { value: 'PROCESSOR', label: 'Buy produce', description: 'I buy fresh cassava or tomatoes for a processing facility.', icon: <Factory className="size-6" /> },
             ]}
           />
           <Button type="submit" size="lg">
@@ -100,7 +100,7 @@ function RegisterForm() {
   const title = type === 'PROCESSOR' ? 'Create your buyer account' : type === 'STAFF' ? 'Create your staff account' : 'Create your seller account';
   const intro =
     type === 'PROCESSOR'
-      ? 'Next you will tell farmers how much cassava you can receive, where, and when. HarvestSlot reviews new businesses before their buying slots go live.'
+      ? 'Next you will tell farmers what you buy, how much you can receive, where, and when. HarvestSlot reviews new businesses before their buying slots go live.'
       : type === 'STAFF'
         ? 'Use the email address your invitation was sent to. Afterwards, open the invitation link again to join your organisation.'
         : 'Next you will add your harvest — where it is, how much, and when it will be ready.';
@@ -109,7 +109,7 @@ function RegisterForm() {
     <div>
       {!invited ? (
         <button type="button" onClick={() => setStep('choose')} className="mb-5 inline-flex items-center gap-1.5 rounded-md text-sm font-medium text-forest hover:underline">
-          <ArrowLeft className="size-4" aria-hidden /> {type === 'PROCESSOR' ? 'Buying cassava' : 'Selling cassava'} · change
+          <ArrowLeft className="size-4" aria-hidden /> {type === 'PROCESSOR' ? 'Buying produce' : 'Selling produce'} · change
         </button>
       ) : null}
       <h1 className="text-3xl font-semibold tracking-tight text-ink">{title}</h1>

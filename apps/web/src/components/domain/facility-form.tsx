@@ -113,7 +113,7 @@ export function FacilityForm({ orgId, existing, onDone }: { orgId: string; exist
         <Field label="Default payment terms (days)">
           <Input inputMode="numeric" value={payDays} onChange={(e) => setPayDays(e.target.value)} />
         </Field>
-        <Field label="Rejected cassava">
+        <Field label="Rejected produce">
           <Select value={rejection} onChange={(e) => setRejection(e.target.value as RejectionHandling)}>
             {RejectionHandlingE.values.map((r) => (
               <option key={r} value={r}>

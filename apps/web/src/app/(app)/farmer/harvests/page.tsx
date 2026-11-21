@@ -103,7 +103,7 @@ function HarvestList({ ctx }: { ctx: FarmerContext }) {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Your harvests"
-        description="Each harvest tells buyers how much cassava you can sell, where, and when."
+        description="Each harvest tells buyers what you are selling, how much, where, and when."
         actions={
           farmerCan(ctx, 'harvest.edit') ? (
             <Button asChild size="lg">

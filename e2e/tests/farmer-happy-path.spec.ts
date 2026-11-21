@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { Api, PASSWORD, lagosDate, makeProcessor, signedInPage, uid } from '../support/api';
 
 /**
- * The acceptance scenario, entirely in the browser: a farmer in Akinyele registers ("Sell cassava"),
+ * The acceptance scenario, entirely in the browser: a farmer in Akinyele registers ("Sell produce"),
  * adds 2 tonnes, finds a buyer and sends a request. The buyer offers ₦100/kg for the full quantity
  * and will collect from the farm. The farmer sees the ₦200,000 estimate before accepting. No driver,
  * vehicle, freight quote or cooperative is involved. The buyer records 1,900 kg accepted (final
@@ -15,15 +15,15 @@ test('one complete sale: harvest → request → offer → plan → weight → p
   const farmerEmail = `farmer-ui-${uid()}@e2e.example`;
   const farmerName = `Ayo Farmer ${uid()}`;
 
-  // ── 1. Two ways to start: "Sell cassava", then only account details ──
+  // ── 1. Two ways to start: "Sell produce", then only account details ──
   const farmerCtx = await browser.newContext({ viewport: { width: 360, height: 760 }, isMobile: true, hasTouch: true });
   const farmer = await farmerCtx.newPage();
   await farmer.goto('/register');
   await expect(farmer.getByRole('heading', { level: 1, name: 'What would you like to do?' })).toBeVisible();
   await farmer.getByRole('button', { name: 'Continue' }).click();
   await expect(farmer.getByText('Choose selling or buying to continue')).toBeVisible();
-  await farmer.getByText('Sell cassava', { exact: true }).click();
-  await expect(farmer.getByRole('radio', { name: /Sell cassava/ })).toBeChecked();
+  await farmer.getByText('Sell produce', { exact: true }).click();
+  await expect(farmer.getByRole('radio', { name: /Sell produce/ })).toBeChecked();
   await farmer.getByRole('button', { name: 'Continue' }).click();
   await expect(farmer.getByRole('heading', { level: 1, name: 'Create your seller account' })).toBeVisible();
   await expect(farmer.getByLabel(/Local government area/)).toHaveCount(0);

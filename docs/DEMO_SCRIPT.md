@@ -22,7 +22,8 @@ Password for every demo account: **`HarvestSlot-Demo-2026`**. In a demonstration
 | Persona | Email | Lands on |
 |---|---|---|
 | Farmer (Adunni, Akinyele) | farmer.adunni@demo.harvestslot.example | Home |
-| Buyer — processor manager (Oluyole Cassava Processing) | manager@ibadan-starch.demo.harvestslot.example | Home (Buying slots · Requests · Bookings) |
+| Buyer — cassava processor manager (Oluyole Cassava Processing) | manager@ibadan-starch.demo.harvestslot.example | Home (Buying slots · Requests · Bookings) |
+| Buyer — tomato processor (Sade, Egbeda Tomato Processing) | manager@egbeda-tomato.demo.harvestslot.example | Home (Buying slots · Requests · Bookings) |
 | Administrator | admin@demo.harvestslot.example | Admin overview |
 
 Also available by email, but not on the persona list: the buyer's receiving officer and finance officer (`receiving@…` and `finance@ibadan-starch.demo.harvestslot.example`), the other farmers (`farmer.<first name>@demo.harvestslot.example`), the Akinyele Fresh Flour Mill owner (`owner@akinyele-flour.demo.harvestslot.example`) and the cooperative representative (`rep@akinyele-coop.demo.harvestslot.example`). Transporter and driver accounts created before the simplification still sign in and keep their records, but they are not part of the demo journey.
@@ -63,7 +64,18 @@ The farmer's question is: *“Who will buy my cassava, how much will they take, 
 | C10 | Cooperative rep → Bookings | Confirmed by the representative acting for a member with full permissions |
 | C11 | Buyer → Requests | Kayode asked for an offer for 1,700 kg: *Review harvest request* |
 | C12 | Kehinde → Harvests | The Iseyin hub said it cannot buy this time; the request is open for other buyers |
+| T1 | Emeka → Payments, or Sade → Bookings | Tomatoes collected 5 days ago; 40 kg of split fruit not accepted, which he agreed; paid |
+| T2 | Tolu, or Sade → Bookings | Tomatoes confirmed: Tolu delivers 600 kg to the paste plant in two days |
+| T3 | Sade → Requests | Ngozi asked for an offer for 700 kg of tomatoes: *Review harvest request* |
+| T4 | Adunni → her 900 kg tomato harvest | An offer from the tomato paste plant waiting for her answer; her tomato matches show only tomato buyers |
 | — | Adunni → her 3,000 kg harvest | Two offers to compare: Oluyole collects at ₦250/kg; Iseyin pays ₦235/kg but she delivers (about ₦20,000 delivery cost) |
+
+## Showing the second crop (2 minutes)
+
+1. As Adunni, open **Harvests**: each card says *Cassava* or *Tomatoes*. Open the 900 kg tomato harvest: the only buyer suggested is the Egbeda tomato paste plant, never a garri or flour plant.
+2. Choose **Add my harvest**: the first question is *What are you selling?* (Cassava or Tomatoes).
+3. Switch to **Buyer — tomatoes (Sade)**: **Requests** shows only tomato harvests; **Buying slots → Publish a buying slot** starts with *What are you buying?*
+4. Pitch line: *storage makes cassava last longer; HarvestSlot makes sure the harvest never has to wait — and the same engine already runs a second crop.*
 
 ## Other things worth showing
 

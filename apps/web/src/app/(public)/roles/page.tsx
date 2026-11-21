@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: 'Who HarvestSlot is for' };
 const roles = [
   {
     id: 'farmers',
-    title: 'Farmers — selling cassava',
+    title: 'Farmers — selling cassava or tomatoes',
     points: [
       'Create an account with your name and a phone number or email. Your farm is asked for when you add a harvest.',
       'Add a harvest: where, roughly how much, and when it will be ready. Buyers see only the area until you agree a plan.',
@@ -21,7 +21,7 @@ const roles = [
   },
   {
     id: 'processors',
-    title: 'Processors — buying cassava',
+    title: 'Processors — buying fresh produce',
     points: [
       'Create an account with your name and business name. HarvestSlot reviews new businesses before their buying slots go live.',
       'Publish buying slots: how much you can receive, where, and on which dates. Your facility is asked for the first time.',
@@ -32,12 +32,12 @@ const roles = [
   },
 ];
 
-const rolePhotos = { farmers: photos.farmerHoldingCassava, processors: photos.cassavaTubers } as const;
+const rolePhotos = { farmers: photos.farmerHoldingCassava, processors: photos.tomatoBaskets } as const;
 
 export default function RolesPage() {
   return (
     <>
-      <PageIntro eyebrow="Who it’s for" title="Every role in the cassava chain, on one plan">
+      <PageIntro eyebrow="Who it’s for" title="Every role in a fresh-produce sale, on one plan">
         Farmers sell, processors buy. Each side confirms its own part — and sees what the other still has to do.
       </PageIntro>
       <nav aria-label="Roles" className="sticky top-16 z-30 border-b border-line/70 bg-surface/90 backdrop-blur">

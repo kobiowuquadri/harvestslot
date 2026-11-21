@@ -70,7 +70,7 @@ function Locations({ ctx }: { ctx: FarmerContext }) {
               ))}
             </ul>
           ) : (
-            <EmptyState title="No farm locations yet">Add the place where the cassava will be collected.</EmptyState>
+            <EmptyState title="No farm locations yet">Add the place where your harvest will be collected.</EmptyState>
           );
         }}
       </QueryView>

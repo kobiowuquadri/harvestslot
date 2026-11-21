@@ -13,7 +13,7 @@ installSeedClock();
 
 import { hash } from '@node-rs/argon2';
 import { loadConfig } from '@harvestslot/config';
-import { lagosDateString, lagosDateTime, addDays, qualityTermsSchema, type QualityTerms } from '@harvestslot/contracts';
+import { CROPS, lagosDateString, lagosDateTime, addDays, qualityTermsSchema, type Crop, type ProcessingProduct, type QualityTerms } from '@harvestslot/contracts';
 import { recheckReadiness, sweepExpiredHolds, type Actor } from '@harvestslot/core';
 import type { PrismaClient } from '@harvestslot/db';
 import { DEMO_PERSONAS } from '../modules/auth/auth.service.js';
@@ -146,6 +146,10 @@ async function main() {
   const p3 = await org('PROCESSOR', 'Iseyin Cassava Hub (Demo)', 'Iseyin');
   await person('p3owner', 'owner@iseyin-hub.demo.harvestslot.example', 'Ronke Demo-Hub');
   await member('p3owner', p3.id, ['OWNER', 'MANAGER', 'RECEIVING_OFFICER', 'FINANCE_OFFICER']);
+  // A tomato buyer: the same journey for a second fast-spoiling crop.
+  const p5 = await org('PROCESSOR', 'Egbeda Tomato Processing (Demo)', 'Egbeda');
+  await person('p5owner', DEMO_PERSONAS['tomato-buyer'], 'Sade Demo-Tomato');
+  await member('p5owner', p5.id, ['OWNER', 'MANAGER', 'RECEIVING_OFFICER', 'FINANCE_OFFICER']);
   const p4 = await org('PROCESSOR', 'Ogbomoso Agro-Processing (Demo)', 'Ogbomosho North', 'PENDING_REVIEW');
   await person('p4owner', 'owner@ogbomoso-agro.demo.harvestslot.example', 'Tayo Demo-Agro');
   await member('p4owner', p4.id, ['OWNER']);
@@ -252,8 +256,9 @@ async function main() {
   const f2fac = await fac('p2owner', p2.id, 'Akinyele Flour Mill', 'Akinyele', 7.552, 3.928, 25_500, 60, criteria(36));
   const f3fac = await fac('p3owner', p3.id, 'Iseyin Garri Hub', 'Iseyin', 7.968, 3.603, 23_000, 90, criteria(48));
   await fac('p4owner', p4.id, 'Ogbomoso Chips Plant', 'Ogbomosho North', 8.131, 4.244, 22_500, 80, criteria(48));
-  const addLine = async (actorKey: string, facilityId: string, name: string, product: 'GARRI' | 'STARCH' | 'FLOUR') => {
-    const f = await facilities.addLine(people[actorKey]!.actor, facilityId, { name, product });
+  const f5fac = await fac('p5owner', p5.id, 'Egbeda Tomato Paste Plant', 'Egbeda', 7.392, 3.981, 45_000, 80, qualityTermsSchema.parse(CROPS.TOMATO.defaultQuality));
+  const addLine = async (actorKey: string, facilityId: string, name: string, product: ProcessingProduct, crop: Crop = 'CASSAVA') => {
+    const f = await facilities.addLine(people[actorKey]!.actor, facilityId, { name, crop, product });
     return f.lines.find((l) => l.name === name)!.id;
   };
   const lines = {
@@ -261,9 +266,10 @@ async function main() {
     p1b: await addLine('manager', f1.id, 'Starch line', 'STARCH'),
     p2: await addLine('p2owner', f2fac.id, 'Flour line', 'FLOUR'),
     p3: await addLine('p3owner', f3fac.id, 'Garri line', 'GARRI'),
+    p5: await addLine('p5owner', f5fac.id, 'Paste line', 'TOMATO_PASTE', 'TOMATO'),
   };
   const slots: Record<string, string> = {};
-  const lineCaps: Record<string, [string, string, string]> = { p1a: ['manager', '6000', '5000'], p1b: ['manager', '4000', '4000'], p2: ['p2owner', '3000', '3000'], p3: ['p3owner', '5000', '4500'] };
+  const lineCaps: Record<string, [string, string, string]> = { p1a: ['manager', '6000', '5000'], p1b: ['manager', '4000', '4000'], p2: ['p2owner', '3000', '3000'], p3: ['p3owner', '5000', '4500'], p5: ['p5owner', '3000', '2500'] };
   for (const [lineKey, [actorKey, proc, purchase]] of Object.entries(lineCaps)) {
     for (let d = -10; d <= 14; d++) {
       const tight = lineKey === 'p2' && d === 9;
@@ -282,21 +288,22 @@ async function main() {
   const slotInfo = async (key: string) => prisma.processingSlot.findUniqueOrThrow({ where: { id: slots[key]! } });
 
   // ── Helpers to drive a booking through the real services ──────────
-  const processorActor: Record<string, string> = { [p1.id]: 'manager', [p2.id]: 'p2owner', [p3.id]: 'p3owner' };
-  const receivingActor: Record<string, string> = { [p1.id]: 'receiving', [p2.id]: 'p2owner', [p3.id]: 'p3owner' };
-  const financeActor: Record<string, string> = { [p1.id]: 'finance', [p2.id]: 'p2owner', [p3.id]: 'p3owner' };
+  const processorActor: Record<string, string> = { [p1.id]: 'manager', [p2.id]: 'p2owner', [p3.id]: 'p3owner', [p5.id]: 'p5owner' };
+  const receivingActor: Record<string, string> = { [p1.id]: 'receiving', [p2.id]: 'p2owner', [p3.id]: 'p3owner', [p5.id]: 'p5owner' };
+  const financeActor: Record<string, string> = { [p1.id]: 'finance', [p2.id]: 'p2owner', [p3.id]: 'p3owner', [p5.id]: 'p5owner' };
 
-  const harvestFor = async (farmerKey: string, qty: string, earliest: number, latest: number, createdAt: Date, actorKey?: string, publish = true) => {
+  const harvestFor = async (farmerKey: string, qty: string, earliest: number, latest: number, createdAt: Date, actorKey?: string, publish = true, crop: Crop = 'CASSAVA') => {
     at(createdAt);
     const f = farmers[farmerKey]!;
     const actor = actorKey ? people[actorKey]!.actor : f.actor!;
     return harvests.create(actor, f.profileId, {
+      crop,
       farmLocationId: f.locationId,
       estimatedQuantityKg: qty,
       earliestHarvestDate: addDays(today, earliest),
       latestHarvestDate: addDays(today, latest),
-      variety: 'TME 419',
-      cropAgeMonths: 12,
+      variety: crop === 'TOMATO' ? 'Roma VF' : 'TME 419',
+      cropAgeMonths: crop === 'TOMATO' ? 3 : 12,
       notes: 'Demo harvest request.',
       transportPreference: 'PROCESSOR_PAYS',
       maxDistanceKm: 150,
@@ -305,7 +312,7 @@ async function main() {
   };
 
   type Handover = 'COLLECT_FROM_FARM' | 'FARMER_DELIVERS';
-  /** An offer on `slotKey`'s day: the cassava changes hands 09:00–13:00 (collection) or 10:00–14:00 (delivery). */
+  /** An offer on `slotKey`'s day: the produce changes hands 09:00–13:00 (collection) or 10:00–14:00 (delivery). */
   const offerFor = async (harvestId: string, slotKey: string, orgId: string, qty: string, price: number, opts: { handover?: Handover; deliveryCost?: number; send?: boolean; validForHours?: number; note?: string; paymentTermsDays?: number } = {}) => {
     const slot = await slotInfo(slotKey);
     const S = slot.startsAt.getTime();
@@ -339,12 +346,13 @@ async function main() {
     handover?: Handover;
     deliveryCost?: number;
     validForHours?: number;
+    crop?: Crop;
   }
   const createAndAccept = async (s: Scenario, mode: 'ACCEPT' | 'PREPARE' = 'ACCEPT') => {
     const slot = await slotInfo(s.slot);
     const S = slot.startsAt.getTime();
     const days = Math.floor((S - realNow().getTime()) / DAY);
-    const h = await harvestFor(s.farmer, s.qty, days - 2, days + 2, new Date(s.times.offer.getTime() - 6 * HOUR), s.farmerActor);
+    const h = await harvestFor(s.farmer, s.qty, days - 2, days + 2, new Date(s.times.offer.getTime() - 6 * HOUR), s.farmerActor, true, s.crop);
     // The farmer asked this buyer for an offer.
     const facility = await prisma.facility.findFirstOrThrow({ where: { organisationId: s.processorOrg } });
     at(new Date(s.times.offer.getTime() - 3 * HOUR));
@@ -453,6 +461,19 @@ async function main() {
     await offerFor(h.id, 'p3:2', p3.id, '800', 23_000, { validForHours: 24 });
   }
 
+  // T1: Emeka — tomatoes collected 5 days ago; 40 kg of split fruit not accepted, which he agreed; paid.
+  {
+    const S = slotStart(-5).getTime();
+    const { bookingId } = await createAndAccept({ farmer: 'f2', slot: 'p5:-5', processorOrg: p5.id, qty: '800', price: 45_000, crop: 'TOMATO', times: { offer: new Date(S - 3 * DAY), accept: new Date(S - 2.9 * DAY) } });
+    await receive(bookingId, S, '800', '760', { reasons: ['ROTTEN_OR_DAMAGED'], note: 'Split and overripe fruit in two crates' });
+    const fa = farmers.f2!.actor!;
+    const rec = (await receiving.get(fa, bookingId))!;
+    at(new Date(S + 8 * HOUR));
+    await receiving.farmerReview(fa, bookingId, { expectedVersion: rec.version, decision: 'ACCEPTED', note: 'Agreed — two crates were damaged on the farm road' });
+    await pay(bookingId, 'PRODUCE', 'ALL', new Date(S + 2 * DAY), new Date(S + 2.2 * DAY), 'ACC-TRF-41207');
+    await pay(bookingId, 'PLATFORM_FEE', 'ALL', new Date(S + 3 * DAY), new Date(S + 3.5 * DAY), 'HS-FEE-TRF-014');
+  }
+
   // ── Current scenarios ─────────────────────────────────────────────
   // C1: Ngozi — the buyer collects today; next: the buyer records the weight.
   {
@@ -532,6 +553,25 @@ async function main() {
     await harvests.invite(people.c2rep!.actor, h.id, f3fac.id);
     at(ago(9));
     await harvests.declineRequest(people.p3owner!.actor, p3.id, h.id, { reason: 'Our trucks do not cover Saki this month.' });
+  }
+
+  // T2: Tolu — tomatoes confirmed; she delivers crates to the paste plant in two days.
+  {
+    await createAndAccept({ farmer: 'f6', slot: 'p5:2', processorOrg: p5.id, qty: '600', price: 45_000, crop: 'TOMATO', handover: 'FARMER_DELIVERS', deliveryCost: 300_000, times: { offer: ago(20), accept: ago(18) } });
+  }
+  // T3: Ngozi — sent the tomato buyer a request: Sade's next step is "Review harvest request".
+  {
+    const h = await harvestFor('f5', '700', 4, 8, ago(10), undefined, true, 'TOMATO');
+    at(ago(9));
+    await harvests.invite(farmers.f5!.actor!, h.id, f5fac.id);
+  }
+  // T4: Adunni also grows tomatoes: an offer from the paste plant waits for her answer.
+  {
+    const h = await harvestFor('adunni', '900', 2, 6, ago(16), undefined, true, 'TOMATO');
+    at(ago(15));
+    await harvests.invite(farmers.adunni!.actor!, h.id, f5fac.id);
+    at(ago(8));
+    await offerFor(h.id, 'p5:3', p5.id, '900', 46_000, { validForHours: 96, note: 'We collect in our own crates early in the morning, before the heat.' });
   }
 
   // ── Open requests and offers ──────────────────────────────────────

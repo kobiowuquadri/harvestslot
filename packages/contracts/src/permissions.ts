@@ -126,7 +126,7 @@ export const DELEGATION_SCOPE_LABELS: Record<DelegationScope, { label: string; d
     label: 'Approve sales',
     description: 'Accept offers and terms, accept farmer-paid transport, review receiving decisions, open disputes, cancel bookings.',
   },
-  CONFIRM_HANDOVER: { label: 'Confirm pickups', description: 'Confirm handover of cassava to the transporter at the farm.' },
+  CONFIRM_HANDOVER: { label: 'Confirm pickups', description: 'Confirm handover of produce to the transporter at the farm.' },
   VIEW_FINANCIALS: { label: 'View finances', description: 'See invoices and payment status for this farmer.' },
   CONFIRM_PAYMENT_RECEIPT: {
     label: 'Confirm payments received',

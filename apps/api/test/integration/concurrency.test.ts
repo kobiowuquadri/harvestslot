@@ -289,7 +289,7 @@ describe('amendments', () => {
     expect(detail.readiness.ready).toBe(true);
     expect(detail.status).toBe('CONFIRMED');
 
-    // Changing how the cassava gets there is material: the farmer agrees again before it applies.
+    // Changing how the produce gets there is material: the farmer agrees again before it applies.
     const s = f.processor.slot.startsAt.getTime();
     detail = expectOk(
       await f.manager.post(
@@ -299,7 +299,7 @@ describe('amendments', () => {
       ),
     );
     expect(detail.pendingAmendment.pendingParties).toEqual(['FARMER']);
-    expect(detail.pendingAmendment.terms.changedFields).toContain('How the cassava gets there');
+    expect(detail.pendingAmendment.terms.changedFields).toContain('How the produce gets there');
     expect(detail.readiness.ready).toBe(false);
     detail = expectOk(
       await f.farmerClient.post(`/bookings/${f.bookingId}/amendments/decide`, { termsVersionId: detail.pendingAmendment.terms.id, contentHash: detail.pendingAmendment.terms.contentHash, decision: 'ACCEPT' }, { idem: true }),

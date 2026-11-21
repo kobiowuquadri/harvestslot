@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   counterOfferSchema,
   createOfferSchema,
+  cropNoun,
   dbDateToString,
   decideOfferSchema,
   formatKg,
@@ -134,6 +135,7 @@ export class OffersService {
       id: o.id,
       harvestRequestId: o.harvestRequestId,
       harvestReference: o.harvestRequest.reference,
+      crop: o.harvestRequest.crop,
       farmerProfileId: o.harvestRequest.farmerProfileId,
       farmerName: o.harvestRequest.farmerProfile.displayName,
       processorOrgId: o.processorOrgId,
@@ -229,7 +231,7 @@ export class OffersService {
       qualityTerms: input.qualityTerms ?? qualityTermsSchema.parse(facility.qualityCriteria),
       toleranceBps: input.toleranceBps ?? facility.defaultToleranceBps,
       paymentTermsDays: input.paymentTermsDays ?? facility.defaultPaymentTermsDays,
-      // Who carries the cassava decides who pays for it: the buyer when collecting, the farmer when delivering.
+      // Who carries the produce decides who pays for it: the buyer when collecting, the farmer when delivering.
       freightPayer: arrangement === 'FARMER_DELIVERS' ? 'FARMER' : arrangement === 'COLLECT_FROM_FARM' ? 'PROCESSOR' : (input.freightPayer ?? 'PROCESSOR'),
       handoverArrangement: arrangement,
       farmerDeliveryCostKobo: arrangement === 'FARMER_DELIVERS' && input.farmerDeliveryCostKobo ? input.farmerDeliveryCostKobo : null,
@@ -268,6 +270,9 @@ export class OffersService {
     const request = await this.prisma.db.harvestRequest.findUnique({ where: { id: input.harvestRequestId } });
     if (!request || request.status !== 'PUBLISHED') throw new DomainError('NOT_FOUND', 'Published harvest request not found');
     if (request.isDemo !== facilitySlot.isDemo) throw new DomainError('NOT_FOUND', 'Published harvest request not found');
+    if (facilitySlot.line.crop !== request.crop) {
+      throw new DomainError('VALIDATION_FAILED', `This buying slot is for ${cropNoun(facilitySlot.line.crop)}; the farmer is selling ${cropNoun(request.crop)}`, [{ path: 'slotId', message: `Choose a buying slot for ${cropNoun(request.crop)}` }]);
+    }
     const now = new Date();
     const terms = this.resolve(input, facilitySlot.facility);
     this.validateTerms(terms, facilitySlot, request, now);
@@ -305,7 +310,7 @@ export class OffersService {
     return this.dto(await this.load(id));
   }
 
-  /** Sends a draft offer: it must say how the cassava gets there. */
+  /** Sends a draft offer: it must say how the produce gets there. */
   async send(actor: Actor, offerId: string, input: z.infer<typeof sendOfferSchema>): Promise<OfferDto> {
     const before = await this.load(offerId);
     await this.access.requireOrg(actor, before.processorOrgId, 'processor.offer.manage', { requireApproved: true });
@@ -323,7 +328,7 @@ export class OffersService {
     const o = await tx.offer.findUniqueOrThrow({ where: { id: offerId }, include: offerInclude });
     const v = o.versions[o.versions.length - 1]!;
     transition(OFFER_MACHINE, o.status, 'send', 'offer');
-    if (!v.handoverArrangement) throw new DomainError('VALIDATION_FAILED', 'Choose how the cassava will get there before sending the offer', [{ path: 'handoverArrangement', message: 'Choose collection or delivery' }]);
+    if (!v.handoverArrangement) throw new DomainError('VALIDATION_FAILED', 'Choose how the produce will get there before sending the offer', [{ path: 'handoverArrangement', message: 'Choose collection or delivery' }]);
     if (o.harvestRequest.status !== 'PUBLISHED') throw new DomainError('INVALID_STATE_TRANSITION', 'The request is no longer open for offers');
     if (v.pickupWindowStart <= now) throw new DomainError('VALIDATION_FAILED', 'The handover time has passed. Choose a new time and send again.');
     const qtyG = toGrams(v.quantityKg);
@@ -400,10 +405,13 @@ export class OffersService {
     const before = await this.load(offerId);
     const sending = before.status === 'DRAFT' && input.send;
     await this.access.requireOrg(actor, before.processorOrgId, 'processor.offer.manage', { requireApproved: before.status !== 'DRAFT' || sending });
-    const slot = await this.prisma.db.processingSlot.findUnique({ where: { id: input.slotId }, include: { facility: true } });
+    const slot = await this.prisma.db.processingSlot.findUnique({ where: { id: input.slotId }, include: { facility: true, line: true } });
     if (!slot || slot.facilityId !== before.facilityId) throw new DomainError('VALIDATION_FAILED', 'Choose a slot at the same facility');
+    if (slot.line.crop !== before.harvestRequest.crop) {
+      throw new DomainError('VALIDATION_FAILED', `This buying slot is for ${cropNoun(slot.line.crop)}; the farmer is selling ${cropNoun(before.harvestRequest.crop)}`, [{ path: 'slotId', message: `Choose a buying slot for ${cropNoun(before.harvestRequest.crop)}` }]);
+    }
     if (before.status !== 'DRAFT' && !input.handoverArrangement) {
-      throw new DomainError('VALIDATION_FAILED', 'A sent offer must keep saying how the cassava gets there', [{ path: 'handoverArrangement', message: 'Choose collection or delivery' }]);
+      throw new DomainError('VALIDATION_FAILED', 'A sent offer must keep saying how the produce gets there', [{ path: 'handoverArrangement', message: 'Choose collection or delivery' }]);
     }
     const now = new Date();
     const terms = this.resolve(input, slot.facility);
@@ -513,7 +521,7 @@ export class OffersService {
   /**
    * Turns an agreed offer version into a booking: allocates supply (harvest lot) under the request
    * lock, attaches the capacity hold, and snapshots version 1 of the terms. When the offer says how the
-   * cassava changes hands, both sides have now agreed complete terms, so the booking is confirmed at once.
+   * produce changes hands, both sides have now agreed complete terms, so the booking is confirmed at once.
    */
   async accept(actor: Actor, offerId: string, input: z.infer<typeof decideOfferSchema>, mode: 'ACCEPT' | 'PREPARE' | 'ACCEPT_COUNTER'): Promise<{ bookingId: string; bookingReference: string; status: string }> {
     const before = await this.load(offerId);

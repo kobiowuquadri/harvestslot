@@ -4,6 +4,18 @@ Every result below comes from a command that was actually run on the build machi
 
 Last full run: **2026-10-24**.
 
+### Re-run after adding the second crop (2026-11-21)
+
+| Check | Command | Result |
+|---|---|---|
+| Lint | `pnpm lint` | pass |
+| Typecheck (all packages and apps) | `pnpm typecheck` | pass |
+| Unit tests | `pnpm test` | 164 passed (config 17, contracts 14, db 72, core 53, api 8); web and worker have no unit tests |
+| Integration tests (embedded PostgreSQL, migrations applied fresh) | `pnpm --filter @harvestslot/api test:integration` | 27 passed in 5 files, including `crops.test.ts` (2) |
+| Demo seed on a fresh local database | `pnpm --filter @harvestslot/api seed` | completed: 20 users, 7 organisations, 28 harvest requests, 14 bookings |
+| API smoke test of the crop journey (demo personas) | scratch script against a local API | tomato harvests match only the tomato buyer; each buyer's requests show only its crop |
+| Browser tests (Playwright) | `pnpm test:e2e` | **not re-run** for this change; texts changed in two specs were updated by hand |
+
 ### Re-run after the 2026-11-16 redesign
 
 Only the web app and the browser tests changed (DECISIONS #28–#32), so these checks were run again on 2026-11-16:

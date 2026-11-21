@@ -106,12 +106,19 @@ enum FacilityStatus {
   INACTIVE
 }
 
+/// The produce traded: cassava (the first crop) and tomatoes. Each buyer intake line buys one crop.
+enum Crop {
+  CASSAVA
+  TOMATO
+}
+
 enum ProcessingProduct {
   GARRI
   FLOUR
   STARCH
   FUFU
   CHIPS
+  TOMATO_PASTE
   OTHER
 }
 
@@ -150,7 +157,7 @@ enum OfferStatus {
   LAPSED
 }
 
-/// How the cassava changes hands (offer and booking terms).
+/// How the produce changes hands (offer and booking terms).
 enum HandoverArrangement {
   COLLECT_FROM_FARM
   FARMER_DELIVERS
@@ -816,7 +823,8 @@ model Facility {
   lat                      Decimal           @db.Decimal(9, 6)
   lng                      Decimal           @db.Decimal(9, 6)
   status                   FacilityStatus    @default(ACTIVE)
-  acceptsCassava           Boolean           @default(true)
+  /// Whether the facility is taking produce at all (column name kept from the cassava-only version).
+  acceptingProduce         Boolean           @default(true) @map("acceptsCassava")
   /// Structured purchase requirements (see contracts QualityTerms).
   qualityCriteria          Json
   minOrderKg               Decimal           @db.Decimal(14, 3)
@@ -847,6 +855,8 @@ model ProcessingLine {
   facilityId String            @db.Uuid
   facility   Facility          @relation(fields: [facilityId], references: [id], onDelete: Restrict)
   name       String
+  /// The crop this line buys; only harvests of the same crop are matched to its slots.
+  crop       Crop              @default(CASSAVA)
   product    ProcessingProduct
   status     LineStatus        @default(ACTIVE)
   createdAt  DateTime          @default(now()) @db.Timestamptz(3)
@@ -920,6 +930,7 @@ model HarvestRequest {
   createdByUserId     String               @db.Uuid
   actingDelegationId  String?              @db.Uuid
   status              HarvestRequestStatus @default(DRAFT)
+  crop                Crop                 @default(CASSAVA)
   estimatedQuantityKg Decimal              @db.Decimal(14, 3)
   /// Quantity currently offered for sale; allocations may never exceed it.
   eligibleQuantityKg  Decimal              @db.Decimal(14, 3)

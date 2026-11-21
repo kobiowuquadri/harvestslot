@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { lgaName, nigeriaPoint, optionalText, reasonText, shortText, uuid } from './common.js';
-import { FacilityStatusE, LineStatusE, ProcessingProductE, RejectionHandlingE, SlotStatusE } from './enums.js';
+import { CropE, FacilityStatusE, LineStatusE, ProcessingProductE, RejectionHandlingE, SlotStatusE } from './enums.js';
 import { isoDateTime } from './time.js';
 import { kgString, koboInt, positiveKgString } from './units.js';
 
@@ -36,8 +36,9 @@ export const updateFacilitySchema = facilityInputSchema.partial().extend({
   status: FacilityStatusE.schema.optional(),
 });
 
-export const lineInputSchema = z.object({ name: shortText(80), product: ProcessingProductE.schema });
-export const updateLineSchema = lineInputSchema.partial().extend({
+/** A line buys one crop; its product must be one that crop can make (checked by the API). */
+export const lineInputSchema = z.object({ name: shortText(80), crop: CropE.schema.default('CASSAVA'), product: ProcessingProductE.schema });
+export const updateLineSchema = lineInputSchema.omit({ crop: true }).partial().extend({
   expectedVersion: z.number().int().min(1),
   status: LineStatusE.schema.optional(),
 });
@@ -46,6 +47,7 @@ export const lineSchema = z.object({
   id: uuid,
   facilityId: uuid,
   name: z.string(),
+  crop: CropE.schema,
   product: ProcessingProductE.schema,
   status: LineStatusE.schema,
   version: z.number(),
@@ -130,6 +132,7 @@ export const slotSchema = z.object({
   id: uuid,
   lineId: uuid,
   lineName: z.string(),
+  crop: CropE.schema,
   product: ProcessingProductE.schema,
   facilityId: uuid,
   facilityName: z.string(),
@@ -158,11 +161,12 @@ export const slotsQuerySchema = z.object({
 });
 
 /**
- * "Tell farmers how much cassava you can receive, where, and on which dates." One form: an existing
- * place, or a new one described here (created on first use), a date range and a quantity.
+ * "Tell farmers what you buy, how much you can receive, where, and on which dates." One form: the crop,
+ * an existing place or a new one described here (created on first use), a date range and a quantity.
  */
 export const buyingSlotSchema = z
   .object({
+    crop: CropE.schema.default('CASSAVA'),
     facilityId: uuid.optional(),
     newFacility: z.object({ name: shortText(120), lga: lgaName, address: optionalText(300), point: nigeriaPoint.optional() }).optional(),
     fromDate: z.iso.date(),

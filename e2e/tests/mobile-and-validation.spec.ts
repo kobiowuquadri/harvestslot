@@ -39,14 +39,14 @@ test('phone navigation: bottom bar, menu dialog with focus handling, and Escape 
 test('registration asks what you want to do first, then shows field errors instead of submitting', async ({ page }) => {
   await page.goto('/register');
   await expect(page.getByLabel(/Local government area/)).toHaveCount(0);
-  await page.getByText('Buy cassava', { exact: true }).click();
+  await page.getByText('Buy produce', { exact: true }).click();
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Create your buyer account' })).toBeVisible();
   await expect(page.getByLabel('Business name')).toBeVisible();
   // Changing your mind keeps what you typed.
   await page.getByLabel('Your name').fill('Bisi Buyer');
   await page.getByRole('button', { name: /change/ }).click();
-  await page.getByText('Sell cassava', { exact: true }).click();
+  await page.getByText('Sell produce', { exact: true }).click();
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Create your seller account' })).toBeVisible();
   await expect(page.getByLabel('Your name')).toHaveValue('Bisi Buyer');

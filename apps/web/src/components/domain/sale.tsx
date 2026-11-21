@@ -375,7 +375,7 @@ export function ReviewWeightActions({ b }: { b: BookingDetail }) {
             <Field label="What is wrong?">
               <Select value={category} onChange={(e) => setCategory(e.target.value as 'WEIGHT' | 'QUALITY_REJECTION')}>
                 <option value="WEIGHT">The weight is wrong</option>
-                <option value="QUALITY_REJECTION">Cassava was wrongly refused</option>
+                <option value="QUALITY_REJECTION">Produce was wrongly refused</option>
               </Select>
             </Field>
             <Field label="Tell us what happened" hint="At least 10 characters." error={review.error?.fieldErrors['dispute.description']} required>

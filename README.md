@@ -1,8 +1,8 @@
 # HarvestSlot
 
-**Harvest with a confirmed plan.** HarvestSlot answers one question for a cassava farmer in Oyo State, Nigeria: *“Who will buy my cassava, how much will they take, and when and where should it be ready?”* The farmer adds a harvest, finds a buyer (a processor) whose buying slot fits, and reviews the buyer's offer: price, quantity, estimated total, date, place and who brings the cassava (the buyer collects, or the farmer delivers). Once both sides agree, capacity is reserved and the plan says *Ready to harvest*. The buyer then records the weight accepted and the payment, and the farmer confirms the money arrived.
+**Harvest with a confirmed plan.** HarvestSlot answers one question for a farmer in Oyo State, Nigeria whose crop spoils soon after harvest: *“Who will buy my harvest, how much will they take, and when and where should it be ready?”* It supports **cassava and tomatoes**; a harvest is only ever matched with buyers of the same crop. The farmer adds a harvest, finds a buyer (a processor) whose buying slot fits, and reviews the buyer's offer: price, quantity, estimated total, date, place and who brings the produce (the buyer collects, or the farmer delivers). Once both sides agree, capacity is reserved and the plan says *Ready to harvest*. The buyer then records the weight accepted and the payment, and the farmer confirms the money arrived.
 
-Two ways to start: **Sell cassava** (farmer, mobile-first PWA) or **Buy cassava** (processor: owner, manager, receiving officer, finance officer). Platform administrators review businesses. Cooperatives acting for members, and transporter and driver accounts from earlier versions, keep working for existing records but are not part of public sign-up or the demo journey.
+Two ways to start: **Sell produce** (farmer, mobile-first PWA) or **Buy produce** (processor: owner, manager, receiving officer, finance officer). Platform administrators review businesses. Cooperatives acting for members, and transporter and driver accounts from earlier versions, keep working for existing records but are not part of public sign-up or the demo journey.
 
 > Demonstration data is fictional. No real business, farmer or partnership is implied, and the app makes no impact claims.
 
@@ -53,10 +53,11 @@ Password: **`HarvestSlot-Demo-2026`** (demo environments only).
 | Role | Email |
 |---|---|
 | Farmer (sells) | farmer.adunni@demo.harvestslot.example |
-| Buyer — processor manager | manager@ibadan-starch.demo.harvestslot.example |
+| Buyer — cassava processor manager | manager@ibadan-starch.demo.harvestslot.example |
+| Buyer — tomato processor (Sade) | manager@egbeda-tomato.demo.harvestslot.example |
 | Administrator | admin@demo.harvestslot.example |
 
-These three are the one-click demo personas. Also seeded (sign in by email): the buyer's receiving and finance officers (`receiving@…`, `finance@ibadan-starch.demo.harvestslot.example`), other farmers, a second buyer (`owner@akinyele-flour.demo.harvestslot.example`) and a cooperative representative (`rep@akinyele-coop.demo.harvestslot.example`).
+These four are the one-click demo personas. Also seeded (sign in by email): the buyer's receiving and finance officers (`receiving@…`, `finance@ibadan-starch.demo.harvestslot.example`), other farmers, a second buyer (`owner@akinyele-flour.demo.harvestslot.example`) and a cooperative representative (`rep@akinyele-coop.demo.harvestslot.example`).
 
 The walkthrough is in [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
 

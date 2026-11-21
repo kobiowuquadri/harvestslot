@@ -3,10 +3,12 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { ArrowLeft, ArrowRight, CalendarDays, CloudOff, LocateFixed, MapPin, Plus, Scale, Search } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarDays, Cherry, CloudOff, LocateFixed, MapPin, Plus, Scale, Search, Sprout } from 'lucide-react';
 import {
   addDays,
   createHarvestSchema,
+  CROPS,
+  CropE,
   formatKg,
   formatLagosDate,
   formatTonnes,
@@ -14,6 +16,7 @@ import {
   OYO_LGAS,
   tonnesToKgString,
   updateHarvestSchema,
+  type Crop,
   type FarmerProfileDto,
   type HarvestDto,
 } from '@harvestslot/contracts';
@@ -33,6 +36,8 @@ type Unit = 'kg' | 't';
 type Wait = '7' | '14' | '30';
 
 export interface HarvestFormValues {
+  /** What is for sale; fixed once the harvest is created. */
+  crop: Crop;
   /** A saved farm location; empty when describing a new place. */
   farmLocationId: string;
   newPlace: boolean;
@@ -49,6 +54,7 @@ export interface HarvestFormValues {
 }
 
 export const emptyHarvestValues: HarvestFormValues = {
+  crop: 'CASSAVA',
   farmLocationId: '',
   newPlace: false,
   lga: '',
@@ -68,6 +74,7 @@ export function normaliseDraftValues(raw: Record<string, unknown>): HarvestFormV
   const v = { ...emptyHarvestValues, ...(raw as Partial<HarvestFormValues>) };
   if (!v.quantity && typeof raw.estimatedQuantityKg === 'string') v.quantity = raw.estimatedQuantityKg;
   if (!v.readyDate && typeof raw.earliestHarvestDate === 'string') v.readyDate = raw.earliestHarvestDate;
+  if (!CropE.values.includes(v.crop)) v.crop = 'CASSAVA';
   return v;
 }
 
@@ -75,6 +82,7 @@ export function valuesFromHarvest(h: HarvestDto): HarvestFormValues {
   const days = Math.round((new Date(h.latestHarvestDate).getTime() - new Date(h.earliestHarvestDate).getTime()) / 86_400_000);
   return {
     ...emptyHarvestValues,
+    crop: h.crop,
     farmLocationId: h.farmLocation.id,
     quantity: Number(h.eligibleQuantityKg).toString(),
     readyDate: h.earliestHarvestDate,
@@ -99,6 +107,7 @@ export function harvestPayload(v: HarvestFormValues) {
   const kg = quantityKg(v) ?? '';
   const point = v.lat && v.lng ? { lat: Number(v.lat), lng: Number(v.lng) } : undefined;
   return {
+    crop: v.crop,
     ...(v.farmLocationId && !v.newPlace
       ? { farmLocationId: v.farmLocationId }
       : {
@@ -118,15 +127,15 @@ export function harvestPayload(v: HarvestFormValues) {
   };
 }
 
-const STEPS = ['Where', 'How much', 'When', 'Check'] as const;
+const STEPS = ['What & where', 'How much', 'When', 'Check'] as const;
 const STEP_PATHS: Array<(path: string) => boolean> = [
-  (p) => p.startsWith('farmLocationId') || p.startsWith('newLocation'),
+  (p) => p.startsWith('crop') || p.startsWith('farmLocationId') || p.startsWith('newLocation'),
   (p) => p.startsWith('estimatedQuantityKg') || p.startsWith('eligibleQuantityKg'),
   (p) => p.startsWith('earliestHarvestDate') || p.startsWith('latestHarvestDate'),
 ];
 
 /**
- * "Add my harvest": where the cassava is, roughly how much, and when it will be ready — then a short
+ * "Add my harvest": what is for sale (cassava or tomatoes) and where, roughly how much, and when it will be ready — then a short
  * summary before "Find buyers". Works offline: the farmer can keep it on this phone and send it later;
  * sending uses the draft id as idempotency key, so retries never create a duplicate.
  */
@@ -161,20 +170,21 @@ export function HarvestForm({
   const lgas = config?.supportedLgas?.length ? config.supportedLgas : [...OYO_LGAS];
   const set = <K extends keyof HarvestFormValues>(k: K, value: HarvestFormValues[K]) => setV((p) => ({ ...p, [k]: value }));
   const kg = quantityKg(v);
+  const noun = CROPS[v.crop].noun;
 
   const validate = (): Record<string, string> => {
     const out: Record<string, string> = {};
     const payload = harvestPayload(v);
     if (v.quantity.trim() && !kg) out.estimatedQuantityKg = v.unit === 't' ? 'Enter tonnes like 2 or 2.5' : 'Enter kilograms like 2000';
     if (v.readyDate && v.readyDate < today) out.earliestHarvestDate = 'Choose today or a later date';
-    if (!existing && locations.length && !v.newPlace && !v.farmLocationId) out.farmLocationId = 'Choose where the cassava is';
+    if (!existing && locations.length && !v.newPlace && !v.farmLocationId) out.farmLocationId = v.crop === 'TOMATO' ? 'Choose where the tomatoes are' : 'Choose where the cassava is';
     const result = existing
       ? updateHarvestSchema.safeParse({ farmLocationId: v.farmLocationId, estimatedQuantityKg: payload.estimatedQuantityKg, eligibleQuantityKg: payload.estimatedQuantityKg, earliestHarvestDate: payload.earliestHarvestDate, latestHarvestDate: payload.latestHarvestDate, expectedVersion: existing.version })
       : createHarvestSchema.safeParse({ ...payload, publish: true });
     if (!result.success) {
       for (const issue of result.error.issues) {
         const path = issue.path.join('.');
-        out[path] ??= path === 'estimatedQuantityKg' ? 'Enter how much cassava you have' : path === 'earliestHarvestDate' ? 'Choose when it will be ready' : path.startsWith('newLocation.lga') ? 'Choose the local government area' : issue.message;
+        out[path] ??= path === 'estimatedQuantityKg' ? `Enter how much ${noun} you have` : path === 'earliestHarvestDate' ? 'Choose when it will be ready' : path.startsWith('newLocation.lga') ? 'Choose the local government area' : issue.message;
       }
     }
     return out;
@@ -305,8 +315,23 @@ export function HarvestForm({
       <section className="rounded-2xl border border-line bg-surface p-5 shadow-[var(--shadow-card)] sm:p-6">
         {step === 0 ? (
           <div className="flex flex-col gap-5">
+            {existing ? (
+              <p className="text-[15px] text-muted">
+                Selling <strong className="text-ink">{noun}</strong>. To sell another crop, add a new harvest.
+              </p>
+            ) : (
+              <ChoiceCards<Crop>
+                name="crop"
+                legend="What are you selling?"
+                columns={2}
+                value={v.crop}
+                onChange={(c) => set('crop', c)}
+                error={errors.crop}
+                options={CropE.values.map((c) => ({ value: c, label: CROPS[c].label, description: CROPS[c].why, icon: c === 'TOMATO' ? <Cherry className="size-6" /> : <Sprout className="size-6" /> }))}
+              />
+            )}
             <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
-              <MapPin className="size-5 text-forest" aria-hidden /> Where is the cassava?
+              <MapPin className="size-5 text-forest" aria-hidden /> Where {v.crop === 'TOMATO' ? 'are the tomatoes' : 'is the cassava'}?
             </h2>
             {locations.length ? (
               <ChoiceCards<string>
@@ -375,7 +400,7 @@ export function HarvestForm({
         {step === 1 ? (
           <div className="flex flex-col gap-5">
             <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
-              <Scale className="size-5 text-forest" aria-hidden /> Roughly how much cassava is for sale?
+              <Scale className="size-5 text-forest" aria-hidden /> Roughly how much {noun} {v.crop === 'TOMATO' ? 'are' : 'is'} for sale?
             </h2>
             <ChoiceCards<Unit>
               name="unit"
@@ -415,7 +440,7 @@ export function HarvestForm({
             </Field>
             <ChoiceCards<Wait>
               name="waitDays"
-              legend="How long can it wait in the ground after that?"
+              legend={v.crop === 'TOMATO' ? 'How long can they stay on the plants after that?' : 'How long can it wait in the ground after that?'}
               size="sm"
               columns={3}
               value={v.waitDays}
@@ -436,6 +461,7 @@ export function HarvestForm({
             <h2 className="text-lg font-semibold text-ink">{existing ? 'Check your changes' : 'Check your harvest'}</h2>
             <dl className="divide-y divide-line rounded-xl border border-line">
               {[
+                ['Selling', CROPS[v.crop].label, 0],
                 ['Where', placeLabel, 0],
                 ['How much', kg ? formatKg(kg) : 'Not entered', 1],
                 ['Ready', v.readyDate ? `${formatLagosDate(v.readyDate)} — can wait until ${formatLagosDate(addDays(v.readyDate, Number(v.waitDays)))}` : 'Not chosen', 2],

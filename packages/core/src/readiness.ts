@@ -28,7 +28,7 @@ const LABELS: Record<ReadinessCheckCode, string> = {
   FARMER_ACCEPTED: 'Farmer accepted the current terms',
   PROCESSOR_ACCEPTED: 'Processor accepted the current terms',
   CAPACITY_RESERVED: 'Quantity and processing capacity reserved',
-  HANDOVER_AGREED: 'How and where the cassava changes hands is agreed',
+  HANDOVER_AGREED: 'How and where the produce changes hands is agreed',
   TRANSPORT_ACCEPTED: 'Transport quote and payer accepted',
   VEHICLE_DRIVER_CONFIRMED: 'Vehicle and driver confirmed',
   WINDOWS_FEASIBLE: 'Agreed dates and times still workable',
@@ -93,7 +93,7 @@ export function evaluateReadiness(f: ReadinessFacts): Readiness {
     ? f.handover!.arrangement === 'COLLECT_FROM_FARM'
       ? `The buyer collects at ${f.handover!.placeLabel}.`
       : `The farmer delivers to ${f.handover!.placeLabel}.`
-    : 'How the cassava gets to the buyer has not been agreed yet.';
+    : 'How the produce gets to the buyer has not been agreed yet.';
 
   const windowProblems: string[] = [];
   if (f.pickupWindowEnd <= f.now && !['ACTIVE', 'COMPLETED'].includes(f.bookingStatus)) {

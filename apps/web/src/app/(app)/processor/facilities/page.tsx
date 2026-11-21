@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ProcessingProductE, type FacilityDto } from '@harvestslot/contracts';
+import { CROPS, CropE, PRODUCT_LABELS, type Crop, type FacilityDto } from '@harvestslot/contracts';
 import { DemoTag, Kg, Price, StatusBadge } from '@/components/domain/display';
 import { FacilityForm } from '@/components/domain/facility-form';
 import { OrgGate } from '@/components/domain/org-gate';
@@ -16,18 +16,35 @@ import { useAction } from '@/lib/mutations';
 
 function AddLine({ facility, orgId }: { facility: FacilityDto; orgId: string }) {
   const [name, setName] = useState('');
-  const [product, setProduct] = useState('GARRI');
-  const add = useAction({ request: () => ({ path: `/facilities/${facility.id}/lines`, body: { name, product }, idempotent: false }), invalidate: [['facilities', orgId]], success: 'Line added', onSuccess: () => setName('') });
+  const [crop, setCrop] = useState<Crop>('CASSAVA');
+  const [product, setProduct] = useState<string>(CROPS.CASSAVA.products[0]!);
+  const add = useAction({ request: () => ({ path: `/facilities/${facility.id}/lines`, body: { name, crop, product }, idempotent: false }), invalidate: [['facilities', orgId]], success: 'Line added', onSuccess: () => setName('') });
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
       <Field label="New line name">
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Garri line 2" />
       </Field>
+      <Field label="Crop bought">
+        <Select
+          value={crop}
+          onChange={(e) => {
+            const c = e.target.value as Crop;
+            setCrop(c);
+            setProduct(CROPS[c].products[0]!);
+          }}
+        >
+          {CropE.values.map((c) => (
+            <option key={c} value={c}>
+              {CROPS[c].label}
+            </option>
+          ))}
+        </Select>
+      </Field>
       <Field label="Product">
         <Select value={product} onChange={(e) => setProduct(e.target.value)}>
-          {ProcessingProductE.values.map((p) => (
+          {CROPS[crop].products.map((p) => (
             <option key={p} value={p}>
-              {p.toLowerCase()}
+              {PRODUCT_LABELS[p]}
             </option>
           ))}
         </Select>
@@ -94,7 +111,7 @@ function Facilities({ orgId }: { orgId: string }) {
                     <ul className="flex flex-col gap-1">
                       {f.lines.map((l) => (
                         <li key={l.id} className="flex flex-wrap items-center gap-2 text-sm">
-                          {l.name} <Badge tone="neutral">{l.product.toLowerCase()}</Badge> <StatusBadge kind="generic" status={l.status} />
+                          {l.name} <Badge tone="neutral">{CROPS[l.crop].label} · {PRODUCT_LABELS[l.product].toLowerCase()}</Badge> <StatusBadge kind="generic" status={l.status} />
                           <LineToggle line={l} orgId={orgId} />
                         </li>
                       ))}

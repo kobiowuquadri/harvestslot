@@ -34,13 +34,14 @@ export const DelegationScopeE = e([
 ]);
 export const ConsentMethodE = e(['FARMER_IN_APP', 'RECORDED_BY_REPRESENTATIVE']);
 export const FacilityStatusE = e(['ACTIVE', 'INACTIVE']);
-export const ProcessingProductE = e(['GARRI', 'FLOUR', 'STARCH', 'FUFU', 'CHIPS', 'OTHER']);
+export const CropE = e(['CASSAVA', 'TOMATO']);
+export const ProcessingProductE = e(['GARRI', 'FLOUR', 'STARCH', 'FUFU', 'CHIPS', 'TOMATO_PASTE', 'OTHER']);
 export const LineStatusE = e(['ACTIVE', 'INACTIVE']);
 export const SlotStatusE = e(['DRAFT', 'PUBLISHED', 'CLOSED', 'CANCELLED']);
 export const HarvestRequestStatusE = e(['DRAFT', 'PUBLISHED', 'CLOSED', 'WITHDRAWN']);
 export const TransportPreferenceE = e(['PROCESSOR_PAYS', 'FARMER_MAY_PAY']);
 export const OfferStatusE = e(['DRAFT', 'OPEN', 'COUNTERED', 'ACCEPTED', 'DECLINED', 'WITHDRAWN', 'EXPIRED', 'LAPSED']);
-/** How the cassava changes hands: the buyer collects at the farm, or the farmer delivers to the facility. */
+/** How the produce changes hands: the buyer collects at the farm, or the farmer delivers to the facility. */
 export const HandoverArrangementE = e(['COLLECT_FROM_FARM', 'FARMER_DELIVERS']);
 export const ProposerPartyE = e(['PROCESSOR', 'FARMER']);
 export const FreightPayerE = e(['PROCESSOR', 'FARMER']);
@@ -181,6 +182,7 @@ export type FarmerClaimStatus = (typeof FarmerClaimStatusE.values)[number];
 export type LocationSource = (typeof LocationSourceE.values)[number];
 export type DelegationScope = (typeof DelegationScopeE.values)[number];
 export type ConsentMethod = (typeof ConsentMethodE.values)[number];
+export type Crop = (typeof CropE.values)[number];
 export type ProcessingProduct = (typeof ProcessingProductE.values)[number];
 export type SlotStatus = (typeof SlotStatusE.values)[number];
 export type HarvestRequestStatus = (typeof HarvestRequestStatusE.values)[number];
@@ -237,6 +239,7 @@ export const ALL_ENUMS = {
   DelegationScope: DelegationScopeE.values,
   ConsentMethod: ConsentMethodE.values,
   FacilityStatus: FacilityStatusE.values,
+  Crop: CropE.values,
   ProcessingProduct: ProcessingProductE.values,
   LineStatus: LineStatusE.values,
   SlotStatus: SlotStatusE.values,

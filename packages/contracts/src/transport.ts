@@ -184,7 +184,7 @@ export const handoverExceptionSchema = z.object({ reason: reasonText });
 export const confirmPickupSchema = z.object({
   farmerReportedQuantityKg: nonNegativeKg.optional(),
   actingForFarmerId: uuid.optional(),
-  agree: z.literal(true, { message: 'Confirm that you handed over the cassava' }),
+  agree: z.literal(true, { message: 'Confirm that you handed over the produce' }),
 });
 
 export const jobSchema = z.object({

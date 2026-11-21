@@ -5,9 +5,10 @@ import { PageIntro } from '@/components/domain/marketing';
 export const metadata: Metadata = { title: 'FAQ and contact' };
 
 const faqs = [
-  ['Does a match mean someone will buy my cassava?', 'No. A match only shows processors with open capacity that fits your dates and location. Nothing is reserved until a processor sends an offer and you accept its exact terms.'],
+  ['Which crops can I sell?', 'Cassava and tomatoes for now: both spoil quickly after harvest, so agreeing the buyer first matters most. A buyer publishes slots for the crop it buys, and you are only matched with buyers of your crop.'],
+  ['Does a match mean someone will buy my harvest?', 'No. A match only shows processors with open capacity that fits your dates and location. Nothing is reserved until a processor sends an offer and you accept its exact terms.'],
   ['When should I start harvesting?', 'Only when your booking shows "Ready to harvest". That means the buyer, processing capacity, transport, vehicle and driver are all confirmed for the current terms. If anything changes, the booking stops being ready and you are told why.'],
-  ['Who brings the cassava to the buyer?', 'The offer says: either the buyer collects from your farm, or you deliver to their facility. Any delivery cost you would pay is shown before you accept.'],
+  ['Who brings the produce to the buyer?', 'The offer says: either the buyer collects from your farm, or you deliver to their facility. Any delivery cost you would pay is shown before you accept.'],
   ['What if the facility rejects part of my load?', 'The facility records the weights and the accepted and rejected quantities with reasons and evidence. You review any material difference and can accept it or open a dispute. You are invoiced for the accepted quantity at the agreed price.'],
   ['Does HarvestSlot hold my money?', 'No. Processors pay farmers directly. A payment counts as received only when you confirm it arrived. HarvestSlot only collects its own service fee from processors.'],
   ['Can my cooperative act for me?', 'Only within the permissions you give, which you can see and revoke at any time. Approving a sale is a separate permission from helping with data entry.'],

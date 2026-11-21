@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import {
   buyingSlotSchema,
+  CROPS,
+  cropNoun,
   formatLagosDate,
   addDays,
   adjustCapacitySchema,
@@ -57,7 +59,7 @@ export class FacilitiesService {
       cancellationTerms: f.cancellationTerms,
       isDemo: f.isDemo,
       version: f.version,
-      lines: f.lines.map((l) => ({ id: l.id, facilityId: l.facilityId, name: l.name, product: l.product, status: l.status, version: l.version })),
+      lines: f.lines.map((l) => ({ id: l.id, facilityId: l.facilityId, name: l.name, crop: l.crop, product: l.product, status: l.status, version: l.version })),
     };
   }
 
@@ -125,7 +127,10 @@ export class FacilitiesService {
     const f = await this.prisma.db.facility.findUnique({ where: { id: facilityId } });
     if (!f) throw new DomainError('NOT_FOUND', 'Facility not found');
     await this.access.requireOrg(actor, f.organisationId, 'processor.facility.manage');
-    const line = await this.prisma.db.processingLine.create({ data: { facilityId, name: input.name, product: input.product } });
+    if (!CROPS[input.crop].products.includes(input.product)) {
+      throw new DomainError('VALIDATION_FAILED', `A line buying ${cropNoun(input.crop)} cannot make that product`, [{ path: 'product', message: 'Choose a product made from this crop' }]);
+    }
+    const line = await this.prisma.db.processingLine.create({ data: { facilityId, name: input.name, crop: input.crop, product: input.product } });
     await audit(this.prisma.db, { actor, organisationId: f.organisationId, action: 'line.created', entityType: 'processing_line', entityId: line.id });
     return this.get(actor, facilityId);
   }
@@ -135,6 +140,9 @@ export class FacilitiesService {
     if (!line) throw new DomainError('NOT_FOUND', 'Line not found');
     await this.access.requireOrg(actor, line.facility.organisationId, 'processor.facility.manage');
     const { expectedVersion, ...rest } = input;
+    if (rest.product && !CROPS[line.crop].products.includes(rest.product)) {
+      throw new DomainError('VALIDATION_FAILED', `A line buying ${cropNoun(line.crop)} cannot make that product`, [{ path: 'product', message: 'Choose a product made from this crop' }]);
+    }
     const r = await this.prisma.db.processingLine.updateMany({ where: { id: lineId, version: expectedVersion }, data: { ...rest, version: { increment: 1 } } });
     if (r.count !== 1) throw new DomainError('VERSION_CONFLICT', 'The line was changed elsewhere. Reload and try again.');
     return this.get(actor, line.facilityId);
@@ -150,6 +158,7 @@ export class FacilitiesService {
       id: s.id,
       lineId: s.lineId,
       lineName: s.line.name,
+      crop: s.line.crop,
       product: s.line.product,
       facilityId: s.facilityId,
       facilityName: s.facility.name,
@@ -244,7 +253,7 @@ export class FacilitiesService {
         lga: nf.lga,
         address: nf.address,
         point,
-        qualityCriteria: qualityTermsSchema.parse({ maxHoursHarvestToDelivery: 48, soilAndStemsRemoved: true, maxVisibleRotPercent: 5, varietiesAccepted: [], notes: 'Fresh roots, harvested no more than 48 hours before delivery.' }),
+        qualityCriteria: qualityTermsSchema.parse(CROPS[input.crop].defaultQuality),
         minOrderKg: '100',
         maxPickupDistanceKm: 100,
         indicativePriceKoboPerKg: input.priceKoboPerKg,
@@ -256,10 +265,14 @@ export class FacilitiesService {
       facilityId = f.id;
       await this.prisma.db.organisation.updateMany({ where: { id: orgId, lga: null }, data: { lga: nf.lga } });
     }
-    let line = await this.prisma.db.processingLine.findFirst({ where: { facilityId, status: 'ACTIVE' }, orderBy: { createdAt: 'asc' } });
+    // Each crop is bought on its own line: the first buying slot for a crop at a place creates its intake line.
+    let line = await this.prisma.db.processingLine.findFirst({ where: { facilityId, crop: input.crop, status: 'ACTIVE' }, orderBy: { createdAt: 'asc' } });
     if (!line) {
-      await this.addLine(actor, facilityId, { name: 'Cassava intake', product: 'OTHER' });
-      line = await this.prisma.db.processingLine.findFirstOrThrow({ where: { facilityId, status: 'ACTIVE' }, orderBy: { createdAt: 'asc' } });
+      const existingNames = new Set((await this.prisma.db.processingLine.findMany({ where: { facilityId }, select: { name: true } })).map((l) => l.name));
+      let name = CROPS[input.crop].intakeLineName;
+      for (let n = 2; existingNames.has(name); n++) name = `${CROPS[input.crop].intakeLineName} ${n}`;
+      await this.addLine(actor, facilityId, { name, crop: input.crop, product: 'OTHER' });
+      line = await this.prisma.db.processingLine.findFirstOrThrow({ where: { facilityId, crop: input.crop, status: 'ACTIVE' }, orderBy: { createdAt: 'asc' } });
     }
     const startsAt = lagosDateTime(input.fromDate, 8);
     const endsAt = lagosDateTime(input.toDate, 17);

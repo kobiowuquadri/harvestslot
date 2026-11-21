@@ -52,7 +52,7 @@ export const recordAcceptedWeightSchema = z
   })
   .refine((v) => Number(v.acceptedKg) <= Number(v.receivedKg), { message: 'Accepted weight cannot be more than the weight received', path: ['acceptedKg'] })
   .refine((v) => Number(v.acceptedKg) === Number(v.receivedKg) || v.rejectionReasons.length > 0, {
-    message: 'Say why some cassava was not accepted',
+    message: 'Say why some produce was not accepted',
     path: ['rejectionReasons'],
   });
 
@@ -80,7 +80,7 @@ export const submitQualityDecisionSchema = z
     path: ['rejectionReasons'],
   })
   .refine((v) => Number(v.rejectedKg) === 0 || v.rejectedDisposition !== 'NONE', {
-    message: 'Choose what happens to the rejected cassava',
+    message: 'Choose what happens to the rejected produce',
     path: ['rejectedDisposition'],
   });
 

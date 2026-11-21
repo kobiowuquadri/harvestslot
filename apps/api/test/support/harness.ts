@@ -142,7 +142,7 @@ export async function makeFarmer(db: PrismaClient, opts: { withAccount?: boolean
   return { user, profile, location };
 }
 
-export async function makeProcessor(db: PrismaClient, opts: { capacityKg?: string; purchaseLimitKg?: string; slotDayOffset?: number } = {}) {
+export async function makeProcessor(db: PrismaClient, opts: { capacityKg?: string; purchaseLimitKg?: string; slotDayOffset?: number; crop?: 'CASSAVA' | 'TOMATO' } = {}) {
   const manager = await makeUser(db, 'manager');
   const org = await makeOrg(db, 'PROCESSOR', manager.id, ['OWNER', 'MANAGER']);
   const receiving = await makeUser(db, 'receiving');
@@ -163,7 +163,8 @@ export async function makeProcessor(db: PrismaClient, opts: { capacityKg?: strin
       cancellationTerms: 'Either party may cancel before harvest starts without penalty.',
     },
   });
-  const line = await db.processingLine.create({ data: { facilityId: facility.id, name: `Line ${randomUUID().slice(0, 4)}`, product: 'GARRI' } });
+  const crop = opts.crop ?? 'CASSAVA';
+  const line = await db.processingLine.create({ data: { facilityId: facility.id, name: `Line ${randomUUID().slice(0, 4)}`, crop, product: crop === 'TOMATO' ? 'TOMATO_PASTE' : 'GARRI' } });
   const offset = opts.slotDayOffset ?? 3;
   const startsAt = new Date(`${lagosDate(offset)}T07:00:00+01:00`);
   const slot = await db.processingSlot.create({
@@ -200,9 +201,10 @@ export async function makeTransporter(db: PrismaClient, opts: { vehicles?: numbe
   return { owner, org, driverUser, driver, vehicles };
 }
 
-export async function makeHarvest(db: PrismaClient, farmer: Awaited<ReturnType<typeof makeFarmer>>, quantityKg = '2000') {
+export async function makeHarvest(db: PrismaClient, farmer: Awaited<ReturnType<typeof makeFarmer>>, quantityKg = '2000', crop: 'CASSAVA' | 'TOMATO' = 'CASSAVA') {
   return db.harvestRequest.create({
     data: {
+      crop,
       reference: `HR-T-${randomUUID().slice(0, 8)}`,
       farmerProfileId: farmer.profile.id,
       farmLocationId: farmer.location.id,
@@ -219,7 +221,7 @@ export async function makeHarvest(db: PrismaClient, farmer: Awaited<ReturnType<t
 
 /**
  * Offer terms that fit a fixture slot: the buyer collects from the farm the evening before (pickup
- * window), and the cassava reaches the facility inside the slot.
+ * window), and the produce reaches the facility inside the slot.
  */
 export function offerTerms(slot: { id: string; startsAt: Date }, quantityKg = '2000', priceKoboPerKg = 25_000, handoverArrangement: 'COLLECT_FROM_FARM' | 'FARMER_DELIVERS' = 'COLLECT_FROM_FARM') {
   const s = slot.startsAt.getTime();

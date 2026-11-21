@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { CalendarDays, MapPin, Send } from 'lucide-react';
-import { formatKg, type InboxItem, type OfferDto } from '@harvestslot/contracts';
+import { CROPS, formatKg, type InboxItem, type OfferDto } from '@harvestslot/contracts';
 import { ReasonActionDialog } from '@/components/domain/dialogs';
 import { DateOnly, Price } from '@/components/domain/display';
 import { OfferForm } from '@/components/domain/offer-form';
@@ -33,6 +33,7 @@ function OfferDialog({ w, item, onClose }: { w: Extract<Workspace, { kind: 'proc
             existing={draft.data}
             request={{
               harvestRequestId: item.harvestRequestId,
+              crop: item.crop,
               reference: item.reference,
               farmerName: item.farmerName,
               farmLabel: item.farmLabel,
@@ -59,6 +60,7 @@ function RequestCard({ w, i, highlighted, onReview }: { w: Extract<Workspace, { 
         <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-2">
             <span className="text-[15px] font-semibold text-ink">{i.farmerName}</span>
+            <Badge>{CROPS[i.crop].label}</Badge>
             {i.request ? <Badge tone="accent">Asked you directly</Badge> : null}
           </p>
           <p className="mt-0.5 flex items-center gap-1 text-[13px] text-muted">
@@ -132,7 +134,7 @@ function Requests({ w }: { w: Extract<Workspace, { kind: 'processor' }> }) {
   }, [highlighted, q.data, w]);
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Requests" description="Farmers with cassava to sell that fit your buying slots. Review a request and send an offer — or tell the farmer you can’t buy this time." />
+      <PageHeader title="Requests" description="Farmers with produce to sell that fit your buying slots. Review a request and send an offer — or tell the farmer you can’t buy this time." />
       {w.status !== 'APPROVED' ? <Alert tone="warning">HarvestSlot is reviewing your business. You can prepare offers as drafts now and send them once the review is done.</Alert> : null}
       <QueryView
         query={q}

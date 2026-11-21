@@ -36,7 +36,7 @@ export default function BookingsPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title={view === 'cooperative' ? 'Member bookings' : view === 'admin' ? 'All bookings' : view === 'farmer' ? 'My plans' : 'Bookings'}
-        description={view === 'farmer' ? 'Each plan says who buys your cassava, how much, and when and where it should be ready — and what happens next.' : 'Agreed purchases: from the plan, to the weight you accept, to the payment the farmer confirms.'}
+        description={view === 'farmer' ? 'Each plan says who buys your produce, how much, and when and where it should be ready — and what happens next.' : 'Agreed purchases: from the plan, to the weight you accept, to the payment the farmer confirms.'}
         actions={
           <Select aria-label="Filter by status" value={status} onChange={(e) => setStatus(e.target.value as BookingStatus | '')} className="w-56">
             <option value="">All statuses</option>

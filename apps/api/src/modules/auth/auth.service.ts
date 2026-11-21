@@ -30,6 +30,7 @@ const TERMS_VERSION = '2026-10-draft';
 export const DEMO_PERSONAS: Record<DemoPersona, string> = {
   farmer: 'farmer.adunni@demo.harvestslot.example',
   'processor-manager': 'manager@ibadan-starch.demo.harvestslot.example',
+  'tomato-buyer': 'manager@egbeda-tomato.demo.harvestslot.example',
   'receiving-officer': 'receiving@ibadan-starch.demo.harvestslot.example',
   'finance-officer': 'finance@ibadan-starch.demo.harvestslot.example',
   cooperative: 'rep@akinyele-coop.demo.harvestslot.example',

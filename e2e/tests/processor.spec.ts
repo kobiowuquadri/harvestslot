@@ -14,7 +14,7 @@ test('a buyer publishes a buying slot in plain words, cannot double-publish the 
   await expect(page.getByRole('heading', { level: 1, name: 'Buying slots' })).toBeVisible();
   await page.getByRole('button', { name: 'Publish a buying slot' }).first().click();
   const d = page.getByRole('dialog', { name: 'Publish a buying slot' });
-  await expect(d.getByText('Tell farmers how much cassava you can receive, where, and on which dates.')).toBeVisible();
+  await expect(d.getByText('Tell farmers what you buy, how much you can receive, where, and on which dates.')).toBeVisible();
   await d.getByLabel('Name farmers will see').fill('Akinyele Garri Works');
   await d.getByRole('combobox', { name: /Local government area/ }).fill('Akiny');
   await d.getByRole('option', { name: 'Akinyele' }).click();

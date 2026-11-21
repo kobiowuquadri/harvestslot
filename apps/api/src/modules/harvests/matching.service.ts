@@ -9,7 +9,7 @@ import {
   type MatchRequestInput,
   type Policies,
 } from '@harvestslot/core';
-import { formatKg, gramsToKgString, lagosStartOfDay, qualityTermsSchema, toGrams, type MatchResponse } from '@harvestslot/contracts';
+import { cropNoun, formatKg, gramsToKgString, lagosStartOfDay, qualityTermsSchema, toGrams, type Crop, type MatchResponse } from '@harvestslot/contracts';
 import type { Db } from '@harvestslot/db';
 import { PrismaService } from '../../common/prisma.service.js';
 import { ENV, type Env } from '../../common/tokens.js';
@@ -18,6 +18,7 @@ const HORIZON_DAYS = 75;
 
 export interface RequestFacts {
   id: string;
+  crop: Crop;
   remainingG: bigint;
   earliestHarvestDate: string;
   latestHarvestDate: string;
@@ -68,7 +69,7 @@ export class MatchingService {
     return out;
   }
 
-  async candidates(db: Db, now: Date, opts: { orgId?: string; from: Date; to: Date; isDemo: boolean }): Promise<MatchCandidateInput[]> {
+  async candidates(db: Db, now: Date, opts: { orgId?: string; crop?: Crop; from: Date; to: Date; isDemo: boolean }): Promise<MatchCandidateInput[]> {
     const slots = await db.processingSlot.findMany({
       where: {
         status: 'PUBLISHED',
@@ -76,6 +77,7 @@ export class MatchingService {
         endsAt: { gt: opts.from },
         isDemo: opts.isDemo,
         ...(opts.orgId ? { facility: { organisationId: opts.orgId } } : {}),
+        ...(opts.crop ? { line: { crop: opts.crop } } : {}),
       },
       include: { line: true, facility: { include: { organisation: { select: { id: true, name: true, status: true } } } } },
       orderBy: { startsAt: 'asc' },
@@ -90,14 +92,14 @@ export class MatchingService {
         lga: s.facility.lga,
         point: { lat: Number(s.facility.lat), lng: Number(s.facility.lng) },
         status: s.facility.status,
-        acceptsCassava: s.facility.acceptsCassava,
+        acceptingProduce: s.facility.acceptingProduce,
         maxPickupDistanceKm: s.facility.maxPickupDistanceKm,
         minOrderG: toGrams(s.facility.minOrderKg),
         indicativePriceKoboPerKg: s.facility.indicativePriceKoboPerKg,
         qualityCriteria: qualityTermsSchema.parse(s.facility.qualityCriteria),
       },
       org: { id: s.facility.organisation.id, name: s.facility.organisation.name, status: s.facility.organisation.status },
-      slot: { id: s.id, startsAt: s.startsAt, endsAt: s.endsAt, status: s.status, lineName: s.line.name, lineStatus: s.line.status, product: s.line.product },
+      slot: { id: s.id, startsAt: s.startsAt, endsAt: s.endsAt, status: s.status, lineName: s.line.name, lineStatus: s.line.status, crop: s.line.crop, product: s.line.product },
       usage: usage.get(s.id)!,
       reliability: reliability.get(s.facility.organisationId) ?? { completed: 0, onTime: 0 },
       invited: false,
@@ -115,6 +117,7 @@ export class MatchingService {
     const point = useExact ? (r.exact ?? r.approx) : r.approx;
     return {
       id: r.id,
+      crop: r.crop,
       remainingG: r.remainingG,
       earliestHarvestDate: r.earliestHarvestDate,
       latestHarvestDate: r.latestHarvestDate,
@@ -129,7 +132,7 @@ export class MatchingService {
   async forFarmer(r: RequestFacts, policies: Policies, invitedFacilityIds: Set<string>, now = new Date()): Promise<MatchResponse> {
     const { from, to } = this.window(r);
     const horizon = new Date(now.getTime() + HORIZON_DAYS * 86_400_000);
-    const candidates = await this.candidates(this.prisma.db, now, { from, to: to < horizon ? to : horizon, isDemo: r.isDemo });
+    const candidates = await this.candidates(this.prisma.db, now, { crop: r.crop, from, to: to < horizon ? to : horizon, isDemo: r.isDemo });
     candidates.forEach((c) => (c.invited = invitedFacilityIds.has(c.facility.id)));
     const input = this.input(r, true);
     const { matches, rejections } = rankMatches(input, candidates, {
@@ -182,7 +185,7 @@ export class MatchingService {
         explanation: m.explanation,
         remainingSteps: [
           'Send a request: the buyer replies with an offer (a request reserves nothing)',
-          'You review the offer — price, date, and who brings the cassava — and accept or decline',
+          `You review the offer — price, date, and who brings the ${cropNoun(r.crop)} — and accept or decline`,
           'Your plan is confirmed and you can harvest',
         ],
         qualityCriteria: m.candidate.facility.qualityCriteria,

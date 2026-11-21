@@ -2,6 +2,7 @@
 
 import { CheckCircle2, Circle, XCircle } from 'lucide-react';
 import {
+  CROPS,
   PARTY_LABELS,
   REJECTION_HANDLING_LABELS,
   estimateFarmerNet,
@@ -82,7 +83,7 @@ export function TermsSummary({ terms, viewer }: { terms: BookingTermsContent; vi
         <strong>{terms.processor.name}</strong> buys <strong>
           <Kg kg={terms.quantityKg} tonnes />
         </strong>{' '}
-        of fresh cassava from <strong>{terms.farmer.displayName}</strong> at <strong><Price kobo={terms.priceKoboPerKg} /></strong>, for processing at {terms.facility.name}. Pickup{' '}
+        of {CROPS[terms.harvest.crop ?? 'CASSAVA'].produce} from <strong>{terms.farmer.displayName}</strong> at <strong><Price kobo={terms.priceKoboPerKg} /></strong>, for processing at {terms.facility.name}. Pickup{' '}
         <Window start={terms.pickupWindow.start} end={terms.pickupWindow.end} />; delivery <Window start={terms.deliveryWindow.start} end={terms.deliveryWindow.end} />.{' '}
         {terms.freightPayer === 'PROCESSOR' ? 'The processor pays for transport.' : 'The farmer pays for transport, as shown below.'}
       </p>
@@ -95,7 +96,7 @@ export function TermsSummary({ terms, viewer }: { terms: BookingTermsContent; vi
           ['Pickup from', `${terms.harvest.pickupLocationLabel}, ${terms.harvest.pickupLga}`],
           ['Processing', `${terms.facility.name} · ${terms.line.name} (${terms.line.product.toLowerCase()})`],
           ['Quality requirements', `Delivered within ${terms.qualityTerms.maxHoursHarvestToDelivery} h of harvest${terms.qualityTerms.soilAndStemsRemoved ? '; soil and stems removed' : ''}${terms.qualityTerms.maxVisibleRotPercent !== undefined ? `; ≤${terms.qualityTerms.maxVisibleRotPercent}% visible rot` : ''}${terms.qualityTerms.minRootLengthCm ? `; roots ≥${terms.qualityTerms.minRootLengthCm} cm` : ''}`],
-          ['Rejected cassava', REJECTION_HANDLING_LABELS[terms.rejectionHandling]],
+          ['Rejected produce', REJECTION_HANDLING_LABELS[terms.rejectionHandling]],
           ['Payment', terms.invoiceDueRule],
           ['Cancellation', terms.cancellationTerms],
           [

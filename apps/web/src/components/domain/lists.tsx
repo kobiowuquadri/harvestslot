@@ -4,6 +4,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { ArrowRight, CheckCircle2, Clock, FileText } from 'lucide-react';
 import {
+  CROPS,
   INVOICE_KIND_LABELS,
   type BookingSummary,
   type HarvestDto,
@@ -96,8 +97,9 @@ export function BookingCards({
                     ) : null}
                     {b.isDemo ? <DemoTag /> : null}
                   </div>
-                  <span className="shrink-0 text-lg font-semibold tracking-tight text-ink">
+                  <span className="shrink-0 text-right text-lg font-semibold tracking-tight text-ink">
                     <Kg kg={b.quantityKg} />
+                    <span className="block text-xs font-medium text-muted">{CROPS[b.crop].label}</span>
                   </span>
                 </div>
                 <div className="min-w-0">
@@ -180,8 +182,9 @@ export function HarvestCards({
                   <StatusBadge kind="harvest" status={h.status} />
                   {h.isDemo ? <DemoTag /> : null}
                 </div>
-                <span className="shrink-0 text-lg font-semibold tracking-tight text-ink">
+                <span className="shrink-0 text-right text-lg font-semibold tracking-tight text-ink">
                   <Kg kg={h.eligibleQuantityKg} tonnes />
+                  <span className="block text-xs font-medium text-muted">{CROPS[h.crop].label}</span>
                 </span>
               </div>
               <div className="min-w-0">

@@ -37,7 +37,7 @@ function GetStarted() {
         </span>
         <div>
           <h2 className="text-2xl font-semibold tracking-tight text-ink">Find a buyer before you harvest</h2>
-          <p className="mt-2 max-w-xl text-[15px] text-muted">Tell us where your cassava is, roughly how much you have and when it will be ready. We show buyers who can take it.</p>
+          <p className="mt-2 max-w-xl text-[15px] text-muted">Cassava or tomatoes: tell us where your harvest is, roughly how much you have and when it will be ready. We show buyers who can take it.</p>
         </div>
         <AddHarvestButton className="self-start" />
       </div>

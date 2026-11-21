@@ -160,7 +160,7 @@ export function ProcessorDashboard({ w }: { w: Extract<Workspace, { kind: 'proce
       <DashboardHeader
         eyebrow={`${greeting()}${firstName ? `, ${firstName}` : ''} · ${todayLabel()}`}
         title={w.label}
-        description="Buying slots, farmers’ requests and your bookings — agreed before the cassava is dug."
+        description="Buying slots, farmers’ requests and your bookings — agreed before anything is harvested."
         actions={
           <>
             {commercial ? (

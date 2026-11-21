@@ -18,16 +18,16 @@ import { Button } from '@/components/ui/button';
 import { photos } from '@/content/photos';
 
 const roles = [
-  { icon: Sprout, title: 'Sell cassava', body: 'Add your harvest, choose a buyer, agree who collects and when — then harvest.' },
-  { icon: Factory, title: 'Buy cassava', body: 'Publish buying slots, answer farmers’ requests, record the weight and the payment.' },
+  { icon: Sprout, title: 'Sell your harvest', body: 'Cassava or tomatoes: add your harvest, choose a buyer, agree who collects and when — then harvest.' },
+  { icon: Factory, title: 'Buy fresh produce', body: 'Publish buying slots for each crop, answer farmers’ requests, record the weight and the payment.' },
   { icon: Truck, title: 'Collect or deliver', body: 'One decision in the offer: the buyer collects from the farm, or the farmer delivers.' },
   { icon: HandCoins, title: 'Paid for what is accepted', body: 'The final amount uses the weight accepted; the farmer confirms the money arrived.' },
 ];
 
 const steps = [
-  { icon: Sprout, title: 'Add your harvest', body: 'Where the cassava is, roughly how much (kg or tonnes) and when it will be ready. Drafts wait on the phone without a signal.' },
+  { icon: Sprout, title: 'Add your harvest', body: 'What you are selling, where it is, roughly how much (kg or tonnes) and when it will be ready. Drafts wait on the phone without a signal.' },
   { icon: ListChecks, title: 'Find a buyer', body: 'See buyers whose location, buying dates and free space fit — each explained in one sentence — and send a request.' },
-  { icon: Truck, title: 'Accept the offer', body: 'Price, quantity, date, place and who brings the cassava are on one screen. Accept or decline; declining keeps your harvest listed.' },
+  { icon: Truck, title: 'Accept the offer', body: 'Price, quantity, date, place and who brings the produce are on one screen. Accept or decline; declining keeps your harvest listed.' },
   { icon: BadgeCheck, title: 'Ready to harvest', body: 'Once both sides agree and the buyer’s space is reserved, the plan says so in one sentence. Then weigh, pay and confirm receipt.' },
 ];
 
@@ -41,12 +41,12 @@ const features = [
 ];
 
 const audiences = [
-  { id: 'farmers', title: 'Farmers selling cassava', photo: photos.farmerHoldingCassava, body: 'Know your buyer, price, place and day before you dig, and confirm every payment yourself. Free for farmers.' },
-  { id: 'processors', title: 'Processors buying cassava', photo: photos.cassavaTubers, body: 'Tell farmers how much you can receive, where and when. Plan intake instead of hoping for deliveries, and keep weights on record.' },
+  { id: 'farmers', title: 'Farmers selling cassava or tomatoes', photo: photos.farmerHoldingCassava, body: 'Know your buyer, price, place and day before you harvest, and confirm every payment yourself. Free for farmers.' },
+  { id: 'processors', title: 'Processors buying fresh produce', photo: photos.tomatoBaskets, body: 'Tell farmers what you buy, how much you can receive, where and when. Plan intake instead of hoping for deliveries, and keep weights on record.' },
 ];
 
 const notDone = [
-  'Hold or move the money for your cassava — buyers pay farmers directly and the farmer confirms.',
+  'Hold or move the money for your harvest — buyers pay farmers directly and the farmer confirms.',
   'Charge farmers a fee for selling their crop.',
   'Track trucks live — the buyer collects or the farmer delivers, at the agreed time.',
   'Publish impact numbers it has not measured. HarvestSlot is a new service with no pilot results yet.',
@@ -116,13 +116,13 @@ export default function LandingPage() {
           </div>
           <div className="order-1 col-span-2 text-center lg:order-2 lg:col-span-1">
             <p className="inline-flex items-center gap-2 rounded-full bg-surface px-3 py-1 text-xs font-medium text-muted ring-1 ring-line">
-              <span className="size-1.5 rounded-full bg-forest" aria-hidden /> Cassava · Oyo State, Nigeria
+              <span className="size-1.5 rounded-full bg-forest" aria-hidden /> Cassava &amp; tomatoes · Oyo State, Nigeria
             </p>
             <h1 className="mt-5 text-[2.5rem] font-semibold leading-[1.1] text-ink sm:text-5xl lg:text-[3.25rem]">
               Harvest with a <span className="headline-underline whitespace-nowrap">confirmed plan.</span>
             </h1>
             <p className="mx-auto mt-5 max-w-md text-[17px] leading-relaxed text-muted">
-              Know who will buy your cassava, how much they will take, and when and where it should be ready — <strong className="font-semibold text-ink">before you harvest</strong> — so fresh roots are never dug up without somewhere to go.
+              Know who will buy your cassava or tomatoes, how much they will take, and when and where it should be ready — <strong className="font-semibold text-ink">before you harvest</strong> — so a crop that spoils fast never leaves the farm without somewhere to go.
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-3">
               <Button asChild size="lg">
@@ -173,7 +173,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div>
-            <SectionHeading eyebrow="How it works" title="From expected harvest to a confirmed plan" body="Four steps stand between a field of mature cassava and a harvest that is safe to start." />
+            <SectionHeading eyebrow="How it works" title="From expected harvest to a confirmed plan" body="Four steps stand between a field ready for harvest and a harvest that is safe to start." />
             <ol className="mt-8 flex flex-col gap-5">
               {steps.map(({ icon: Icon, title, body }, i) => (
                 <li key={title} className="flex gap-4">
@@ -200,7 +200,7 @@ export default function LandingPage() {
       {/* ── Features ── */}
       <section id="features" className="scroll-mt-20 bg-canvas">
         <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-          <SectionHeading center eyebrow="Features" title="Built for the realities of a fresh crop" body="Cassava starts to spoil within days of harvest. Every part of HarvestSlot is designed so nobody digs, drives or pays on a promise that might not hold." />
+          <SectionHeading center eyebrow="Features" title="Built for the realities of a fresh crop" body="Cassava roots start to spoil within days of harvest, and ripe tomatoes bruise and soften just as fast. Every part of HarvestSlot is designed so nobody digs, drives or pays on a promise that might not hold." />
           <div className="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {features.map(({ icon: Icon, title, body }) => (
               <div key={title} className="rounded-2xl border border-line bg-surface p-6 shadow-[var(--shadow-card)]">
@@ -259,7 +259,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-[1.4fr_1fr]">
             <div className="px-6 py-12 sm:px-12">
               <h2 className="font-display text-3xl font-semibold tracking-tight text-white sm:text-4xl">Plan your next harvest before you dig.</h2>
-              <p className="mt-3 max-w-lg text-base leading-relaxed text-white/75">Sell cassava as a farmer, or buy it for your processing facility. Free to start.</p>
+              <p className="mt-3 max-w-lg text-base leading-relaxed text-white/75">Sell cassava or tomatoes as a farmer, or buy them for your processing facility. Free to start.</p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Button asChild size="lg">
                   <Link href="/register">Create an account</Link>

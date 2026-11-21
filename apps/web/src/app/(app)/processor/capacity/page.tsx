@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
-import { addDays, formatLagosDate, lagosDateString, lagosStartOfDay, type FacilityDto, type SlotDto } from '@harvestslot/contracts';
+import { addDays, CROPS, formatLagosDate, lagosDateString, lagosStartOfDay, PRODUCT_LABELS, type FacilityDto, type SlotDto } from '@harvestslot/contracts';
 import { BuyingSlotButton } from '@/components/domain/buying-slot-form';
 import { ReasonActionDialog } from '@/components/domain/dialogs';
 import { DemoTag, Kg, StatusBadge, When, Window } from '@/components/domain/display';
@@ -10,7 +10,7 @@ import { OrgGate } from '@/components/domain/org-gate';
 import { EmptyState, PageHeader, QueryView } from '@/components/domain/states';
 import { Button } from '@/components/ui/button';
 import { Checkbox, Field, Input, Select, Textarea } from '@/components/ui/form';
-import { Alert, Card, CardContent, Dialog, DialogContent } from '@/components/ui/primitives';
+import { Alert, Badge, Card, CardContent, Dialog, DialogContent } from '@/components/ui/primitives';
 import { useApi } from '@/lib/hooks';
 import { useAction } from '@/lib/mutations';
 import type { Workspace } from '@/lib/session';
@@ -138,7 +138,7 @@ function CreateSlot({ orgId, facilities }: { orgId: string; facilities: Facility
               <Select value={lineId} onChange={(e) => setLineId(e.target.value)}>
                 {lines.map((l) => (
                   <option key={l.id} value={l.id}>
-                    {l.facilityName} · {l.name} ({l.product.toLowerCase()})
+                    {l.facilityName} · {l.name} ({CROPS[l.crop].noun}, {PRODUCT_LABELS[l.product].toLowerCase()})
                   </option>
                 ))}
               </Select>
@@ -212,7 +212,7 @@ function Capacity({ w }: { w: Extract<Workspace, { kind: 'processor' }> }) {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Buying slots"
-        description="Tell farmers how much cassava you can receive, where, and on which dates. Farmers whose harvest fits see you as a buyer; an offer you send holds the space until they answer."
+        description="Tell farmers what you buy, how much you can receive, where, and on which dates. Farmers whose harvest fits see you as a buyer; an offer you send holds the space until they answer."
         actions={
           facilities.data ? (
             <>
@@ -262,6 +262,7 @@ function Capacity({ w }: { w: Extract<Workspace, { kind: 'processor' }> }) {
                         <span className="font-medium">
                           {s.facilityName} · {s.lineName}
                         </span>
+                        <Badge>{CROPS[s.crop].label}</Badge>
                         <StatusBadge kind="slot" status={s.status} />
                         {s.isDemo ? <DemoTag /> : null}
                         <span className="text-sm text-muted">

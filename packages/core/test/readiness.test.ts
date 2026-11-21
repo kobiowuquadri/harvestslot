@@ -58,7 +58,7 @@ describe('evaluateReadiness', () => {
   });
 
   it('older bookings made with a transporter still need a confirmed, conflict-free trip with a driver', () => {
-    // Without transport terms and without a handover, how the cassava gets there is not agreed.
+    // Without transport terms and without a handover, how the produce gets there is not agreed.
     expect(failing(readyFacts({ hasTransportTerms: false, confirmedParties: ['FARMER', 'PROCESSOR'], trip: null }))).toEqual(['HANDOVER_AGREED']);
     expect(failing(readyFacts({ trip: { status: 'CONFIRMED', hasDriver: false, conflict: false, matchesTerms: true } }))).toEqual(['VEHICLE_DRIVER_CONFIRMED']);
     expect(failing(readyFacts({ trip: { status: 'CANCELLED', hasDriver: true, conflict: false, matchesTerms: true } }))).toEqual(['VEHICLE_DRIVER_CONFIRMED']);

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import {
   createHarvestSchema,
+  cropNoun,
   dbDateToString,
   declineRequestSchema,
   formatKg,
@@ -59,8 +60,8 @@ function harvestNextStep(r: HarvestRow, remainingG: bigint, today: string, reque
   const openOffers = r.offers.filter((o) => o.status === 'OPEN' || o.status === 'COUNTERED').length;
   const liveBookings = r.bookings.filter((b) => !['CANCELLED', 'EXPIRED'].includes(b.status)).length;
   if (r.status === 'DRAFT') return { stage: 'Not shared with buyers yet', forFarmer: 'Find buyers for this harvest' };
-  if (r.status === 'WITHDRAWN') return { stage: 'Withdrawn', forFarmer: 'Add a new harvest when you have cassava to sell' };
-  if (r.status === 'CLOSED') return { stage: 'Closed to new offers', forFarmer: liveBookings ? 'See your confirmed plan' : 'Add a new harvest when you have cassava to sell' };
+  if (r.status === 'WITHDRAWN') return { stage: 'Withdrawn', forFarmer: `Add a new harvest when you have ${cropNoun(r.crop)} to sell` };
+  if (r.status === 'CLOSED') return { stage: 'Closed to new offers', forFarmer: liveBookings ? 'See your confirmed plan' : `Add a new harvest when you have ${cropNoun(r.crop)} to sell` };
   if (openOffers) return { stage: openOffers === 1 ? 'Offer received' : `${openOffers} offers received`, forFarmer: openOffers === 1 ? 'Review the offer' : 'Review and compare the offers' };
   if (remainingG === 0n && liveBookings) return { stage: 'Fully booked', forFarmer: 'See your confirmed plan' };
   if (dbDateToString(r.latestHarvestDate) < today) return { stage: 'Harvest dates have passed', forFarmer: 'Change the dates to find buyers again' };
@@ -112,6 +113,7 @@ export class HarvestsService {
         farmerName: r.farmerProfile.displayName,
         farmLocation: { id: r.farmLocationId, label: r.farmLocation.label, lga: r.farmLocation.lga, community: r.farmLocation.community },
         status: r.status,
+        crop: r.crop,
         estimatedQuantityKg: gramsToKgString(toGrams(r.estimatedQuantityKg)),
         eligibleQuantityKg: gramsToKgString(eligible),
         earliestHarvestDate: dbDateToString(r.earliestHarvestDate),
@@ -198,7 +200,7 @@ export class HarvestsService {
       if (farmLocationId) {
         await this.assertLocation(tx, farmerProfileId, farmLocationId);
       } else {
-        // "Where is the cassava?" answered in the same step: save it as a farm location for next time.
+        // "Where is the harvest?" answered in the same step: save it as a farm location for next time.
         const nl = input.newLocation!;
         const approx = await approxFor(tx, nl.lga, nl.point);
         const source = !nl.point ? 'DESCRIPTION_ONLY' : authority.mode === 'DELEGATE' ? 'COOPERATIVE_REPORTED' : nl.source === 'DESCRIPTION_ONLY' ? 'SELF_REPORTED_PIN' : nl.source;
@@ -236,6 +238,7 @@ export class HarvestsService {
           createdByUserId: actor.userId,
           actingDelegationId: authority.mode === 'DELEGATE' ? authority.delegationId : null,
           status: input.publish ? 'PUBLISHED' : 'DRAFT',
+          crop: input.crop,
           estimatedQuantityKg: input.estimatedQuantityKg,
           eligibleQuantityKg: input.eligibleQuantityKg ?? input.estimatedQuantityKg,
           earliestHarvestDate: stringToDbDate(input.earliestHarvestDate),
@@ -369,6 +372,7 @@ export class HarvestsService {
       row,
       facts: {
         id,
+        crop: row.crop,
         remainingG: eligible > allocated ? eligible - allocated : 0n,
         earliestHarvestDate: dbDateToString(row.earliestHarvestDate),
         latestHarvestDate: dbDateToString(row.latestHarvestDate),
@@ -403,6 +407,9 @@ export class HarvestsService {
     if (row.status !== 'PUBLISHED') throw new DomainError('INVALID_STATE_TRANSITION', 'Publish the request before asking for offers');
     const facility = await this.prisma.db.facility.findUnique({ where: { id: facilityId }, include: { organisation: true } });
     if (!facility || facility.organisation.status !== 'APPROVED') throw new DomainError('NOT_FOUND', 'Facility not found');
+    if (!(await this.prisma.db.processingLine.count({ where: { facilityId, crop: row.crop, status: 'ACTIVE' } }))) {
+      throw new DomainError('VALIDATION_FAILED', `${facility.organisation.name} does not buy ${cropNoun(row.crop)} at ${facility.name}. Choose a buyer from your matches.`);
+    }
     await withTransaction(this.prisma.db, async (tx) => {
       const existing = await tx.offerInvitation.findUnique({ where: { harvestRequestId_facilityId: { harvestRequestId: id, facilityId } } });
       if (existing && !existing.declinedAt) throw new DomainError('DUPLICATE', `You already sent ${facility.organisation.name} a request. Waiting for their offer.`);
@@ -417,7 +424,7 @@ export class HarvestsService {
         type: 'offer.invited',
         category: 'offers',
         title: `Review harvest request ${row.reference}`,
-        body: `A farmer asked ${facility.name} to buy ${formatKg(row.eligibleQuantityKg.toString())} of cassava, ready ${DAY_LABEL.format(row.earliestHarvestDate)} – ${DAY_LABEL.format(row.latestHarvestDate)}. Send an offer or say you can't buy this time.`,
+        body: `A farmer asked ${facility.name} to buy ${formatKg(row.eligibleQuantityKg.toString())} of ${cropNoun(row.crop)}, ready ${DAY_LABEL.format(row.earliestHarvestDate)} – ${DAY_LABEL.format(row.latestHarvestDate)}. Send an offer or say you can't buy this time.`,
         link: `/processor/inbox?request=${id}`,
         dedupeKey: `offer-invited:${id}:${facilityId}:${Date.now()}`,
       });
@@ -482,6 +489,7 @@ export class HarvestsService {
       const approx = r.farmLocation.approxLat !== null && r.farmLocation.approxLng !== null ? { lat: Number(r.farmLocation.approxLat), lng: Number(r.farmLocation.approxLng) } : null;
       const input = {
         id: r.id,
+        crop: r.crop,
         remainingG: remaining,
         earliestHarvestDate: dbDateToString(r.earliestHarvestDate),
         latestHarvestDate: dbDateToString(r.latestHarvestDate),
@@ -499,7 +507,7 @@ export class HarvestsService {
       if (!eligibleCandidates.length && !invitation && !offer) continue;
       const ranked = eligibleCandidates.length ? rankMatches(input, eligibleCandidates, { now, weights: policies.matchingWeights, roadFactor: 1.4, reliabilityMinHistory: policies.reliabilityMinHistory }).matches : [];
       const best = ranked[0] ?? null;
-      const fallback = candidates[0] ?? null;
+      const fallback = candidates.find((c) => c.slot.crop === r.crop) ?? candidates[0] ?? null;
       const facilityOf = best?.candidate.facility ?? fallback?.facility ?? null;
       if (!facilityOf) continue;
       const nextStep = !offer
@@ -518,6 +526,7 @@ export class HarvestsService {
       items.push({
         harvestRequestId: r.id,
         reference: r.reference,
+        crop: r.crop,
         farmerName: r.farmerProfile.displayName,
         lga: r.farmLocation.lga,
         community: r.farmLocation.community,

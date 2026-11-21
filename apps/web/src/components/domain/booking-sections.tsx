@@ -326,19 +326,19 @@ export function PickupPanel({ b }: { b: BookingDetail }) {
   return (
     <Card id="pickup" className="border-forest ring-1 ring-forest">
       <CardHeader>
-        <CardTitle>Hand over your cassava</CardTitle>
+        <CardTitle>Hand over your produce</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {s.status === 'ARRIVED_AT_PICKUP' ? <p className="text-sm">The driver ({s.driverName}, {s.vehiclePlate}) has arrived. When loading is finished, they record the quantity.</p> : null}
         {s.status === 'COLLECTED' ? (
           <>
             <p className="text-sm">
-              The driver recorded <strong><Kg kg={s.collectedKg} /></strong> loaded. Confirm only if the cassava has left your hands.
+              The driver recorded <strong><Kg kg={s.collectedKg} /></strong> loaded. Confirm only if the produce has left your hands.
             </p>
             <Field label="Your own count (kg, optional)" hint="If it differs from the driver’s, both are kept on record.">
               <Input inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} />
             </Field>
-            <Checkbox label="I handed over this cassava to the driver" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
+            <Checkbox label="I handed over this produce to the driver" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
             <div className="flex flex-wrap gap-2">
               <Button size="lg" onClick={() => confirm.mutate()} loading={confirm.isPending} disabled={!agree}>
                 Confirm pickup
@@ -350,7 +350,7 @@ export function PickupPanel({ b }: { b: BookingDetail }) {
             {code ? (
               <Alert tone="info" title="Tell the driver this code">
                 <span className="block text-3xl font-bold tracking-[0.3em] text-forest tabular">{code.code}</span>
-                It works once and expires <When at={code.expiresAt} relative />. Never share it before the cassava is loaded.
+                It works once and expires <When at={code.expiresAt} relative />. Never share it before the produce is loaded.
               </Alert>
             ) : null}
           </>
@@ -420,7 +420,7 @@ export function HarvestProgress({ b }: { b: BookingDetail }) {
       <CardContent className="flex flex-col gap-3">
         {b.allowedActions.includes('startHarvest') ? (
           <>
-            <p className="text-sm">Every check has passed: buyer, processing slot, transport, vehicle and driver are confirmed. Harvest so the cassava is ready for the pickup window.</p>
+            <p className="text-sm">Every check has passed: buyer, processing slot, transport, vehicle and driver are confirmed. Harvest so the produce is ready for the pickup window.</p>
             <Button size="lg" onClick={() => start.mutate()} loading={start.isPending}>
               I have started harvesting
             </Button>

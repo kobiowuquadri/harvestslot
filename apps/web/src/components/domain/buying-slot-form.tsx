@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarPlus, Factory, Plus } from 'lucide-react';
-import { addDays, formatKg, formatTonnes, lagosDateString, OYO_LGAS, type FacilityDto } from '@harvestslot/contracts';
+import { CalendarPlus, Cherry, Factory, Plus, Sprout } from 'lucide-react';
+import { addDays, CROPS, CropE, formatKg, formatTonnes, lagosDateString, OYO_LGAS, type Crop, type FacilityDto } from '@harvestslot/contracts';
 import { Button } from '@/components/ui/button';
 import { ChoiceCards, SearchSelect } from '@/components/ui/choice';
 import { Field, Input } from '@/components/ui/form';
@@ -12,12 +12,14 @@ import { useSession } from '@/lib/session';
 import { nairaToKobo } from '@/lib/utils';
 import { quantityKg } from './harvest-form';
 
-/** "Tell farmers how much cassava you can receive, where, and on which dates." */
+/** "Tell farmers what you buy, how much you can receive, where, and on which dates." */
 export function BuyingSlotButton({ orgId, facilities, approved, size = 'lg' }: { orgId: string; facilities: FacilityDto[]; approved: boolean; size?: 'md' | 'lg' }) {
   const { config } = useSession();
   const today = lagosDateString(new Date());
   const active = facilities.filter((f) => f.status === 'ACTIVE');
   const [open, setOpen] = useState(false);
+  // Start from the crop this buyer already buys (a tomato buyer is not asked about cassava every time).
+  const [crop, setCrop] = useState<Crop>(facilities.flatMap((f) => f.lines).find((l) => l.status === 'ACTIVE')?.crop ?? 'CASSAVA');
   const [place, setPlace] = useState<string | null>(active[0]?.id ?? (active.length ? null : '__new'));
   const [name, setName] = useState('');
   const [lga, setLga] = useState('');
@@ -33,6 +35,7 @@ export function BuyingSlotButton({ orgId, facilities, approved, size = 'lg' }: {
     request: () => ({
       path: `/organisations/${orgId}/buying-slots`,
       body: {
+        crop,
         ...(place && place !== '__new' ? { facilityId: place } : { newFacility: { name: name.trim(), lga, address: address.trim() || undefined } }),
         fromDate,
         toDate,
@@ -52,7 +55,7 @@ export function BuyingSlotButton({ orgId, facilities, approved, size = 'lg' }: {
         <CalendarPlus className="size-5" aria-hidden /> Publish a buying slot
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent title="Publish a buying slot" description="Tell farmers how much cassava you can receive, where, and on which dates." wide>
+        <DialogContent title="Publish a buying slot" description="Tell farmers what you buy, how much you can receive, where, and on which dates." wide>
           <form
             className="flex flex-col gap-5"
             onSubmit={(e) => {
@@ -61,9 +64,18 @@ export function BuyingSlotButton({ orgId, facilities, approved, size = 'lg' }: {
             }}
           >
             {save.error ? <Alert tone="danger">{save.error.message}</Alert> : null}
+            <ChoiceCards<Crop>
+              name="crop"
+              legend="What are you buying?"
+              columns={2}
+              value={crop}
+              onChange={setCrop}
+              error={fe.crop}
+              options={CropE.values.map((c) => ({ value: c, label: CROPS[c].label, description: `Farmers selling ${CROPS[c].noun} see this slot`, icon: c === 'TOMATO' ? <Cherry className="size-5" /> : <Sprout className="size-5" /> }))}
+            />
             <ChoiceCards<string>
               name="place"
-              legend="Where will you receive the cassava?"
+              legend={`Where will you receive the ${CROPS[crop].noun}?`}
               value={place}
               onChange={setPlace}
               error={fe.facilityId}

@@ -100,5 +100,16 @@ export const photos = {
     "license": "CC0",
     "licenseUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
     "source": "https://commons.wikimedia.org/wiki/File:Cassava_tuber.jpg"
+  },
+  "tomatoBaskets": {
+    "src": "/images/tomato-baskets.webp",
+    "width": 1200,
+    "height": 800,
+    "alt": "Woven baskets heaped with freshly harvested tomatoes at a market",
+    "title": "Baskets of freshly harvested tomatoes at Pambeguwa perishable market 01",
+    "author": "Friday musa",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Baskets_of_freshly_harvested_tomatoes_at_Pambeguwa_perishable_market_01.jpg"
   }
 } satisfies Record<string, Photo>;

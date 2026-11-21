@@ -137,6 +137,7 @@ export class BookingEngine {
       harvest: {
         harvestRequestId: offer.harvestRequestId,
         reference: offer.harvestRequest.reference,
+        crop: offer.harvestRequest.crop,
         plannedHarvestDate: dbDateToString(v.plannedHarvestDate),
         pickupLocationLabel: offer.harvestRequest.farmLocation.label,
         pickupLga: offer.harvestRequest.farmLocation.lga,

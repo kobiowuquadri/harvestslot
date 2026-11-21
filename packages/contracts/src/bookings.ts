@@ -5,6 +5,7 @@ import {
   BookingPartyE,
   BookingStatusE,
   ConfirmationMethodE,
+  CropE,
   FreightPayerE,
   HandoverArrangementE,
   HandoverMethodE,
@@ -103,7 +104,7 @@ export const transportTermsSchema = z.object({
 });
 export type TransportTerms = z.infer<typeof transportTermsSchema>;
 
-/** How and where the cassava changes hands (bookings made from offers with a handover decision). */
+/** How and where the produce changes hands (bookings made from offers with a handover decision). */
 export const handoverTermsSchema = z.object({
   arrangement: HandoverArrangementE.schema,
   /** The farm for collection, the facility for delivery. */
@@ -126,6 +127,8 @@ export const bookingTermsContentSchema = z.object({
   harvest: z.object({
     harvestRequestId: uuid,
     reference: z.string(),
+    /** Snapshots made before crops were added are cassava. */
+    crop: CropE.schema.default('CASSAVA'),
     plannedHarvestDate: z.string(),
     pickupLocationLabel: z.string(),
     pickupLga: z.string(),
@@ -282,6 +285,7 @@ export const bookingSummarySchema = z.object({
   id: uuid,
   reference: z.string(),
   status: BookingStatusE.schema,
+  crop: CropE.schema,
   farmerName: z.string(),
   farmerProfileId: uuid,
   processorName: z.string(),

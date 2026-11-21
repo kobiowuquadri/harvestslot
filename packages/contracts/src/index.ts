@@ -7,6 +7,7 @@ export * from './permissions.js';
 export * from './auth.js';
 export * from './farmers.js';
 export * from './facilities.js';
+export * from './crops.js';
 export * from './harvests.js';
 export * from './bookings.js';
 export * from './transport.js';

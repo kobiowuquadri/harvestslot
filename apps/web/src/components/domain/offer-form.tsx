@@ -4,12 +4,14 @@ import { useState } from 'react';
 import { Factory, Send, Truck } from 'lucide-react';
 import {
   addDays,
+  CROPS,
   formatKg,
   formatLagosDate,
   formatNaira,
   lagosDateString,
   produceAmountKobo,
   toGrams,
+  type Crop,
   type FacilityDto,
   type HandoverArrangement,
   type OfferDto,
@@ -25,6 +27,8 @@ import { koboToNairaInput, nairaToKobo } from '@/lib/utils';
 
 export interface OfferRequestContext {
   harvestRequestId: string;
+  /** Only buying slots for this crop can be offered. */
+  crop: Crop;
   reference: string;
   farmerName: string;
   farmLabel: string;
@@ -41,7 +45,7 @@ const lagosTime = (iso: string) => new Intl.DateTimeFormat('en-GB', { hour: '2-d
 const slotDays = (s: SlotDto) => ({ first: lagosDateString(new Date(s.startsAt)), last: lagosDateString(new Date(new Date(s.endsAt).getTime() - 1)) });
 
 /**
- * The buyer's offer, prefilled from the request and the best-fitting buying slot. "How will the cassava
+ * The buyer's offer, prefilled from the request and the best-fitting buying slot. "How will the produce
  * get there?" is one choice; without it the offer can only be saved as a draft.
  */
 export function OfferForm({ orgId, request, existing, onDone }: { orgId: string; request: OfferRequestContext; existing?: OfferDto; onDone: (o: OfferDto) => void }) {
@@ -50,7 +54,8 @@ export function OfferForm({ orgId, request, existing, onDone }: { orgId: string;
   const to = new Date(new Date(`${request.latestHarvestDate}T00:00:00+01:00`).getTime() + 86_400_000);
   const slots = useApi<SlotDto[]>(['slots', orgId, 'offer', request.harvestRequestId], `/organisations/${orgId}/slots?status=PUBLISHED&from=${encodeURIComponent(new Date(from.getTime() - 86_400_000).toISOString())}&to=${encodeURIComponent(to.toISOString())}`);
   const facilities = useApi<FacilityDto[]>(['facilities', orgId], `/organisations/${orgId}/facilities`);
-  const usable = (slots.data ?? []).filter((s) => new Date(s.startsAt) < to && new Date(s.endsAt) > from && new Date(s.endsAt) > new Date());
+  const noun = CROPS[request.crop].noun;
+  const usable = (slots.data ?? []).filter((s) => s.crop === request.crop && new Date(s.startsAt) < to && new Date(s.endsAt) > from && new Date(s.endsAt) > new Date());
   const cur = existing?.current;
 
   const [slotId, setSlotId] = useState(cur?.slotId ?? request.bestSlotId ?? '');
@@ -105,7 +110,7 @@ export function OfferForm({ orgId, request, existing, onDone }: { orgId: string;
     setLocalError(null);
     if (!slotId) return setLocalError('Choose a buying slot');
     if (!priceKobo) return setLocalError('Enter the price per kg, like 100 or 100.50');
-    if (send && !arrangement) return setLocalError('Choose how the cassava will get there, or save the offer as a draft');
+    if (send && !arrangement) return setLocalError(`Choose how the ${noun} will get there, or save the offer as a draft`);
     if (arrangement === 'FARMER_DELIVERS' && cost.trim() && costKobo === null) return setLocalError('Enter the delivery cost in naira, like 15000');
     if (fromTime >= toTime) return setLocalError('The time window must end after it starts');
     save.mutate(send);
@@ -129,14 +134,14 @@ export function OfferForm({ orgId, request, existing, onDone }: { orgId: string;
       {localError ? <Alert tone="danger">{localError}</Alert> : save.error ? <Alert tone="danger">{save.error.message}</Alert> : null}
       <div className="rounded-xl bg-canvas/70 p-4 text-sm">
         <p className="font-medium text-ink">
-          {request.farmerName} · {formatKg(request.remainingKg)} · {request.farmLabel}, {request.lga}
+          {request.farmerName} · {formatKg(request.remainingKg)} of {noun} · {request.farmLabel}, {request.lga}
         </p>
         <p className="text-muted">
           Can harvest {formatLagosDate(request.earliestHarvestDate)} – {formatLagosDate(request.latestHarvestDate)} · {request.reference}
         </p>
       </div>
 
-      <Field label="Buying slot" error={fe.slotId} required hint={slots.isLoading ? 'Loading your buying slots…' : usable.length ? undefined : 'None of your published buying slots covers these dates. Publish one under Buying slots first.'}>
+      <Field label="Buying slot" error={fe.slotId} required hint={slots.isLoading ? 'Loading your buying slots…' : usable.length ? undefined : `None of your published buying slots for ${noun} covers these dates. Publish one under Buying slots first.`}>
         <Select value={slotId} onChange={(e) => { setSlotId(e.target.value); setDay(''); }}>
           <option value="">Choose…</option>
           {usable.map((s) => (
@@ -186,7 +191,7 @@ export function OfferForm({ orgId, request, existing, onDone }: { orgId: string;
 
       <ChoiceCards<HandoverArrangement>
         name="handoverArrangement"
-        legend="How will the cassava get there?"
+        legend={`How will the ${noun} get there?`}
         value={arrangement}
         onChange={setArrangement}
         error={fe.handoverArrangement}

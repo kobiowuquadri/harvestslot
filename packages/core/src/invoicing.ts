@@ -1,4 +1,5 @@
 import {
+  CROPS,
   bpsOfKobo,
   formatKg,
   formatNaira,
@@ -69,7 +70,7 @@ export async function issueReceivingInvoices(tx: Tx, bookingId: string, accepted
         lines: {
           create: [
             {
-              description: `Cassava roots accepted for ${booking.reference}: ${formatKg(acceptedKg)} × ${formatPricePerKg(price)}`,
+              description: `${CROPS[terms.content.harvest.crop ?? 'CASSAVA'].label} accepted for ${booking.reference}: ${formatKg(acceptedKg)} × ${formatPricePerKg(price)}`,
               quantityKg: acceptedKg,
               unitPriceKobo: price,
               amountKobo: produceKobo,

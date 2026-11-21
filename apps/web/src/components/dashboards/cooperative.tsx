@@ -120,7 +120,7 @@ export function CooperativeDashboard({ w }: { w: Extract<Workspace, { kind: 'coo
             icon: FileCheck2,
             href: '/bookings',
             value: bookings.data ? inProgress.length : undefined,
-            sub: bookings.data ? `${tonnes(sumKg(inProgress.map((b) => b.quantityKg)))} of cassava` : null,
+            sub: bookings.data ? `${tonnes(sumKg(inProgress.map((b) => b.quantityKg)))} of produce` : null,
           },
         ]}
       />

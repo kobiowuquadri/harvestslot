@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { CalendarDays, CheckCircle2, Clock, MapPin, Send, Truck, XCircle } from 'lucide-react';
-import { formatKg, HANDOVER_ARRANGEMENT_LABELS, type HarvestDto, type MatchResponse, type MatchResult, type OfferDto } from '@harvestslot/contracts';
+import { CROPS, formatKg, HANDOVER_ARRANGEMENT_LABELS, type HarvestDto, type MatchResponse, type MatchResult, type OfferDto } from '@harvestslot/contracts';
 import { ConfirmActionButton, ReasonActionDialog } from '@/components/domain/dialogs';
 import { DateOnly, DemoTag, Money, Price, ReviewedTag, StatusBadge, When } from '@/components/domain/display';
 import { FarmerGate } from '@/components/domain/farmer-gate';
@@ -259,7 +259,7 @@ function HarvestDetail({ ctx }: { ctx: FarmerContext }) {
               }
               title={
                 <span className="flex flex-wrap items-center gap-2">
-                  {formatKg(h.eligibleQuantityKg)} of cassava <StatusBadge kind="harvest" status={h.status} /> {h.isDemo ? <DemoTag /> : null}
+                  {formatKg(h.eligibleQuantityKg)} of {CROPS[h.crop].noun} <StatusBadge kind="harvest" status={h.status} /> {h.isDemo ? <DemoTag /> : null}
                 </span>
               }
               description={
@@ -313,7 +313,7 @@ function HarvestDetail({ ctx }: { ctx: FarmerContext }) {
                     <ReasonActionDialog
                       trigger="Remove this harvest"
                       title="Remove this harvest?"
-                      description="Use this if the cassava is no longer for sale."
+                      description={`Use this if the ${CROPS[h.crop].noun} ${h.crop === 'TOMATO' ? 'are' : 'is'} no longer for sale.`}
                       confirmLabel="Remove harvest"
                       path={`/harvests/${h.id}/withdraw`}
                       body={{ expectedVersion: h.version }}

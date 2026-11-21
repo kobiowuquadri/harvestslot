@@ -1,11 +1,11 @@
 import { z } from 'zod';
 import { lgaName, nigeriaPoint, optionalText, reasonText, shortText, uuid } from './common.js';
-import { FreightPayerE, HandoverArrangementE, HarvestRequestStatusE, LocationSourceE, OfferStatusE, ProposerPartyE, RejectionHandlingE, TransportPreferenceE } from './enums.js';
+import { CropE, FreightPayerE, HandoverArrangementE, HarvestRequestStatusE, LocationSourceE, OfferStatusE, ProposerPartyE, RejectionHandlingE, TransportPreferenceE } from './enums.js';
 import { qualityTermsSchema } from './facilities.js';
 import { isoDate, isoDateTime } from './time.js';
 import { koboInt, positiveKgString, positiveKoboInt } from './units.js';
 
-/** A farm location created inline while adding a harvest ("Where is the cassava?"). */
+/** A farm location created inline while adding a harvest ("Where is the harvest?"). */
 export const newHarvestLocationSchema = z.object({
   label: shortText(80).optional(),
   lga: lgaName,
@@ -54,6 +54,8 @@ function harvestRefinements<T extends z.ZodType<{ earliestHarvestDate?: string; 
 export const createHarvestSchema = harvestRefinements(
   z.object({
     ...harvestFields,
+    /** What is for sale. Fixed once created: offers and bookings are made for this crop. */
+    crop: CropE.schema.default('CASSAVA'),
     /** Either an existing farm location or a new one described in the same step. */
     farmLocationId: uuid.optional(),
     newLocation: newHarvestLocationSchema.optional(),
@@ -61,7 +63,7 @@ export const createHarvestSchema = harvestRefinements(
     clientDraftId: z.string().uuid().optional(),
     publish: z.boolean().default(false),
   }),
-).refine((v) => v.farmLocationId || v.newLocation, { message: 'Tell us where the cassava is', path: ['farmLocationId'] });
+).refine((v) => v.farmLocationId || v.newLocation, { message: 'Tell us where the harvest is', path: ['farmLocationId'] });
 export type CreateHarvestInput = z.infer<typeof createHarvestSchema>;
 
 export const updateHarvestSchema = harvestRefinements(
@@ -85,6 +87,7 @@ export const harvestSchema = z.object({
   farmerName: z.string(),
   farmLocation: z.object({ id: uuid, label: z.string(), lga: z.string(), community: z.string().nullable() }),
   status: HarvestRequestStatusE.schema,
+  crop: CropE.schema,
   estimatedQuantityKg: z.string(),
   eligibleQuantityKg: z.string(),
   earliestHarvestDate: z.string(),
@@ -130,6 +133,7 @@ export const harvestListQuerySchema = z.object({
 export const inboxItemSchema = z.object({
   harvestRequestId: uuid,
   reference: z.string(),
+  crop: CropE.schema,
   farmerName: z.string(),
   lga: z.string(),
   community: z.string().nullable(),
@@ -165,7 +169,7 @@ const offerTermsFields = {
   priceKoboPerKg: positiveKoboInt,
   /** The agreed day: harvest for collection, or delivery to the facility. */
   plannedHarvestDate: isoDate,
-  /** When the cassava changes hands. Pickup and delivery windows are derived from it. */
+  /** When the produce changes hands. Pickup and delivery windows are derived from it. */
   handoverWindowStart: isoDateTime.optional(),
   handoverWindowEnd: isoDateTime.optional(),
   /** Leaving this empty keeps the offer as a draft: it cannot be sent without a handover decision. */
@@ -203,7 +207,7 @@ function windowRefinements<T extends z.ZodType<WindowFields>>(schema: T) {
       (v) =>
         (v.handoverWindowStart && v.handoverWindowEnd) ||
         (v.pickupWindowStart && v.pickupWindowEnd && v.deliveryWindowStart && v.deliveryWindowEnd),
-      { message: 'Choose when the cassava changes hands', path: ['handoverWindowStart'] },
+      { message: 'Choose when the produce changes hands', path: ['handoverWindowStart'] },
     )
     .refine((v) => !v.handoverWindowStart || !v.handoverWindowEnd || new Date(v.handoverWindowEnd) > new Date(v.handoverWindowStart), {
       message: 'The time window must end after it starts',
@@ -233,7 +237,7 @@ export const createOfferSchema = windowRefinements(
     validForHours: z.number().int().min(1).max(336).optional(),
   }),
 ).refine((v) => !v.send || v.handoverArrangement, {
-  message: 'Choose how the cassava will get there, or save the offer as a draft',
+  message: 'Choose how the produce will get there, or save the offer as a draft',
   path: ['handoverArrangement'],
 });
 export type CreateOfferInput = z.infer<typeof createOfferSchema>;
@@ -278,7 +282,7 @@ export const offerVersionSchema = z.object({
   freightPayer: FreightPayerE.schema,
   handoverArrangement: HandoverArrangementE.schema.nullable(),
   farmerDeliveryCostKobo: z.number().nullable(),
-  /** Where the cassava changes hands: the farm for collection, the facility for delivery. */
+  /** Where the produce changes hands: the farm for collection, the facility for delivery. */
   handoverPlace: z.string().nullable(),
   rejectionHandling: RejectionHandlingE.schema,
   cancellationTerms: z.string(),
@@ -292,6 +296,7 @@ export const offerSchema = z.object({
   id: uuid,
   harvestRequestId: uuid,
   harvestReference: z.string(),
+  crop: CropE.schema,
   farmerProfileId: uuid,
   farmerName: z.string(),
   processorOrgId: uuid,

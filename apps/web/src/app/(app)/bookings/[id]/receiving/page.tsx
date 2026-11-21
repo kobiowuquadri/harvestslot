@@ -6,7 +6,8 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import {
   DISPOSITION_LABELS,
-  ProcessingProductE,
+  CROPS,
+  PRODUCT_LABELS,
   REJECTION_REASON_LABELS,
   RejectedDispositionE,
   RejectionReasonE,
@@ -196,7 +197,7 @@ function DecisionForm({ r, bookingId }: { r: ReceivingDto; bookingId: string }) 
               ))}
               {submit.error?.fieldErrors.rejectionReasons ? <p className="text-sm text-danger">{submit.error.fieldErrors.rejectionReasons}</p> : null}
             </fieldset>
-            <Field label="What happens to the rejected cassava?" error={submit.error?.fieldErrors.rejectedDisposition}>
+            <Field label="What happens to the rejected produce?" error={submit.error?.fieldErrors.rejectedDisposition}>
               <Select value={disposition} onChange={(e) => setDisposition(e.target.value as RejectedDisposition)}>
                 {RejectedDispositionE.values.map((d) => (
                   <option key={d} value={d}>
@@ -342,9 +343,9 @@ function ProcessingPanel({ booking }: { booking: BookingDetail }) {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field label="Product">
                     <Select value={product} onChange={(e) => setProduct(e.target.value)}>
-                      {ProcessingProductE.values.map((x) => (
+                      {CROPS[booking.current.content.harvest.crop ?? 'CASSAVA'].products.map((x) => (
                         <option key={x} value={x}>
-                          {x.toLowerCase()}
+                          {PRODUCT_LABELS[x]}
                         </option>
                       ))}
                     </Select>
@@ -438,7 +439,7 @@ export default function ReceivingPage() {
                                   ['Accepted', <strong key="a"><Kg kg={r.quality.acceptedKg} /></strong>],
                                   ['Rejected', <Kg key="rj" kg={r.quality.rejectedKg} />],
                                   ['Rejection reasons', r.quality.rejectionReasons.map((x) => REJECTION_REASON_LABELS[x]).join(', ') || '—'],
-                                  ['Rejected cassava', DISPOSITION_LABELS[r.quality.rejectedDisposition]],
+                                  ['Rejected produce', DISPOSITION_LABELS[r.quality.rejectedDisposition]],
                                   ['Assessed by', r.quality.assessedBy],
                                   ['Estimated produce value', <Money key="v" kobo={r.estimatedProduceAmountKobo} />],
                                 ] as Array<[string, React.ReactNode]>)

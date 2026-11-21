@@ -57,7 +57,7 @@ export class DisputesService {
   private viewerParty(access: BookingAccess): BookingParty {
     return (access.parties.find((p) => p !== 'ADMIN') ?? 'ADMIN') as BookingParty;
   }
-  /** The cassava reached the buyer: a handover booking once receiving is recorded, older bookings once the shipment was delivered. */
+  /** The produce reached the buyer: a handover booking once receiving is recorded, older bookings once the shipment was delivered. */
   private async handedOver(tx: Tx, b: { id: string; currentTermsVersionNo: number; shipments: Array<{ status: string }> }): Promise<boolean> {
     const v = await tx.bookingTermsVersion.findUniqueOrThrow({ where: { bookingId_versionNo: { bookingId: b.id, versionNo: b.currentTermsVersionNo } } });
     return Boolean((v.content as unknown as BookingTermsContent).handover) || b.shipments.some((s) => s.status === 'DELIVERED');

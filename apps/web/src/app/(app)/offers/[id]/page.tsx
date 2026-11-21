@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { CalendarDays, CheckCircle2, Factory, MapPin, Scale, Truck, Wallet } from 'lucide-react';
-import { formatKg, formatNaira, REJECTION_HANDLING_LABELS, type HarvestDto, type OfferDto } from '@harvestslot/contracts';
+import { CROPS, formatKg, formatNaira, REJECTION_HANDLING_LABELS, type HarvestDto, type OfferDto } from '@harvestslot/contracts';
 import { ActingForBanner } from '@/components/domain/banners';
 import { ReasonActionDialog } from '@/components/domain/dialogs';
 import { DateOnly, DemoTag, Price, ReviewedTag, StatusBadge, When, Window } from '@/components/domain/display';
@@ -27,12 +27,12 @@ function OfferTerms({ o, asProcessor }: { o: OfferDto; asProcessor: boolean }) {
   const net = v.farmerDeliveryCostKobo ? v.estimatedProduceAmountKobo - v.farmerDeliveryCostKobo : null;
   const rows: Array<{ icon: ReactNode; label: string; value: ReactNode; note?: ReactNode }> = [
     { icon: <Factory className="size-4" />, label: 'Buyer', value: <>{o.processorName}</>, note: !asProcessor ? <ReviewedTag approved={o.processorVerified} /> : null },
-    { icon: <Scale className="size-4" />, label: 'Quantity', value: formatKg(v.quantityKg) },
+    { icon: <Scale className="size-4" />, label: 'Quantity', value: `${formatKg(v.quantityKg)} of ${CROPS[o.crop].noun}` },
     { icon: <Wallet className="size-4" />, label: 'Price', value: <Price kobo={v.priceKoboPerKg} /> },
     { icon: <CalendarDays className="size-4" />, label: 'Date', value: <Window start={window.start} end={window.end} /> },
     {
       icon: <Truck className="size-4" />,
-      label: 'Who brings the cassava',
+      label: `Who brings the ${CROPS[o.crop].noun}`,
       value: v.handoverArrangement ? (collect ? `${asProcessor ? 'You collect' : 'They collect'} from the farm` : `${asProcessor ? 'The farmer delivers' : 'You deliver'} to ${o.facility.name}`) : 'Not decided yet (draft)',
     },
     { icon: <MapPin className="size-4" />, label: 'Where', value: v.handoverPlace ?? '—' },
@@ -78,7 +78,7 @@ function OfferTerms({ o, asProcessor }: { o: OfferDto; asProcessor: boolean }) {
             {v.qualityTerms.maxVisibleRotPercent !== undefined ? `; at most ${v.qualityTerms.maxVisibleRotPercent}% visible rot` : ''}.
           </li>
           <li>Quantity may differ by up to {v.toleranceBps / 100}% without a new agreement.</li>
-          <li>Cassava not accepted: {REJECTION_HANDLING_LABELS[v.rejectionHandling].toLowerCase()}.</li>
+          <li>{CROPS[o.crop].label} not accepted: {REJECTION_HANDLING_LABELS[v.rejectionHandling].toLowerCase()}.</li>
           <li>{v.cancellationTerms}</li>
         </ul>
       </details>
@@ -171,9 +171,9 @@ function ProcessorPanel({ offer }: { offer: OfferDto }) {
               : offer.status === 'DECLINED'
                 ? 'Declined by the farmer'
                 : offer.status === 'LAPSED'
-                  ? 'Lapsed — the farmer sold this cassava elsewhere'
+                  ? `Lapsed — the farmer sold these ${CROPS[offer.crop].noun} elsewhere`
                   : 'Withdrawn';
-  const forYou = offer.status === 'DRAFT' ? 'Decide how the cassava will get there, then send the offer.' : offer.status === 'COUNTERED' ? 'Accept the farmer’s terms, or update your offer.' : null;
+  const forYou = offer.status === 'DRAFT' ? `Decide how the ${CROPS[offer.crop].noun} will get there, then send the offer.` : offer.status === 'COUNTERED' ? 'Accept the farmer’s terms, or update your offer.' : null;
   const waitingFor = offer.status === 'OPEN' ? `Waiting for ${offer.farmerName} to accept or decline. Capacity is held until ${new Date(offer.expiresAt).toLocaleString('en-NG', { timeZone: 'Africa/Lagos', dateStyle: 'medium', timeStyle: 'short' })}.` : null;
   return (
     <>
@@ -228,6 +228,7 @@ function ProcessorPanel({ offer }: { offer: OfferDto }) {
               existing={offer}
               request={{
                 harvestRequestId: harvest.data.id,
+                crop: harvest.data.crop,
                 reference: harvest.data.reference,
                 farmerName: harvest.data.farmerName,
                 farmLabel: harvest.data.farmLocation.label,

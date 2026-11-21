@@ -155,7 +155,7 @@ export function describePlan(f: PlanFacts): { plan: SalePlan; nextStep: NextStep
     if (f.pendingParties.includes('FARMER')) nextStep = step('Waiting for the farmer to confirm', 'FARMER', v, 'Review and confirm the terms', null, null, `Waiting for ${farmer} to confirm`);
     else if (f.pendingParties.includes('PROCESSOR')) nextStep = step('Waiting for the buyer to confirm', 'PROCESSOR', v, null, 'Review and confirm the terms', `Waiting for ${buyer} to confirm`, null);
     else if (!c.handover && !c.transport) {
-      nextStep = step('Agree how the cassava gets there', 'PROCESSOR', v, null, 'Propose how the cassava will get to you (collect or farmer delivers)', `Waiting for ${buyer} to say how the cassava gets there`, null);
+      nextStep = step('Agree how the produce gets there', 'PROCESSOR', v, null, 'Propose how the produce will get to you (collect or farmer delivers)', `Waiting for ${buyer} to say how the produce gets there`, null);
     } else nextStep = step('Waiting for transport', 'PROCESSOR', v, null, 'Confirm transport for this booking', 'Waiting for transport to be confirmed', null);
   } else if (weighed && plan.payment) {
     const p = plan.payment;
