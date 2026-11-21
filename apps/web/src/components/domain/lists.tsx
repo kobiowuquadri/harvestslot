@@ -4,7 +4,6 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { ArrowRight, CheckCircle2, Clock, FileText } from 'lucide-react';
 import {
-  CROPS,
   INVOICE_KIND_LABELS,
   type BookingSummary,
   type HarvestDto,
@@ -14,6 +13,7 @@ import {
 import { Badge } from '@/components/ui/primitives';
 import { cn } from '@/lib/utils';
 import { DateOnly, DemoTag, Kg, Money, Price, StatusBadge, When, Window } from './display';
+import { useCrops } from '@/lib/crops';
 
 /** Where a booking stands, from agreed terms to payment (derived from the booking summary). */
 export function bookingSteps(b: BookingSummary) {
@@ -73,6 +73,7 @@ export function BookingCards({
   perspective: 'farmer' | 'processor' | 'transporter' | 'cooperative' | 'admin';
   linkSuffix?: string;
 }) {
+  const crops = useCrops();
   return (
     <ul className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
       {items.map((b) => {
@@ -99,7 +100,7 @@ export function BookingCards({
                   </div>
                   <span className="shrink-0 text-right text-lg font-semibold tracking-tight text-ink">
                     <Kg kg={b.quantityKg} />
-                    <span className="block text-xs font-medium text-muted">{CROPS[b.crop].label}</span>
+                    <span className="block text-xs font-medium text-muted">{crops.info(b.crop).label}</span>
                   </span>
                 </div>
                 <div className="min-w-0">
@@ -170,6 +171,7 @@ export function HarvestCards({
   items: HarvestDto[];
   hrefFor: (h: HarvestDto) => string;
 }) {
+  const crops = useCrops();
   return (
     <ul className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
       {items.map((h) => (
@@ -184,7 +186,7 @@ export function HarvestCards({
                 </div>
                 <span className="shrink-0 text-right text-lg font-semibold tracking-tight text-ink">
                   <Kg kg={h.eligibleQuantityKg} tonnes />
-                  <span className="block text-xs font-medium text-muted">{CROPS[h.crop].label}</span>
+                  <span className="block text-xs font-medium text-muted">{crops.info(h.crop).label}</span>
                 </span>
               </div>
               <div className="min-w-0">

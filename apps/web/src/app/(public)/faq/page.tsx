@@ -5,7 +5,7 @@ import { PageIntro } from '@/components/domain/marketing';
 export const metadata: Metadata = { title: 'FAQ and contact' };
 
 const faqs = [
-  ['Which crops can I sell?', 'Cassava and tomatoes for now: both spoil quickly after harvest, so agreeing the buyer first matters most. A buyer publishes slots for the crop it buys, and you are only matched with buyers of your crop.'],
+  ['Which crops can I sell?', 'Any crop HarvestSlot lists, such as cassava, tomatoes, peppers, plantain and oil palm fruit, and the list grows. If yours isn’t listed, choose “My crop isn’t listed” when you add your harvest and we’ll tell you when you can list it. You are only matched with buyers of your crop; if none has opened a buying slot yet, your harvest stays listed and we tell you when one does.'],
   ['Does a match mean someone will buy my harvest?', 'No. A match only shows processors with open capacity that fits your dates and location. Nothing is reserved until a processor sends an offer and you accept its exact terms.'],
   ['When should I start harvesting?', 'Only when your booking shows "Ready to harvest". That means the buyer, processing capacity, transport, vehicle and driver are all confirmed for the current terms. If anything changes, the booking stops being ready and you are told why.'],
   ['Who brings the produce to the buyer?', 'The offer says: either the buyer collects from your farm, or you deliver to their facility. Any delivery cost you would pay is shown before you accept.'],

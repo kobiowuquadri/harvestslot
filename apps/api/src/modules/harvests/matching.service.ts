@@ -9,7 +9,7 @@ import {
   type MatchRequestInput,
   type Policies,
 } from '@harvestslot/core';
-import { cropNoun, formatKg, gramsToKgString, lagosStartOfDay, qualityTermsSchema, toGrams, type Crop, type MatchResponse } from '@harvestslot/contracts';
+import { formatKg, gramsToKgString, lagosStartOfDay, qualityTermsSchema, toGrams, type MatchResponse } from '@harvestslot/contracts';
 import type { Db } from '@harvestslot/db';
 import { PrismaService } from '../../common/prisma.service.js';
 import { ENV, type Env } from '../../common/tokens.js';
@@ -18,7 +18,8 @@ const HORIZON_DAYS = 75;
 
 export interface RequestFacts {
   id: string;
-  crop: Crop;
+  crop: string;
+  cropNoun: string;
   remainingG: bigint;
   earliestHarvestDate: string;
   latestHarvestDate: string;
@@ -69,7 +70,7 @@ export class MatchingService {
     return out;
   }
 
-  async candidates(db: Db, now: Date, opts: { orgId?: string; crop?: Crop; from: Date; to: Date; isDemo: boolean }): Promise<MatchCandidateInput[]> {
+  async candidates(db: Db, now: Date, opts: { orgId?: string; crop?: string; from: Date; to: Date; isDemo: boolean }): Promise<MatchCandidateInput[]> {
     const slots = await db.processingSlot.findMany({
       where: {
         status: 'PUBLISHED',
@@ -79,7 +80,7 @@ export class MatchingService {
         ...(opts.orgId ? { facility: { organisationId: opts.orgId } } : {}),
         ...(opts.crop ? { line: { crop: opts.crop } } : {}),
       },
-      include: { line: true, facility: { include: { organisation: { select: { id: true, name: true, status: true } } } } },
+      include: { line: { include: { cropInfo: { select: { noun: true } } } }, facility: { include: { organisation: { select: { id: true, name: true, status: true } } } } },
       orderBy: { startsAt: 'asc' },
       take: 2000,
     });
@@ -99,7 +100,7 @@ export class MatchingService {
         qualityCriteria: qualityTermsSchema.parse(s.facility.qualityCriteria),
       },
       org: { id: s.facility.organisation.id, name: s.facility.organisation.name, status: s.facility.organisation.status },
-      slot: { id: s.id, startsAt: s.startsAt, endsAt: s.endsAt, status: s.status, lineName: s.line.name, lineStatus: s.line.status, crop: s.line.crop, product: s.line.product },
+      slot: { id: s.id, startsAt: s.startsAt, endsAt: s.endsAt, status: s.status, lineName: s.line.name, lineStatus: s.line.status, crop: s.line.crop, cropNoun: s.line.cropInfo.noun, product: s.line.product },
       usage: usage.get(s.id)!,
       reliability: reliability.get(s.facility.organisationId) ?? { completed: 0, onTime: 0 },
       invited: false,
@@ -118,6 +119,7 @@ export class MatchingService {
     return {
       id: r.id,
       crop: r.crop,
+      cropNoun: r.cropNoun,
       remainingG: r.remainingG,
       earliestHarvestDate: r.earliestHarvestDate,
       latestHarvestDate: r.latestHarvestDate,
@@ -185,7 +187,7 @@ export class MatchingService {
         explanation: m.explanation,
         remainingSteps: [
           'Send a request: the buyer replies with an offer (a request reserves nothing)',
-          `You review the offer — price, date, and who brings the ${cropNoun(r.crop)} — and accept or decline`,
+          `You review the offer — price, date, and who brings the ${r.cropNoun} — and accept or decline`,
           'Your plan is confirmed and you can harvest',
         ],
         qualityCriteria: m.candidate.facility.qualityCriteria,

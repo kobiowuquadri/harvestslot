@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { lgaName, nigeriaPoint, optionalText, reasonText, shortText, uuid } from './common.js';
-import { CropE, FreightPayerE, HandoverArrangementE, HarvestRequestStatusE, LocationSourceE, OfferStatusE, ProposerPartyE, RejectionHandlingE, TransportPreferenceE } from './enums.js';
+import { FreightPayerE, HandoverArrangementE, HarvestRequestStatusE, LocationSourceE, OfferStatusE, ProposerPartyE, RejectionHandlingE, TransportPreferenceE } from './enums.js';
+import { cropCode } from './crops.js';
 import { qualityTermsSchema } from './facilities.js';
 import { isoDate, isoDateTime } from './time.js';
 import { koboInt, positiveKgString, positiveKoboInt } from './units.js';
@@ -55,7 +56,7 @@ export const createHarvestSchema = harvestRefinements(
   z.object({
     ...harvestFields,
     /** What is for sale. Fixed once created: offers and bookings are made for this crop. */
-    crop: CropE.schema.default('CASSAVA'),
+    crop: cropCode.default('CASSAVA'),
     /** Either an existing farm location or a new one described in the same step. */
     farmLocationId: uuid.optional(),
     newLocation: newHarvestLocationSchema.optional(),
@@ -87,7 +88,7 @@ export const harvestSchema = z.object({
   farmerName: z.string(),
   farmLocation: z.object({ id: uuid, label: z.string(), lga: z.string(), community: z.string().nullable() }),
   status: HarvestRequestStatusE.schema,
-  crop: CropE.schema,
+  crop: z.string(),
   estimatedQuantityKg: z.string(),
   eligibleQuantityKg: z.string(),
   earliestHarvestDate: z.string(),
@@ -133,7 +134,7 @@ export const harvestListQuerySchema = z.object({
 export const inboxItemSchema = z.object({
   harvestRequestId: uuid,
   reference: z.string(),
-  crop: CropE.schema,
+  crop: z.string(),
   farmerName: z.string(),
   lga: z.string(),
   community: z.string().nullable(),
@@ -296,7 +297,7 @@ export const offerSchema = z.object({
   id: uuid,
   harvestRequestId: uuid,
   harvestReference: z.string(),
-  crop: CropE.schema,
+  crop: z.string(),
   farmerProfileId: uuid,
   farmerName: z.string(),
   processorOrgId: uuid,

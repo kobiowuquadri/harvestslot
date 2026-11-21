@@ -106,10 +106,10 @@ enum FacilityStatus {
   INACTIVE
 }
 
-/// The produce traded: cassava (the first crop) and tomatoes. Each buyer intake line buys one crop.
-enum Crop {
-  CASSAVA
-  TOMATO
+enum CropRequestStatus {
+  OPEN
+  ADDED
+  DISMISSED
 }
 
 enum ProcessingProduct {
@@ -587,6 +587,7 @@ model User {
   notifications      Notification[]
   consents           ConsentRecord[]     @relation("ConsentSubjectUser")
   dataRequests       DataRequest[]
+  cropRequests       CropRequest[]
 
   @@map("users")
 }
@@ -855,8 +856,9 @@ model ProcessingLine {
   facilityId String            @db.Uuid
   facility   Facility          @relation(fields: [facilityId], references: [id], onDelete: Restrict)
   name       String
-  /// The crop this line buys; only harvests of the same crop are matched to its slots.
-  crop       Crop              @default(CASSAVA)
+  /// The crop this line buys (a `crops.code`); only harvests of the same crop are matched to its slots.
+  crop       String            @default("CASSAVA")
+  cropInfo   Crop              @relation(fields: [crop], references: [code], onDelete: Restrict, onUpdate: Cascade)
   product    ProcessingProduct
   status     LineStatus        @default(ACTIVE)
   createdAt  DateTime          @default(now()) @db.Timestamptz(3)
@@ -918,6 +920,55 @@ model CapacityAdjustment {
   @@map("capacity_adjustments")
 }
 
+/// A crop HarvestSlot supports. Administrators add crops and switch them on or off; nothing in the
+/// code lists crops. Harvests and buyer intake lines name one crop by `code`.
+model Crop {
+  code                      String              @id
+  label                     String
+  /// The word used inside sentences: "cassava", "tomatoes".
+  noun                      String
+  nounIsPlural              Boolean             @default(false)
+  /// What the farmer hands over: "fresh roots", "fresh tomatoes".
+  produce                   String
+  /// One line on why the timing matters, shown when choosing the crop.
+  why                       String
+  /// Default purchase terms for a buyer's first place for this crop.
+  maxHoursHarvestToDelivery Int                 @default(48)
+  soilAndStemsRemoved       Boolean             @default(false)
+  qualityNotes              String?
+  /// Products a line buying this crop can make.
+  products                  ProcessingProduct[] @default([OTHER])
+  active                    Boolean             @default(true)
+  sortOrder                 Int                 @default(100)
+  createdAt                 DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt                 DateTime            @updatedAt @db.Timestamptz(3)
+
+  harvestRequests HarvestRequest[]
+  lines           ProcessingLine[]
+
+  @@map("crops")
+}
+
+/// "My crop isn't listed": a farmer asks for a crop; administrators add it or dismiss the request.
+model CropRequest {
+  id                String            @id @default(uuid(7)) @db.Uuid
+  name              String
+  /// Lower-case name used to group requests for the same crop.
+  nameKey           String
+  note              String?
+  requestedByUserId String            @db.Uuid
+  requestedBy       User              @relation(fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  lga               String?
+  status            CropRequestStatus @default(OPEN)
+  resolvedCropCode  String?
+  resolvedAt        DateTime?         @db.Timestamptz(3)
+  isDemo            Boolean           @default(false)
+  createdAt         DateTime          @default(now()) @db.Timestamptz(3)
+
+  @@index([status, nameKey])
+  @@map("crop_requests")
+}
+
 // ───────────────────────────── Harvests & offers ─────────────────────────────
 
 model HarvestRequest {
@@ -930,7 +981,9 @@ model HarvestRequest {
   createdByUserId     String               @db.Uuid
   actingDelegationId  String?              @db.Uuid
   status              HarvestRequestStatus @default(DRAFT)
-  crop                Crop                 @default(CASSAVA)
+  /// What is for sale (a `crops.code`), fixed once created.
+  crop                String               @default("CASSAVA")
+  cropInfo            Crop                 @relation(fields: [crop], references: [code], onDelete: Restrict, onUpdate: Cascade)
   estimatedQuantityKg Decimal              @db.Decimal(14, 3)
   /// Quantity currently offered for sale; allocations may never exceed it.
   eligibleQuantityKg  Decimal              @db.Decimal(14, 3)

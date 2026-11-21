@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import {
   createHarvestSchema,
-  cropNoun,
   dbDateToString,
   declineRequestSchema,
   formatKg,
@@ -42,10 +41,12 @@ import { AccessService } from '../../common/access.service.js';
 import { PrismaService } from '../../common/prisma.service.js';
 import { iso, kobo } from '../../common/serialize.js';
 import { approxFor } from '../farmers/farmers.service.js';
+import { activeCrop } from '../crops/crops.service.js';
 import { MatchingService, type RequestFacts } from './matching.service.js';
 
 const include = {
   farmLocation: true,
+  cropInfo: { select: { noun: true } },
   farmerProfile: { select: { displayName: true } },
   offers: { select: { id: true, status: true, facilityId: true, createdAt: true } },
   bookings: { select: { status: true } },
@@ -60,8 +61,8 @@ function harvestNextStep(r: HarvestRow, remainingG: bigint, today: string, reque
   const openOffers = r.offers.filter((o) => o.status === 'OPEN' || o.status === 'COUNTERED').length;
   const liveBookings = r.bookings.filter((b) => !['CANCELLED', 'EXPIRED'].includes(b.status)).length;
   if (r.status === 'DRAFT') return { stage: 'Not shared with buyers yet', forFarmer: 'Find buyers for this harvest' };
-  if (r.status === 'WITHDRAWN') return { stage: 'Withdrawn', forFarmer: `Add a new harvest when you have ${cropNoun(r.crop)} to sell` };
-  if (r.status === 'CLOSED') return { stage: 'Closed to new offers', forFarmer: liveBookings ? 'See your confirmed plan' : `Add a new harvest when you have ${cropNoun(r.crop)} to sell` };
+  if (r.status === 'WITHDRAWN') return { stage: 'Withdrawn', forFarmer: `Add a new harvest when you have ${r.cropInfo.noun} to sell` };
+  if (r.status === 'CLOSED') return { stage: 'Closed to new offers', forFarmer: liveBookings ? 'See your confirmed plan' : `Add a new harvest when you have ${r.cropInfo.noun} to sell` };
   if (openOffers) return { stage: openOffers === 1 ? 'Offer received' : `${openOffers} offers received`, forFarmer: openOffers === 1 ? 'Review the offer' : 'Review and compare the offers' };
   if (remainingG === 0n && liveBookings) return { stage: 'Fully booked', forFarmer: 'See your confirmed plan' };
   if (dbDateToString(r.latestHarvestDate) < today) return { stage: 'Harvest dates have passed', forFarmer: 'Change the dates to find buyers again' };
@@ -69,7 +70,7 @@ function harvestNextStep(r: HarvestRow, remainingG: bigint, today: string, reque
   if (waiting.length) {
     return { stage: 'Waiting for the buyer’s offer', forFarmer: `Waiting for ${waiting.map((w) => w.processorName).join(' and ')} to send an offer. You can ask other buyers too.` };
   }
-  return { stage: liveBookings ? 'Part booked — more for sale' : 'Looking for a buyer', forFarmer: 'Send a request to a buyer that fits' };
+  return { stage: liveBookings ? 'Part booked — more for sale' : 'Looking for a buyer', forFarmer: 'Send a request to a buyer that fits. If none fits yet, we tell you when a new buyer opens a buying slot.' };
 }
 
 @Injectable()
@@ -194,6 +195,7 @@ export class HarvestsService {
         return (await this.dtos([existing]))[0]!;
       }
     }
+    await activeCrop(this.prisma.db, input.crop);
     const profile = await this.prisma.db.farmerProfile.findUniqueOrThrow({ where: { id: farmerProfileId } });
     const id = await withTransaction(this.prisma.db, async (tx) => {
       let farmLocationId = input.farmLocationId;
@@ -363,8 +365,8 @@ export class HarvestsService {
     return this.get(actor, id);
   }
 
-  async facts(id: string, now = new Date()): Promise<{ facts: RequestFacts; row: Prisma.HarvestRequestGetPayload<{ include: { farmLocation: true } }> }> {
-    const row = await this.prisma.db.harvestRequest.findUniqueOrThrow({ where: { id }, include: { farmLocation: true } });
+  async facts(id: string, now = new Date()): Promise<{ facts: RequestFacts; row: Prisma.HarvestRequestGetPayload<{ include: { farmLocation: true; cropInfo: true } }> }> {
+    const row = await this.prisma.db.harvestRequest.findUniqueOrThrow({ where: { id }, include: { farmLocation: true, cropInfo: true } });
     const allocated = await requestAllocation(this.prisma.db, id, now);
     const eligible = toGrams(row.eligibleQuantityKg);
     const l = row.farmLocation;
@@ -373,6 +375,7 @@ export class HarvestsService {
       facts: {
         id,
         crop: row.crop,
+        cropNoun: row.cropInfo.noun,
         remainingG: eligible > allocated ? eligible - allocated : 0n,
         earliestHarvestDate: dbDateToString(row.earliestHarvestDate),
         latestHarvestDate: dbDateToString(row.latestHarvestDate),
@@ -401,14 +404,14 @@ export class HarvestsService {
 
   /** Farmer asks a matched processor for an offer. Notifies them; reserves nothing. */
   async invite(actor: Actor, id: string, facilityId: string) {
-    const row = await this.prisma.db.harvestRequest.findUnique({ where: { id } });
+    const row = await this.prisma.db.harvestRequest.findUnique({ where: { id }, include: { cropInfo: true } });
     if (!row) throw new DomainError('NOT_FOUND', 'Harvest request not found');
     const authority = await this.access.farmer(actor, row.farmerProfileId, 'harvest.edit');
     if (row.status !== 'PUBLISHED') throw new DomainError('INVALID_STATE_TRANSITION', 'Publish the request before asking for offers');
     const facility = await this.prisma.db.facility.findUnique({ where: { id: facilityId }, include: { organisation: true } });
     if (!facility || facility.organisation.status !== 'APPROVED') throw new DomainError('NOT_FOUND', 'Facility not found');
     if (!(await this.prisma.db.processingLine.count({ where: { facilityId, crop: row.crop, status: 'ACTIVE' } }))) {
-      throw new DomainError('VALIDATION_FAILED', `${facility.organisation.name} does not buy ${cropNoun(row.crop)} at ${facility.name}. Choose a buyer from your matches.`);
+      throw new DomainError('VALIDATION_FAILED', `${facility.organisation.name} does not buy ${row.cropInfo.noun} at ${facility.name}. Choose a buyer from your matches.`);
     }
     await withTransaction(this.prisma.db, async (tx) => {
       const existing = await tx.offerInvitation.findUnique({ where: { harvestRequestId_facilityId: { harvestRequestId: id, facilityId } } });
@@ -424,7 +427,7 @@ export class HarvestsService {
         type: 'offer.invited',
         category: 'offers',
         title: `Review harvest request ${row.reference}`,
-        body: `A farmer asked ${facility.name} to buy ${formatKg(row.eligibleQuantityKg.toString())} of ${cropNoun(row.crop)}, ready ${DAY_LABEL.format(row.earliestHarvestDate)} – ${DAY_LABEL.format(row.latestHarvestDate)}. Send an offer or say you can't buy this time.`,
+        body: `A farmer asked ${facility.name} to buy ${formatKg(row.eligibleQuantityKg.toString())} of ${row.cropInfo.noun}, ready ${DAY_LABEL.format(row.earliestHarvestDate)} – ${DAY_LABEL.format(row.latestHarvestDate)}. Send an offer or say you can't buy this time.`,
         link: `/processor/inbox?request=${id}`,
         dedupeKey: `offer-invited:${id}:${facilityId}:${Date.now()}`,
       });
@@ -465,7 +468,7 @@ export class HarvestsService {
     const org = await this.prisma.db.organisation.findUniqueOrThrow({ where: { id: orgId } });
     const requests = await this.prisma.db.harvestRequest.findMany({
       where: { status: 'PUBLISHED', isDemo: org.isDemo, latestHarvestDate: { gte: stringToDbDate(lagosDateString(now)) } },
-      include: { farmLocation: true, farmerProfile: { select: { displayName: true } } },
+      include: { farmLocation: true, farmerProfile: { select: { displayName: true } }, cropInfo: { select: { noun: true } } },
       orderBy: { earliestHarvestDate: 'asc' },
       take: 300,
     });
@@ -490,6 +493,7 @@ export class HarvestsService {
       const input = {
         id: r.id,
         crop: r.crop,
+        cropNoun: r.cropInfo.noun,
         remainingG: remaining,
         earliestHarvestDate: dbDateToString(r.earliestHarvestDate),
         latestHarvestDate: dbDateToString(r.latestHarvestDate),

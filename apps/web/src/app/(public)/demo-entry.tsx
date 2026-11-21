@@ -7,7 +7,7 @@ import type { DemoPersona } from '@harvestslot/contracts';
 import { post } from '@/lib/api';
 import { useSession } from '@/lib/session';
 
-/** The main demo: a farmer selling cassava and tomatoes, a cassava buyer, a tomato buyer, and the administrator. */
+/** The main demo: a farmer selling several crops, a cassava buyer, a tomato buyer, and the administrator. */
 export const PERSONAS: Array<{ persona: DemoPersona; label: string; home: string }> = [
   { persona: 'farmer', label: 'Farmer — selling (Adunni)', home: '/app' },
   { persona: 'processor-manager', label: 'Buyer — cassava (Bola)', home: '/app' },

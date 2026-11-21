@@ -6,7 +6,6 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import {
   DISPOSITION_LABELS,
-  CROPS,
   PRODUCT_LABELS,
   REJECTION_REASON_LABELS,
   RejectedDispositionE,
@@ -29,6 +28,7 @@ import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, DescriptionList
 import { ApiError, uploadFile } from '@/lib/api';
 import { useApi } from '@/lib/hooks';
 import { useAction } from '@/lib/mutations';
+import { useCrops } from '@/lib/crops';
 
 type Processing = z.infer<typeof processingSchema>;
 const keys = (id: string) => [['receiving', id], ['booking', id], ['processing', id], ['bookings']];
@@ -293,6 +293,7 @@ function FarmerReview({ r, bookingId }: { r: ReceivingDto; bookingId: string }) 
 }
 
 function ProcessingPanel({ booking }: { booking: BookingDetail }) {
+  const crops = useCrops();
   const q = useApi<Processing>(['processing', booking.id], `/bookings/${booking.id}/processing`);
   const facility = useApi<FacilityDto>(['facility', booking.current.content.facility.id], `/facilities/${booking.current.content.facility.id}`);
   const [lineId, setLineId] = useState(booking.current.content.line.id);
@@ -343,7 +344,7 @@ function ProcessingPanel({ booking }: { booking: BookingDetail }) {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Field label="Product">
                     <Select value={product} onChange={(e) => setProduct(e.target.value)}>
-                      {CROPS[booking.current.content.harvest.crop ?? 'CASSAVA'].products.map((x) => (
+                      {crops.info(booking.current.content.harvest.crop ?? 'CASSAVA').products.map((x) => (
                         <option key={x} value={x}>
                           {PRODUCT_LABELS[x]}
                         </option>

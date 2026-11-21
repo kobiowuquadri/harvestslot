@@ -101,6 +101,7 @@ export function navFor(w: Workspace | undefined, devTools: boolean): NavItem[] {
           { href: '/admin/disputes', label: 'Disputes', icon: Scale },
           { href: '/bookings', label: 'All bookings', icon: ClipboardCheck },
           { href: '/admin/policies', label: 'Policies', icon: Settings },
+          { href: '/admin/crops', label: 'Crops', icon: Sprout },
           { href: '/admin/locations', label: 'Locations', icon: MapIcon },
           { href: '/admin/integrations', label: 'Integrations', icon: Wrench },
           { href: '/admin/outbox', label: 'Messages & webhooks', icon: Bell },

@@ -4,14 +4,12 @@ import { useState } from 'react';
 import { Factory, Send, Truck } from 'lucide-react';
 import {
   addDays,
-  CROPS,
   formatKg,
   formatLagosDate,
   formatNaira,
   lagosDateString,
   produceAmountKobo,
   toGrams,
-  type Crop,
   type FacilityDto,
   type HandoverArrangement,
   type OfferDto,
@@ -24,11 +22,12 @@ import { Alert } from '@/components/ui/primitives';
 import { useApi } from '@/lib/hooks';
 import { useAction } from '@/lib/mutations';
 import { koboToNairaInput, nairaToKobo } from '@/lib/utils';
+import { useCrops } from '@/lib/crops';
 
 export interface OfferRequestContext {
   harvestRequestId: string;
   /** Only buying slots for this crop can be offered. */
-  crop: Crop;
+  crop: string;
   reference: string;
   farmerName: string;
   farmLabel: string;
@@ -54,7 +53,7 @@ export function OfferForm({ orgId, request, existing, onDone }: { orgId: string;
   const to = new Date(new Date(`${request.latestHarvestDate}T00:00:00+01:00`).getTime() + 86_400_000);
   const slots = useApi<SlotDto[]>(['slots', orgId, 'offer', request.harvestRequestId], `/organisations/${orgId}/slots?status=PUBLISHED&from=${encodeURIComponent(new Date(from.getTime() - 86_400_000).toISOString())}&to=${encodeURIComponent(to.toISOString())}`);
   const facilities = useApi<FacilityDto[]>(['facilities', orgId], `/organisations/${orgId}/facilities`);
-  const noun = CROPS[request.crop].noun;
+  const noun = useCrops().info(request.crop).noun;
   const usable = (slots.data ?? []).filter((s) => s.crop === request.crop && new Date(s.startsAt) < to && new Date(s.endsAt) > from && new Date(s.endsAt) > new Date());
   const cur = existing?.current;
 

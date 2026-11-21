@@ -34,7 +34,7 @@ export const DelegationScopeE = e([
 ]);
 export const ConsentMethodE = e(['FARMER_IN_APP', 'RECORDED_BY_REPRESENTATIVE']);
 export const FacilityStatusE = e(['ACTIVE', 'INACTIVE']);
-export const CropE = e(['CASSAVA', 'TOMATO']);
+export const CropRequestStatusE = e(['OPEN', 'ADDED', 'DISMISSED']);
 export const ProcessingProductE = e(['GARRI', 'FLOUR', 'STARCH', 'FUFU', 'CHIPS', 'TOMATO_PASTE', 'OTHER']);
 export const LineStatusE = e(['ACTIVE', 'INACTIVE']);
 export const SlotStatusE = e(['DRAFT', 'PUBLISHED', 'CLOSED', 'CANCELLED']);
@@ -182,7 +182,7 @@ export type FarmerClaimStatus = (typeof FarmerClaimStatusE.values)[number];
 export type LocationSource = (typeof LocationSourceE.values)[number];
 export type DelegationScope = (typeof DelegationScopeE.values)[number];
 export type ConsentMethod = (typeof ConsentMethodE.values)[number];
-export type Crop = (typeof CropE.values)[number];
+export type CropRequestStatus = (typeof CropRequestStatusE.values)[number];
 export type ProcessingProduct = (typeof ProcessingProductE.values)[number];
 export type SlotStatus = (typeof SlotStatusE.values)[number];
 export type HarvestRequestStatus = (typeof HarvestRequestStatusE.values)[number];
@@ -239,7 +239,7 @@ export const ALL_ENUMS = {
   DelegationScope: DelegationScopeE.values,
   ConsentMethod: ConsentMethodE.values,
   FacilityStatus: FacilityStatusE.values,
-  Crop: CropE.values,
+  CropRequestStatus: CropRequestStatusE.values,
   ProcessingProduct: ProcessingProductE.values,
   LineStatus: LineStatusE.values,
   SlotStatus: SlotStatusE.values,

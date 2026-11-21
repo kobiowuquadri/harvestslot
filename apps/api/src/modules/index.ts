@@ -34,11 +34,16 @@ import { NotificationsController, NotificationsService } from './notifications/n
 import { AdminController, AnalyticsController, PrivacyController } from './admin/admin.controller.js';
 import { AdminService } from './admin/admin.service.js';
 import { AnalyticsService } from './analytics/analytics.service.js';
+import { AdminCropsController, CropsController } from './crops/crops.controller.js';
+import { CropsService } from './crops/crops.service.js';
 
 @Module({ controllers: [AuthController], providers: [AuthService, OtpService], exports: [AuthService, OtpService] })
 export class AuthModule {}
 
-@Module({ controllers: [SystemController] })
+@Module({ controllers: [CropsController, AdminCropsController], providers: [CropsService], exports: [CropsService] })
+export class CropsModule {}
+
+@Module({ imports: [CropsModule], controllers: [SystemController] })
 export class SystemModule {}
 
 @Module({ imports: [AuthModule], controllers: [OrganisationsController], providers: [OrganisationsService] })
@@ -85,6 +90,7 @@ export class AdminModule {}
 
 export const FEATURE_MODULES = [
   AuthModule,
+  CropsModule,
   SystemModule,
   OrganisationsModule,
   FarmersModule,

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { CalendarDays, CheckCircle2, Clock, MapPin, Send, Truck, XCircle } from 'lucide-react';
-import { CROPS, formatKg, HANDOVER_ARRANGEMENT_LABELS, type HarvestDto, type MatchResponse, type MatchResult, type OfferDto } from '@harvestslot/contracts';
+import { cropVerb, formatKg, HANDOVER_ARRANGEMENT_LABELS, type HarvestDto, type MatchResponse, type MatchResult, type OfferDto } from '@harvestslot/contracts';
 import { ConfirmActionButton, ReasonActionDialog } from '@/components/domain/dialogs';
 import { DateOnly, DemoTag, Money, Price, ReviewedTag, StatusBadge, When } from '@/components/domain/display';
 import { FarmerGate } from '@/components/domain/farmer-gate';
@@ -12,6 +12,7 @@ import { PageHeader, QueryView } from '@/components/domain/states';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/primitives';
 import { farmerCan, useApi, withFarmer, type FarmerContext } from '@/lib/hooks';
+import { useCrops } from '@/lib/crops';
 
 const LIVE = ['OPEN', 'COUNTERED'];
 
@@ -105,6 +106,7 @@ function MatchCard({ m, h, canAsk, ctx }: { m: MatchResult; h: HarvestDto; canAs
 function Buyers({ h, ctx }: { h: HarvestDto; ctx: FarmerContext }) {
   const q = useApi<MatchResponse>(['matches', h.id], h.status === 'PUBLISHED' ? `/harvests/${h.id}/matches` : null);
   const canAsk = farmerCan(ctx, 'harvest.edit');
+  const noun = useCrops().info(h.crop).noun;
   if (h.status !== 'PUBLISHED') return null;
   return (
     <section aria-labelledby="buyers" className="flex flex-col gap-3">
@@ -120,7 +122,13 @@ function Buyers({ h, ctx }: { h: HarvestDto; ctx: FarmerContext }) {
           const otherRequests = h.requests.filter((x) => !shown.has(x.facilityId));
           return (
             <div className="flex flex-col gap-4">
-              {r.results.length === 0 ? (
+              {r.results.length === 0 && r.infeasible?.suggestions[0]?.kind === 'WAIT' && !r.infeasible.reasons.some((x) => x.includes('slot(s)')) ? (
+                <Alert tone="info" title={`No buyer for ${noun} on your dates yet — we’ll tell you when one opens`}>
+                  <p>
+                    Your harvest stays listed. As soon as a buyer opens a buying slot for {noun} near you on dates that fit, you get a notification, and buyers can already see your harvest in their requests.
+                  </p>
+                </Alert>
+              ) : r.results.length === 0 ? (
                 <Alert tone="warning" title="No buyer fits right now — your harvest is still saved">
                   {r.infeasible?.reasons.length ? (
                     <ul className="list-disc pl-5">
@@ -215,6 +223,7 @@ function Offers({ h, ctx }: { h: HarvestDto; ctx: FarmerContext }) {
 }
 
 function HarvestDetail({ ctx }: { ctx: FarmerContext }) {
+  const crops = useCrops();
   const { id } = useParams<{ id: string }>();
   const params = useSearchParams();
   const q = useApi<HarvestDto>(['harvest', id], `/harvests/${id}`);
@@ -259,7 +268,7 @@ function HarvestDetail({ ctx }: { ctx: FarmerContext }) {
               }
               title={
                 <span className="flex flex-wrap items-center gap-2">
-                  {formatKg(h.eligibleQuantityKg)} of {CROPS[h.crop].noun} <StatusBadge kind="harvest" status={h.status} /> {h.isDemo ? <DemoTag /> : null}
+                  {formatKg(h.eligibleQuantityKg)} of {crops.info(h.crop).noun} <StatusBadge kind="harvest" status={h.status} /> {h.isDemo ? <DemoTag /> : null}
                 </span>
               }
               description={
@@ -313,7 +322,7 @@ function HarvestDetail({ ctx }: { ctx: FarmerContext }) {
                     <ReasonActionDialog
                       trigger="Remove this harvest"
                       title="Remove this harvest?"
-                      description={`Use this if the ${CROPS[h.crop].noun} ${h.crop === 'TOMATO' ? 'are' : 'is'} no longer for sale.`}
+                      description={`Use this if the ${crops.info(h.crop).noun} ${cropVerb(crops.info(h.crop))} no longer for sale.`}
                       confirmLabel="Remove harvest"
                       path={`/harvests/${h.id}/withdraw`}
                       body={{ expectedVersion: h.version }}

@@ -10,8 +10,9 @@ import { getDraft } from '@/lib/drafts';
 function NewHarvest() {
   const params = useSearchParams();
   const draftParam = params.get('draft');
-  // A link can choose the crop up front, e.g. /farmer/harvests/new?crop=TOMATO.
-  const crop = params.get('crop') === 'TOMATO' ? 'TOMATO' : 'CASSAVA';
+  // A link can choose the crop up front, e.g. /farmer/harvests/new?crop=PEPPER (a code; the form checks it).
+  const requested = params.get('crop');
+  const crop = requested && /^[A-Z][A-Z0-9_]{1,39}$/.test(requested) ? requested : 'CASSAVA';
   const [initial, setInitial] = useState<HarvestFormValues | null>(draftParam ? null : { ...emptyHarvestValues, crop });
   useEffect(() => {
     if (!draftParam) return;

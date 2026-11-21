@@ -70,12 +70,14 @@ The farmer's question is: *“Who will buy my cassava, how much will they take, 
 | T4 | Adunni → her 900 kg tomato harvest | An offer from the tomato paste plant waiting for her answer; her tomato matches show only tomato buyers |
 | — | Adunni → her 3,000 kg harvest | Two offers to compare: Oluyole collects at ₦250/kg; Iseyin pays ₦235/kg but she delivers (about ₦20,000 delivery cost) |
 
-## Showing the second crop (2 minutes)
+## Showing that any crop works (3 minutes)
 
 1. As Adunni, open **Harvests**: each card says *Cassava* or *Tomatoes*. Open the 900 kg tomato harvest: the only buyer suggested is the Egbeda tomato paste plant, never a garri or flour plant.
-2. Choose **Add my harvest**: the first question is *What are you selling?* (Cassava or Tomatoes).
+2. Choose **Add my harvest**: the first question is *What are you selling?*, listing every crop the administrator has added, with *My crop isn't listed* underneath.
+   Halima (`farmer.halima@…`) has listed peppers, which no demo buyer buys yet: her harvest says *No buyer for peppers on your dates yet — we'll tell you when one opens*.
 3. Switch to **Buyer — tomatoes (Sade)**: **Requests** shows only tomato harvests; **Buying slots → Publish a buying slot** starts with *What are you buying?*
-4. Pitch line: *storage makes cassava last longer; HarvestSlot makes sure the harvest never has to wait — and the same engine already runs a second crop.*
+4. As the **Administrator**, open **Crops**: the five launch crops, and farmers asking for okra (two farmers) and watermelon. *Add this crop* on okra makes it available at once and tells both farmers; *Dismiss* tells them why not.
+5. Pitch line: *storage makes cassava last longer; HarvestSlot makes sure the harvest never has to wait, for any crop the team adds in a minute.*
 
 ## Other things worth showing
 

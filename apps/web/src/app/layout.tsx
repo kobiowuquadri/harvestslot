@@ -10,7 +10,7 @@ import { Providers } from './providers';
 export const metadata: Metadata = {
   title: { default: 'HarvestSlot — Harvest with a confirmed plan', template: '%s · HarvestSlot' },
   description:
-    'Agree a buyer, a date and the handover for your cassava or tomatoes before you harvest. Oyo State, Nigeria.',
+    'Agree a buyer, a date and the handover for your harvest before you pick or dig it. Oyo State, Nigeria.',
   manifest: '/manifest.webmanifest',
   applicationName: 'HarvestSlot',
   icons: {

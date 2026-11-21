@@ -79,8 +79,8 @@ function RegisterForm() {
             }}
             error={chooseError ?? undefined}
             options={[
-              { value: 'FARMER', label: 'Sell produce', description: 'I’m a farmer with cassava or tomatoes, looking for a buyer.', icon: <Sprout className="size-6" /> },
-              { value: 'PROCESSOR', label: 'Buy produce', description: 'I buy fresh cassava or tomatoes for a processing facility.', icon: <Factory className="size-6" /> },
+              { value: 'FARMER', label: 'Sell produce', description: 'I’m a farmer with a harvest to sell, looking for a buyer.', icon: <Sprout className="size-6" /> },
+              { value: 'PROCESSOR', label: 'Buy produce', description: 'I buy fresh produce for a processing facility.', icon: <Factory className="size-6" /> },
             ]}
           />
           <Button type="submit" size="lg">

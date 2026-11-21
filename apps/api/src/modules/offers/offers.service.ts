@@ -3,7 +3,6 @@ import { z } from 'zod';
 import {
   counterOfferSchema,
   createOfferSchema,
-  cropNoun,
   dbDateToString,
   decideOfferSchema,
   formatKg,
@@ -56,7 +55,7 @@ import { BookingEngine, placeLabel } from '../bookings/booking-engine.service.js
 const offerInclude = {
   facility: true,
   processorOrg: true,
-  harvestRequest: { include: { farmLocation: true, farmerProfile: true } },
+  harvestRequest: { include: { farmLocation: true, farmerProfile: true, cropInfo: true } },
   versions: { orderBy: { versionNo: 'asc' as const }, include: { slot: { include: { line: true } } } },
   reservation: true,
   booking: { select: { id: true } },
@@ -261,17 +260,17 @@ export class OffersService {
   }
 
   async create(actor: Actor, input: z.infer<typeof createOfferSchema>): Promise<OfferDto> {
-    const facilitySlot = await this.prisma.db.processingSlot.findUnique({ where: { id: input.slotId }, include: { facility: true, line: true } });
+    const facilitySlot = await this.prisma.db.processingSlot.findUnique({ where: { id: input.slotId }, include: { facility: true, line: { include: { cropInfo: true } } } });
     if (!facilitySlot) throw new DomainError('NOT_FOUND', 'Slot not found');
     const orgId = facilitySlot.facility.organisationId;
     const send = input.send && input.handoverArrangement !== undefined;
     // Drafts can be prepared before the organisation is approved; sending needs approval.
     await this.access.requireOrg(actor, orgId, 'processor.offer.manage', { requireApproved: send });
-    const request = await this.prisma.db.harvestRequest.findUnique({ where: { id: input.harvestRequestId } });
+    const request = await this.prisma.db.harvestRequest.findUnique({ where: { id: input.harvestRequestId }, include: { cropInfo: true } });
     if (!request || request.status !== 'PUBLISHED') throw new DomainError('NOT_FOUND', 'Published harvest request not found');
     if (request.isDemo !== facilitySlot.isDemo) throw new DomainError('NOT_FOUND', 'Published harvest request not found');
     if (facilitySlot.line.crop !== request.crop) {
-      throw new DomainError('VALIDATION_FAILED', `This buying slot is for ${cropNoun(facilitySlot.line.crop)}; the farmer is selling ${cropNoun(request.crop)}`, [{ path: 'slotId', message: `Choose a buying slot for ${cropNoun(request.crop)}` }]);
+      throw new DomainError('VALIDATION_FAILED', `This buying slot is for ${facilitySlot.line.cropInfo.noun}; the farmer is selling ${request.cropInfo.noun}`, [{ path: 'slotId', message: `Choose a buying slot for ${request.cropInfo.noun}` }]);
     }
     const now = new Date();
     const terms = this.resolve(input, facilitySlot.facility);
@@ -405,10 +404,10 @@ export class OffersService {
     const before = await this.load(offerId);
     const sending = before.status === 'DRAFT' && input.send;
     await this.access.requireOrg(actor, before.processorOrgId, 'processor.offer.manage', { requireApproved: before.status !== 'DRAFT' || sending });
-    const slot = await this.prisma.db.processingSlot.findUnique({ where: { id: input.slotId }, include: { facility: true, line: true } });
+    const slot = await this.prisma.db.processingSlot.findUnique({ where: { id: input.slotId }, include: { facility: true, line: { include: { cropInfo: true } } } });
     if (!slot || slot.facilityId !== before.facilityId) throw new DomainError('VALIDATION_FAILED', 'Choose a slot at the same facility');
     if (slot.line.crop !== before.harvestRequest.crop) {
-      throw new DomainError('VALIDATION_FAILED', `This buying slot is for ${cropNoun(slot.line.crop)}; the farmer is selling ${cropNoun(before.harvestRequest.crop)}`, [{ path: 'slotId', message: `Choose a buying slot for ${cropNoun(before.harvestRequest.crop)}` }]);
+      throw new DomainError('VALIDATION_FAILED', `This buying slot is for ${slot.line.cropInfo.noun}; the farmer is selling ${before.harvestRequest.cropInfo.noun}`, [{ path: 'slotId', message: `Choose a buying slot for ${before.harvestRequest.cropInfo.noun}` }]);
     }
     if (before.status !== 'DRAFT' && !input.handoverArrangement) {
       throw new DomainError('VALIDATION_FAILED', 'A sent offer must keep saying how the produce gets there', [{ path: 'handoverArrangement', message: 'Choose collection or delivery' }]);

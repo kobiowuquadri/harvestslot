@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
-import { addDays, CROPS, formatLagosDate, lagosDateString, lagosStartOfDay, PRODUCT_LABELS, type FacilityDto, type SlotDto } from '@harvestslot/contracts';
+import { addDays, formatLagosDate, lagosDateString, lagosStartOfDay, PRODUCT_LABELS, type FacilityDto, type SlotDto } from '@harvestslot/contracts';
 import { BuyingSlotButton } from '@/components/domain/buying-slot-form';
 import { ReasonActionDialog } from '@/components/domain/dialogs';
 import { DemoTag, Kg, StatusBadge, When, Window } from '@/components/domain/display';
@@ -15,6 +15,7 @@ import { useApi } from '@/lib/hooks';
 import { useAction } from '@/lib/mutations';
 import type { Workspace } from '@/lib/session';
 import { lagosInputToIso } from '@/lib/utils';
+import { useCrops } from '@/lib/crops';
 
 function UsageBar({ s }: { s: SlotDto }) {
   const limit = Number(s.usage.limitKg) || 1;
@@ -78,6 +79,7 @@ function AdjustDialog({ s, orgId }: { s: SlotDto; orgId: string }) {
 }
 
 function CreateSlot({ orgId, facilities }: { orgId: string; facilities: FacilityDto[] }) {
+  const crops = useCrops();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<'single' | 'series'>('series');
   const lines = facilities.flatMap((f) => f.lines.filter((l) => l.status === 'ACTIVE').map((l) => ({ ...l, facilityName: f.name })));
@@ -138,7 +140,7 @@ function CreateSlot({ orgId, facilities }: { orgId: string; facilities: Facility
               <Select value={lineId} onChange={(e) => setLineId(e.target.value)}>
                 {lines.map((l) => (
                   <option key={l.id} value={l.id}>
-                    {l.facilityName} · {l.name} ({CROPS[l.crop].noun}, {PRODUCT_LABELS[l.product].toLowerCase()})
+                    {l.facilityName} · {l.name} ({crops.info(l.crop).noun}, {PRODUCT_LABELS[l.product].toLowerCase()})
                   </option>
                 ))}
               </Select>
@@ -192,6 +194,7 @@ function CreateSlot({ orgId, facilities }: { orgId: string; facilities: Facility
 }
 
 function Capacity({ w }: { w: Extract<Workspace, { kind: 'processor' }> }) {
+  const crops = useCrops();
   const today = lagosDateString(new Date());
   const [facilityId, setFacilityId] = useState('');
   const [from, setFrom] = useState(today);
@@ -262,7 +265,7 @@ function Capacity({ w }: { w: Extract<Workspace, { kind: 'processor' }> }) {
                         <span className="font-medium">
                           {s.facilityName} · {s.lineName}
                         </span>
-                        <Badge>{CROPS[s.crop].label}</Badge>
+                        <Badge>{crops.info(s.crop).label}</Badge>
                         <StatusBadge kind="slot" status={s.status} />
                         {s.isDemo ? <DemoTag /> : null}
                         <span className="text-sm text-muted">

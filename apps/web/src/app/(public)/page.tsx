@@ -20,7 +20,7 @@ import { photos } from '@/content/photos';
 import { team } from '@/content/team';
 
 const roles = [
-  { icon: Sprout, title: 'Sell your harvest', body: 'Cassava or tomatoes: add your harvest, choose a buyer, agree who collects and when — then harvest.' },
+  { icon: Sprout, title: 'Sell your harvest', body: 'Add your harvest of any listed crop, choose a buyer, agree who collects and when — then harvest.' },
   { icon: Factory, title: 'Buy fresh produce', body: 'Publish buying slots for each crop, answer farmers’ requests, record the weight and the payment.' },
   { icon: Truck, title: 'Collect or deliver', body: 'One decision in the offer: the buyer collects from the farm, or the farmer delivers.' },
   { icon: HandCoins, title: 'Paid for what is accepted', body: 'The final amount uses the weight accepted; the farmer confirms the money arrived.' },
@@ -43,7 +43,7 @@ const features = [
 ];
 
 const audiences = [
-  { id: 'farmers', title: 'Farmers selling cassava or tomatoes', photo: photos.farmerHoldingCassava, body: 'Know your buyer, price, place and day before you harvest, and confirm every payment yourself. Free for farmers.' },
+  { id: 'farmers', title: 'Farmers selling their harvest', photo: photos.farmerHoldingCassava, body: 'Know your buyer, price, place and day before you harvest, and confirm every payment yourself. Free for farmers.' },
   { id: 'processors', title: 'Processors buying fresh produce', photo: photos.tomatoBaskets, body: 'Tell farmers what you buy, how much you can receive, where and when. Plan intake instead of hoping for deliveries, and keep weights on record.' },
 ];
 
@@ -118,13 +118,13 @@ export default function LandingPage() {
           </div>
           <div className="order-1 col-span-2 text-center lg:order-2 lg:col-span-1">
             <p className="inline-flex items-center gap-2 rounded-full bg-surface px-3 py-1 text-xs font-medium text-muted ring-1 ring-line">
-              <span className="size-1.5 rounded-full bg-forest" aria-hidden /> Cassava &amp; tomatoes · Oyo State, Nigeria
+              <span className="size-1.5 rounded-full bg-forest" aria-hidden /> Fresh produce · Oyo State, Nigeria
             </p>
             <h1 className="mt-5 text-[2.5rem] font-semibold leading-[1.1] text-ink sm:text-5xl lg:text-[3.25rem]">
               Harvest with a <span className="headline-underline whitespace-nowrap">confirmed plan.</span>
             </h1>
             <p className="mx-auto mt-5 max-w-md text-[17px] leading-relaxed text-muted">
-              Know who will buy your cassava or tomatoes, how much they will take, and when and where it should be ready — <strong className="font-semibold text-ink">before you harvest</strong> — so a crop that spoils fast never leaves the farm without somewhere to go.
+              Know who will buy your harvest, how much they will take, and when and where it should be ready — <strong className="font-semibold text-ink">before you harvest</strong> — so a crop that spoils fast never leaves the farm without somewhere to go.
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-3">
               <Button asChild size="lg">
@@ -202,7 +202,7 @@ export default function LandingPage() {
       {/* ── Features ── */}
       <section id="features" className="scroll-mt-20 bg-canvas">
         <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-          <SectionHeading center eyebrow="Features" title="Built for the realities of a fresh crop" body="Cassava roots start to spoil within days of harvest, and ripe tomatoes bruise and soften just as fast. Every part of HarvestSlot is designed so nobody digs, drives or pays on a promise that might not hold." />
+          <SectionHeading center eyebrow="Features" title="Built for the realities of a fresh crop" body="Cassava roots, ripe tomatoes, fresh peppers: many crops start to spoil within days of harvest. Every part of HarvestSlot is designed so nobody digs, drives or pays on a promise that might not hold." />
           <div className="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {features.map(({ icon: Icon, title, body }) => (
               <div key={title} className="rounded-2xl border border-line bg-surface p-6 shadow-[var(--shadow-card)]">
@@ -279,7 +279,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-[1.4fr_1fr]">
             <div className="px-6 py-12 sm:px-12">
               <h2 className="font-display text-3xl font-semibold tracking-tight text-white sm:text-4xl">Plan your next harvest before you dig.</h2>
-              <p className="mt-3 max-w-lg text-base leading-relaxed text-white/75">Sell cassava or tomatoes as a farmer, or buy them for your processing facility. Free to start.</p>
+              <p className="mt-3 max-w-lg text-base leading-relaxed text-white/75">Sell your harvest as a farmer, or buy fresh produce for your processing facility. Free to start.</p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Button asChild size="lg">
                   <Link href="/register">Create an account</Link>

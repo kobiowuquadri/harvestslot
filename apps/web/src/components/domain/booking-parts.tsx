@@ -2,7 +2,6 @@
 
 import { CheckCircle2, Circle, XCircle } from 'lucide-react';
 import {
-  CROPS,
   PARTY_LABELS,
   REJECTION_HANDLING_LABELS,
   estimateFarmerNet,
@@ -14,6 +13,7 @@ import {
 } from '@harvestslot/contracts';
 import { Alert, Badge, DescriptionList } from '@/components/ui/primitives';
 import { DateOnly, Kg, Money, Price, When, Window } from './display';
+import { useCrops } from '@/lib/crops';
 
 /** The backend-computed readiness, check by check. Never toggled by the client. */
 export function ReadinessChecklist({ readiness }: { readiness: Readiness }) {
@@ -71,6 +71,7 @@ export function Timeline({ events }: { events: TimelineEvent[] }) {
 
 /** Plain-language summary of agreed terms, with the farmer's estimate kept separate from invoices. */
 export function TermsSummary({ terms, viewer }: { terms: BookingTermsContent; viewer: 'farmer' | 'processor' | 'transporter' | 'other' }) {
+  const crop = useCrops().info(terms.harvest.crop ?? 'CASSAVA');
   const net = estimateFarmerNet({
     quantityGrams: kgToGrams(terms.quantityKg),
     priceKoboPerKg: BigInt(terms.priceKoboPerKg),
@@ -83,7 +84,7 @@ export function TermsSummary({ terms, viewer }: { terms: BookingTermsContent; vi
         <strong>{terms.processor.name}</strong> buys <strong>
           <Kg kg={terms.quantityKg} tonnes />
         </strong>{' '}
-        of {CROPS[terms.harvest.crop ?? 'CASSAVA'].produce} from <strong>{terms.farmer.displayName}</strong> at <strong><Price kobo={terms.priceKoboPerKg} /></strong>, for processing at {terms.facility.name}. Pickup{' '}
+        of {crop.produce} from <strong>{terms.farmer.displayName}</strong> at <strong><Price kobo={terms.priceKoboPerKg} /></strong>, for processing at {terms.facility.name}. Pickup{' '}
         <Window start={terms.pickupWindow.start} end={terms.pickupWindow.end} />; delivery <Window start={terms.deliveryWindow.start} end={terms.deliveryWindow.end} />.{' '}
         {terms.freightPayer === 'PROCESSOR' ? 'The processor pays for transport.' : 'The farmer pays for transport, as shown below.'}
       </p>

@@ -1,5 +1,4 @@
 import {
-  cropNoun,
   formatKg,
   formatLagosDate,
   formatLagosWindow,
@@ -8,7 +7,6 @@ import {
   koboToNumber,
   lagosStartOfDay,
   produceAmountKobo,
-  type Crop,
   type QualityTerms,
 } from '@harvestslot/contracts';
 import type { SlotUsageGrams } from './capacity.js';
@@ -17,8 +15,10 @@ import type { MatchingWeights } from './policies.js';
 
 export interface MatchRequestInput {
   id: string;
-  /** Only buying slots for the same crop are eligible. */
-  crop: Crop;
+  /** Only buying slots for the same crop (a `crops.code`) are eligible. */
+  crop: string;
+  /** The crop's word for sentences, e.g. "tomatoes". */
+  cropNoun: string;
   remainingG: bigint;
   earliestHarvestDate: string;
   latestHarvestDate: string;
@@ -43,7 +43,7 @@ export interface MatchCandidateInput {
     qualityCriteria: QualityTerms;
   };
   org: { id: string; name: string; status: string };
-  slot: { id: string; startsAt: Date; endsAt: Date; status: string; lineName: string; lineStatus: string; crop: Crop; product: string };
+  slot: { id: string; startsAt: Date; endsAt: Date; status: string; lineName: string; lineStatus: string; crop: string; cropNoun: string; product: string };
   usage: SlotUsageGrams;
   reliability: { completed: number; onTime: number };
   invited: boolean;
@@ -111,10 +111,10 @@ function harvestBounds(r: MatchRequestInput): { start: Date; end: Date } {
 /** Hard eligibility. Returns null when eligible, otherwise the first failing rule. */
 export function checkEligibility(r: MatchRequestInput, c: MatchCandidateInput, opts: MatchOptions): MatchRejection | null {
   const base = { slotId: c.slot.id, facilityName: c.facility.name };
-  if (c.slot.crop !== r.crop) return { ...base, reason: 'CROP_NOT_BOUGHT', detail: `This buying slot is for ${cropNoun(c.slot.crop)}, not ${cropNoun(r.crop)}.` };
+  if (c.slot.crop !== r.crop) return { ...base, reason: 'CROP_NOT_BOUGHT', detail: `This buying slot is for ${c.slot.cropNoun}, not ${r.cropNoun}.` };
   if (c.org.status !== 'APPROVED') return { ...base, reason: 'PROCESSOR_NOT_APPROVED', detail: 'Processor has not been reviewed and approved.' };
   if (c.facility.status !== 'ACTIVE' || !c.facility.acceptingProduce || c.slot.lineStatus !== 'ACTIVE') {
-    return { ...base, reason: 'FACILITY_UNAVAILABLE', detail: `Facility or line is not accepting ${cropNoun(r.crop)}.` };
+    return { ...base, reason: 'FACILITY_UNAVAILABLE', detail: `Facility or line is not accepting ${r.cropNoun}.` };
   }
   if (c.slot.status !== 'PUBLISHED' || c.slot.startsAt <= opts.now) {
     return { ...base, reason: 'SLOT_NOT_OPEN', detail: 'Slot is not open for new bookings.' };
@@ -294,7 +294,7 @@ export function explainInfeasibility(
   const reasons: string[] = [];
   const suggestions: Array<{ kind: 'REDUCE_QUANTITY' | 'CHANGE_DATES' | 'EXTEND_DISTANCE' | 'WAIT'; text: string }> = [];
   if (totalCandidates === 0) {
-    reasons.push(`No buyer has published open capacity for ${cropNoun(r.crop)} on upcoming dates.`);
+    reasons.push(`No buyer has published open capacity for ${r.cropNoun} on upcoming dates.`);
     suggestions.push({ kind: 'WAIT', text: 'Keep the request published; processors can still see it in their inbox and make an offer.' });
     return { reasons, suggestions };
   }
@@ -302,9 +302,9 @@ export function explainInfeasibility(
   const counts = new Map<RejectionReason, number>();
   rejections.forEach((x) => counts.set(x.reason, (counts.get(x.reason) ?? 0) + 1));
   const describe: Record<RejectionReason, string> = {
-    CROP_NOT_BOUGHT: `does not buy ${cropNoun(r.crop)}`,
+    CROP_NOT_BOUGHT: `does not buy ${r.cropNoun}`,
     PROCESSOR_NOT_APPROVED: 'processor not yet approved',
-    FACILITY_UNAVAILABLE: `facility not accepting ${cropNoun(r.crop)}`,
+    FACILITY_UNAVAILABLE: `facility not accepting ${r.cropNoun}`,
     SLOT_NOT_OPEN: 'slot closed',
     DATES_INCOMPATIBLE: 'outside your harvest dates',
     TOO_FAR_FOR_PROCESSOR: "beyond the facility's pickup radius",

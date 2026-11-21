@@ -8,6 +8,7 @@ import { PrismaService } from '../../common/prisma.service.js';
 import { RateLimitService } from '../../common/rate-limit.service.js';
 import { ENV, MESSAGING, PAYMENTS, STORAGE, type Env, type Messaging, type ObjectStorage, type PaymentProvider } from '../../common/tokens.js';
 import { ApiOk } from '../../common/zod.js';
+import { CropsService } from '../crops/crops.service.js';
 import type { Actor } from '@harvestslot/core';
 
 @ApiTags('system')
@@ -20,6 +21,7 @@ export class SystemController {
     @Inject(STORAGE) private readonly storage: ObjectStorage,
     @Inject(MESSAGING) private readonly messaging: Messaging,
     @Inject(PAYMENTS) private readonly payments: PaymentProvider | null,
+    private readonly crops: CropsService,
   ) {}
 
   /** Liveness: the process is up. */
@@ -60,6 +62,7 @@ export class SystemController {
       routing: 'none',
       roadDistanceFactor: this.env.ROAD_DISTANCE_FACTOR,
       supportedLgas: locations.map((l) => l.lga),
+      crops: await this.crops.listActive(),
     };
   }
 

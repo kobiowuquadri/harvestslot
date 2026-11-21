@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: 'Who HarvestSlot is for' };
 const roles = [
   {
     id: 'farmers',
-    title: 'Farmers — selling cassava or tomatoes',
+    title: 'Farmers — selling their harvest',
     points: [
       'Create an account with your name and a phone number or email. Your farm is asked for when you add a harvest.',
       'Add a harvest: where, roughly how much, and when it will be ready. Buyers see only the area until you agree a plan.',

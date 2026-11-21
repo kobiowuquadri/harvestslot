@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { emailAddress, lgaName, optionalText, phoneNumber, shortText, uuid } from './common.js';
+import { cropSchema } from './crops.js';
 import {
   DelegationScopeE,
   FarmerClaimStatusE,
@@ -191,5 +192,7 @@ export const publicConfigSchema = z.object({
   routing: z.enum(['none', 'osrm']),
   roadDistanceFactor: z.number(),
   supportedLgas: z.array(z.string()),
+  /** Crops farmers can list now (active ones), in display order. */
+  crops: z.array(cropSchema),
 });
 export type PublicConfig = z.infer<typeof publicConfigSchema>;

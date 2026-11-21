@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Client, expectOk, makeFarmer, makeProcessor, offerTerms, startApp, type TestApp } from '../support/harness.js';
+import { Client, expectOk, makeFarmer, makeProcessor, makeUser, offerTerms, startApp, type TestApp } from '../support/harness.js';
 
 let t: TestApp;
 beforeAll(async () => {
@@ -85,7 +85,7 @@ describe('crops: a harvest is only matched, requested, offered and booked with b
       await manager.post(`/organisations/${buyer.org.id}/buying-slots`, { crop: 'TOMATO', facilityId: buyer.facility.id, fromDate: lagosDate(8), toDate: lagosDate(9), quantityKg: '1500' }, { idem: true }),
       201,
     );
-    expect(slot).toMatchObject({ crop: 'TOMATO', lineName: 'Tomato intake' });
+    expect(slot).toMatchObject({ crop: 'TOMATO', lineName: 'Tomatoes intake' });
     const lines = await t.db.processingLine.findMany({ where: { facilityId: buyer.facility.id }, orderBy: { createdAt: 'asc' } });
     expect(lines.map((l) => l.crop)).toEqual(['CASSAVA', 'TOMATO']);
 
@@ -100,5 +100,71 @@ describe('crops: a harvest is only matched, requested, offered and booked with b
     const wrong = await manager.post(`/facilities/${buyer.facility.id}/lines`, { name: 'Odd line', crop: 'TOMATO', product: 'GARRI' });
     expect(wrong.body.error.code).toBe('VALIDATION_FAILED');
     expect(wrong.body.error.details[0].path).toBe('product');
+  });
+
+  it('administrators add crops without a release; farmers ask for missing crops and hear when buyers appear', async () => {
+    const farmer = await makeFarmer(t.db);
+    const farmerClient = new Client(t.app);
+    await farmerClient.login(farmer.user!.email!);
+    const adminUser = await makeUser(t.db, 'admin', { platformRole: 'ADMIN' });
+    const admin = new Client(t.app);
+    await admin.login(adminUser.email!);
+    const suffix = Date.now().toString(36).toUpperCase();
+    const label = `Okra ${suffix}`;
+
+    // The launch crops are listed for everyone in the public config.
+    const config = expectOk(await farmerClient.get('/config/public'));
+    expect(config.crops.map((c: { code: string }) => c.code)).toEqual(expect.arrayContaining(['CASSAVA', 'TOMATO', 'PEPPER', 'PLANTAIN', 'OIL_PALM_FRUIT']));
+
+    // A crop that is not listed cannot be sold yet; the farmer asks for it instead.
+    const base = { farmLocationId: farmer.location.id, estimatedQuantityKg: '600', earliestHarvestDate: lagosDate(1), latestHarvestDate: lagosDate(8), publish: true };
+    const code = `OKRA_${suffix}`;
+    const unlisted = await farmerClient.post(`/farmers/${farmer.profile.id}/harvests`, { ...base, crop: code }, { idem: true });
+    expect(unlisted.body.error).toMatchObject({ code: 'VALIDATION_FAILED' });
+    expect(unlisted.body.error.details[0].path).toBe('crop');
+    const asked = expectOk(await farmerClient.post('/crop-requests', { name: label, note: 'Every two weeks' }), 201);
+    expect(asked).toMatchObject({ status: 'OPEN', nameKey: label.toLowerCase() });
+    expect((await farmerClient.post('/crop-requests', { name: label })).body.error.code).toBe('DUPLICATE');
+    expect((await farmerClient.post('/crop-requests', { name: 'Cassava' })).body.error.code).toBe('DUPLICATE');
+    expect((await farmerClient.get('/admin/crop-requests')).status).toBe(404); // admin routes are hidden from everyone else
+    const open = expectOk(await admin.get('/admin/crop-requests'));
+    expect(open.some((r: { id: string }) => r.id === asked.id)).toBe(true);
+
+    // The administrator adds it: available at once, and the farmer who asked is told.
+    const crop = expectOk(await admin.post('/admin/crops', { label, noun: label.toLowerCase(), produce: 'fresh pods', why: 'Pods turn tough within two days of picking.', maxHoursHarvestToDelivery: 24, answersRequestIds: [asked.id] }), 201);
+    expect(crop).toMatchObject({ code, active: true, maxHoursHarvestToDelivery: 24 });
+    expect(await t.db.cropRequest.findUniqueOrThrow({ where: { id: asked.id } })).toMatchObject({ status: 'ADDED', resolvedCropCode: code });
+    expect(await t.db.notification.count({ where: { userId: farmer.user!.id, type: 'crop.added' } })).toBe(1);
+    expect(expectOk(await farmerClient.get('/config/public')).crops.some((c: { code: string }) => c.code === code)).toBe(true);
+
+    // The farmer lists it. No buyer yet: the matches say so, and the harvest stays listed.
+    const harvest = expectOk(await farmerClient.post(`/farmers/${farmer.profile.id}/harvests`, { ...base, crop: code }, { idem: true }), 201);
+    const matches = expectOk(await farmerClient.get(`/harvests/${harvest.id}/matches`));
+    expect(matches.results).toEqual([]);
+    expect(matches.infeasible.reasons[0]).toBe(`No buyer has published open capacity for ${label.toLowerCase()} on upcoming dates.`);
+    expect(matches.infeasible.suggestions[0].kind).toBe('WAIT');
+
+    // A buyer opens a buying slot for it nearby: the waiting farmer is told once.
+    const buyer = await makeProcessor(t.db);
+    const manager = new Client(t.app);
+    await manager.login(buyer.manager.email!);
+    const slot = expectOk(await manager.post(`/organisations/${buyer.org.id}/buying-slots`, { crop: code, facilityId: buyer.facility.id, fromDate: lagosDate(2), toDate: lagosDate(4), quantityKg: '1000' }, { idem: true }), 201);
+    expect(slot).toMatchObject({ crop: code, lineName: `${label} intake`, status: 'PUBLISHED' });
+    const told = await t.db.notification.findMany({ where: { userId: farmer.user!.id, type: 'harvest.buyer-available' } });
+    expect(told).toHaveLength(1);
+    expect(told[0]!.title).toBe(`A buyer for your ${label.toLowerCase()} opened a buying slot`);
+    expect(told[0]!.link).toBe(`/farmer/harvests/${harvest.id}`);
+    const after = expectOk(await farmerClient.get(`/harvests/${harvest.id}/matches`));
+    expect(after.results.map((r: { facilityId: string }) => r.facilityId)).toContain(buyer.facility.id);
+
+    // Switched off: no new harvests or buying slots for it; existing ones carry on.
+    expectOk(await admin.patch(`/admin/crops/${code}`, { active: false }));
+    expect((await farmerClient.post(`/farmers/${farmer.profile.id}/harvests`, { ...base, crop: code }, { idem: true })).body.error.code).toBe('VALIDATION_FAILED');
+    expect(expectOk(await farmerClient.get(`/harvests/${harvest.id}`)).crop).toBe(code);
+
+    // Requests the administrator can't meet are dismissed with a reason the farmers see.
+    const melon = expectOk(await farmerClient.post('/crop-requests', { name: `Watermelon ${suffix}` }), 201);
+    expectOk(await admin.post('/admin/crop-requests/dismiss', { nameKey: melon.nameKey, reason: 'No buyer for watermelon in Oyo State yet.' }));
+    expect(await t.db.notification.count({ where: { userId: farmer.user!.id, type: 'crop.request-dismissed' } })).toBe(1);
   });
 });

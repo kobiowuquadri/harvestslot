@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { CalendarDays, MapPin, Send } from 'lucide-react';
-import { CROPS, formatKg, type InboxItem, type OfferDto } from '@harvestslot/contracts';
+import { formatKg, type InboxItem, type OfferDto } from '@harvestslot/contracts';
 import { ReasonActionDialog } from '@/components/domain/dialogs';
 import { DateOnly, Price } from '@/components/domain/display';
 import { OfferForm } from '@/components/domain/offer-form';
@@ -15,6 +15,7 @@ import { Alert, Badge, Dialog, DialogContent, Segmented } from '@/components/ui/
 import { can, useApi } from '@/lib/hooks';
 import type { Workspace } from '@/lib/session';
 import { cn } from '@/lib/utils';
+import { useCrops } from '@/lib/crops';
 
 type Filter = 'answer' | 'sent' | 'all';
 const needsAnswer = (i: InboxItem) => !i.offer || ['DRAFT', 'EXPIRED', 'DECLINED', 'WITHDRAWN', 'LAPSED', 'COUNTERED'].includes(i.offer.status);
@@ -53,6 +54,7 @@ function OfferDialog({ w, item, onClose }: { w: Extract<Workspace, { kind: 'proc
 
 function RequestCard({ w, i, highlighted, onReview }: { w: Extract<Workspace, { kind: 'processor' }>; i: InboxItem; highlighted: boolean; onReview: () => void }) {
   const commercial = can(w, 'processor.offer.manage');
+  const crop = useCrops().info(i.crop);
   const status = i.offer?.status;
   return (
     <li className={cn('flex flex-col gap-4 rounded-2xl border bg-surface p-5 shadow-[var(--shadow-card)]', highlighted ? 'border-forest ring-1 ring-forest' : 'border-line')}>
@@ -60,7 +62,7 @@ function RequestCard({ w, i, highlighted, onReview }: { w: Extract<Workspace, { 
         <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-2">
             <span className="text-[15px] font-semibold text-ink">{i.farmerName}</span>
-            <Badge>{CROPS[i.crop].label}</Badge>
+            <Badge>{crop.label}</Badge>
             {i.request ? <Badge tone="accent">Asked you directly</Badge> : null}
           </p>
           <p className="mt-0.5 flex items-center gap-1 text-[13px] text-muted">

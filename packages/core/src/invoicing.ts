@@ -1,5 +1,4 @@
 import {
-  CROPS,
   bpsOfKobo,
   formatKg,
   formatNaira,
@@ -43,6 +42,7 @@ export async function issueReceivingInvoices(tx: Tx, bookingId: string, accepted
     select: { id: true, reference: true, farmerProfileId: true, processorOrgId: true, isDemo: true, receivingRecord: { select: { id: true } } },
   });
   const terms = await currentTerms(tx, bookingId);
+  const crop = await tx.crop.findUnique({ where: { code: terms.content.harvest.crop ?? 'CASSAVA' }, select: { label: true } });
   const price = BigInt(terms.content.priceKoboPerKg);
   const acceptedG = toGrams(acceptedKg);
   const produceKobo = produceAmountKobo(acceptedG, price);
@@ -70,7 +70,7 @@ export async function issueReceivingInvoices(tx: Tx, bookingId: string, accepted
         lines: {
           create: [
             {
-              description: `${CROPS[terms.content.harvest.crop ?? 'CASSAVA'].label} accepted for ${booking.reference}: ${formatKg(acceptedKg)} × ${formatPricePerKg(price)}`,
+              description: `${crop?.label ?? 'Produce'} accepted for ${booking.reference}: ${formatKg(acceptedKg)} × ${formatPricePerKg(price)}`,
               quantityKg: acceptedKg,
               unitPriceKobo: price,
               amountKobo: produceKobo,

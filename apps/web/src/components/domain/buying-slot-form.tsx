@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarPlus, Cherry, Factory, Plus, Sprout } from 'lucide-react';
-import { addDays, CROPS, CropE, formatKg, formatTonnes, lagosDateString, OYO_LGAS, type Crop, type FacilityDto } from '@harvestslot/contracts';
+import { CalendarPlus, Factory, Plus, Sprout } from 'lucide-react';
+import { addDays, formatKg, formatTonnes, lagosDateString, OYO_LGAS, type FacilityDto } from '@harvestslot/contracts';
 import { Button } from '@/components/ui/button';
 import { ChoiceCards, SearchSelect } from '@/components/ui/choice';
 import { Field, Input } from '@/components/ui/form';
 import { Alert, Dialog, DialogContent } from '@/components/ui/primitives';
+import { useCrops } from '@/lib/crops';
 import { useAction } from '@/lib/mutations';
 import { useSession } from '@/lib/session';
 import { nairaToKobo } from '@/lib/utils';
@@ -19,7 +20,8 @@ export function BuyingSlotButton({ orgId, facilities, approved, size = 'lg' }: {
   const active = facilities.filter((f) => f.status === 'ACTIVE');
   const [open, setOpen] = useState(false);
   // Start from the crop this buyer already buys (a tomato buyer is not asked about cassava every time).
-  const [crop, setCrop] = useState<Crop>(facilities.flatMap((f) => f.lines).find((l) => l.status === 'ACTIVE')?.crop ?? 'CASSAVA');
+  const crops = useCrops();
+  const [crop, setCrop] = useState<string>(facilities.flatMap((f) => f.lines).find((l) => l.status === 'ACTIVE')?.crop ?? 'CASSAVA');
   const [place, setPlace] = useState<string | null>(active[0]?.id ?? (active.length ? null : '__new'));
   const [name, setName] = useState('');
   const [lga, setLga] = useState('');
@@ -64,18 +66,18 @@ export function BuyingSlotButton({ orgId, facilities, approved, size = 'lg' }: {
             }}
           >
             {save.error ? <Alert tone="danger">{save.error.message}</Alert> : null}
-            <ChoiceCards<Crop>
+            <ChoiceCards<string>
               name="crop"
               legend="What are you buying?"
               columns={2}
               value={crop}
               onChange={setCrop}
               error={fe.crop}
-              options={CropE.values.map((c) => ({ value: c, label: CROPS[c].label, description: `Farmers selling ${CROPS[c].noun} see this slot`, icon: c === 'TOMATO' ? <Cherry className="size-5" /> : <Sprout className="size-5" /> }))}
+              options={(crops.list.length ? crops.list : [crops.info(crop)]).map((c) => ({ value: c.code, label: c.label, description: `Farmers selling ${c.noun} see this slot`, icon: <Sprout className="size-5" /> }))}
             />
             <ChoiceCards<string>
               name="place"
-              legend={`Where will you receive the ${CROPS[crop].noun}?`}
+              legend={`Where will you receive the ${crops.info(crop).noun}?`}
               value={place}
               onChange={setPlace}
               error={fe.facilityId}

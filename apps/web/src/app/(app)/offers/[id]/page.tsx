@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { CalendarDays, CheckCircle2, Factory, MapPin, Scale, Truck, Wallet } from 'lucide-react';
-import { CROPS, formatKg, formatNaira, REJECTION_HANDLING_LABELS, type HarvestDto, type OfferDto } from '@harvestslot/contracts';
+import { formatKg, formatNaira, REJECTION_HANDLING_LABELS, type HarvestDto, type OfferDto } from '@harvestslot/contracts';
 import { ActingForBanner } from '@/components/domain/banners';
 import { ReasonActionDialog } from '@/components/domain/dialogs';
 import { DateOnly, DemoTag, Price, ReviewedTag, StatusBadge, When, Window } from '@/components/domain/display';
@@ -16,23 +16,25 @@ import { Alert, Dialog, DialogContent } from '@/components/ui/primitives';
 import { useApi } from '@/lib/hooks';
 import { useAction } from '@/lib/mutations';
 import { useSession } from '@/lib/session';
+import { useCrops } from '@/lib/crops';
 
 const LIVE = ['OPEN', 'COUNTERED'];
 
 /** Every material term on one screen, in the order a farmer weighs them. */
 function OfferTerms({ o, asProcessor }: { o: OfferDto; asProcessor: boolean }) {
+  const crop = useCrops().info(o.crop);
   const v = o.current;
   const collect = v.handoverArrangement === 'COLLECT_FROM_FARM';
   const window = collect ? { start: v.pickupWindowStart, end: v.pickupWindowEnd } : { start: v.deliveryWindowStart, end: v.deliveryWindowEnd };
   const net = v.farmerDeliveryCostKobo ? v.estimatedProduceAmountKobo - v.farmerDeliveryCostKobo : null;
   const rows: Array<{ icon: ReactNode; label: string; value: ReactNode; note?: ReactNode }> = [
     { icon: <Factory className="size-4" />, label: 'Buyer', value: <>{o.processorName}</>, note: !asProcessor ? <ReviewedTag approved={o.processorVerified} /> : null },
-    { icon: <Scale className="size-4" />, label: 'Quantity', value: `${formatKg(v.quantityKg)} of ${CROPS[o.crop].noun}` },
+    { icon: <Scale className="size-4" />, label: 'Quantity', value: `${formatKg(v.quantityKg)} of ${crop.noun}` },
     { icon: <Wallet className="size-4" />, label: 'Price', value: <Price kobo={v.priceKoboPerKg} /> },
     { icon: <CalendarDays className="size-4" />, label: 'Date', value: <Window start={window.start} end={window.end} /> },
     {
       icon: <Truck className="size-4" />,
-      label: `Who brings the ${CROPS[o.crop].noun}`,
+      label: `Who brings the ${crop.noun}`,
       value: v.handoverArrangement ? (collect ? `${asProcessor ? 'You collect' : 'They collect'} from the farm` : `${asProcessor ? 'The farmer delivers' : 'You deliver'} to ${o.facility.name}`) : 'Not decided yet (draft)',
     },
     { icon: <MapPin className="size-4" />, label: 'Where', value: v.handoverPlace ?? '—' },
@@ -78,7 +80,7 @@ function OfferTerms({ o, asProcessor }: { o: OfferDto; asProcessor: boolean }) {
             {v.qualityTerms.maxVisibleRotPercent !== undefined ? `; at most ${v.qualityTerms.maxVisibleRotPercent}% visible rot` : ''}.
           </li>
           <li>Quantity may differ by up to {v.toleranceBps / 100}% without a new agreement.</li>
-          <li>{CROPS[o.crop].label} not accepted: {REJECTION_HANDLING_LABELS[v.rejectionHandling].toLowerCase()}.</li>
+          <li>{crop.label} not accepted: {REJECTION_HANDLING_LABELS[v.rejectionHandling].toLowerCase()}.</li>
           <li>{v.cancellationTerms}</li>
         </ul>
       </details>
@@ -148,6 +150,7 @@ function FarmerDecision({ offer }: { offer: OfferDto }) {
 }
 
 function ProcessorPanel({ offer }: { offer: OfferDto }) {
+  const crop = useCrops().info(offer.crop);
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const harvest = useApi<HarvestDto>(['harvest', offer.harvestRequestId], editing ? `/harvests/${offer.harvestRequestId}` : null);
@@ -171,9 +174,9 @@ function ProcessorPanel({ offer }: { offer: OfferDto }) {
               : offer.status === 'DECLINED'
                 ? 'Declined by the farmer'
                 : offer.status === 'LAPSED'
-                  ? `Lapsed — the farmer sold these ${CROPS[offer.crop].noun} elsewhere`
+                  ? `Lapsed — the farmer sold the ${crop.noun} elsewhere`
                   : 'Withdrawn';
-  const forYou = offer.status === 'DRAFT' ? `Decide how the ${CROPS[offer.crop].noun} will get there, then send the offer.` : offer.status === 'COUNTERED' ? 'Accept the farmer’s terms, or update your offer.' : null;
+  const forYou = offer.status === 'DRAFT' ? `Decide how the ${crop.noun} will get there, then send the offer.` : offer.status === 'COUNTERED' ? 'Accept the farmer’s terms, or update your offer.' : null;
   const waitingFor = offer.status === 'OPEN' ? `Waiting for ${offer.farmerName} to accept or decline. Capacity is held until ${new Date(offer.expiresAt).toLocaleString('en-NG', { timeZone: 'Africa/Lagos', dateStyle: 'medium', timeStyle: 'short' })}.` : null;
   return (
     <>

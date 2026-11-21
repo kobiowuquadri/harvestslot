@@ -2,8 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import {
   buyingSlotSchema,
-  CROPS,
-  cropNoun,
   formatLagosDate,
   addDays,
   adjustCapacitySchema,
@@ -12,7 +10,11 @@ import {
   facilityInputSchema,
   formatKg,
   kgToGrams,
+  lagosDateString,
   lagosDateTime,
+  qualityForCrop,
+  stringToDbDate,
+  toGrams,
   lineInputSchema,
   qualityTermsSchema,
   slotsQuerySchema,
@@ -21,11 +23,12 @@ import {
   type FacilityDto,
   type SlotDto,
 } from '@harvestslot/contracts';
-import { audit, DomainError, lockRow, slotUsage, slotUsageMany, usageDto, withTransaction, type Actor } from '@harvestslot/core';
+import { audit, DomainError, farmerRecipients, haversineKm, lockRow, notify, slotUsage, slotUsageMany, usageDto, withTransaction, type Actor } from '@harvestslot/core';
 import type { Prisma } from '@harvestslot/db';
 import { AccessService } from '../../common/access.service.js';
 import { PrismaService } from '../../common/prisma.service.js';
 import { iso, kg, kobo } from '../../common/serialize.js';
+import { activeCrop } from '../crops/crops.service.js';
 import { approxFor } from '../farmers/farmers.service.js';
 
 type FacilityRow = Prisma.FacilityGetPayload<{ include: { lines: true; organisation: { select: { name: true } } } }>;
@@ -127,8 +130,9 @@ export class FacilitiesService {
     const f = await this.prisma.db.facility.findUnique({ where: { id: facilityId } });
     if (!f) throw new DomainError('NOT_FOUND', 'Facility not found');
     await this.access.requireOrg(actor, f.organisationId, 'processor.facility.manage');
-    if (!CROPS[input.crop].products.includes(input.product)) {
-      throw new DomainError('VALIDATION_FAILED', `A line buying ${cropNoun(input.crop)} cannot make that product`, [{ path: 'product', message: 'Choose a product made from this crop' }]);
+    const crop = await activeCrop(this.prisma.db, input.crop);
+    if (!crop.products.includes(input.product)) {
+      throw new DomainError('VALIDATION_FAILED', `A line buying ${crop.noun} cannot make that product`, [{ path: 'product', message: 'Choose a product made from this crop' }]);
     }
     const line = await this.prisma.db.processingLine.create({ data: { facilityId, name: input.name, crop: input.crop, product: input.product } });
     await audit(this.prisma.db, { actor, organisationId: f.organisationId, action: 'line.created', entityType: 'processing_line', entityId: line.id });
@@ -136,12 +140,12 @@ export class FacilitiesService {
   }
 
   async updateLine(actor: Actor, lineId: string, input: z.infer<typeof updateLineSchema>) {
-    const line = await this.prisma.db.processingLine.findUnique({ where: { id: lineId }, include: { facility: true } });
+    const line = await this.prisma.db.processingLine.findUnique({ where: { id: lineId }, include: { facility: true, cropInfo: true } });
     if (!line) throw new DomainError('NOT_FOUND', 'Line not found');
     await this.access.requireOrg(actor, line.facility.organisationId, 'processor.facility.manage');
     const { expectedVersion, ...rest } = input;
-    if (rest.product && !CROPS[line.crop].products.includes(rest.product)) {
-      throw new DomainError('VALIDATION_FAILED', `A line buying ${cropNoun(line.crop)} cannot make that product`, [{ path: 'product', message: 'Choose a product made from this crop' }]);
+    if (rest.product && !line.cropInfo.products.includes(rest.product)) {
+      throw new DomainError('VALIDATION_FAILED', `A line buying ${line.cropInfo.noun} cannot make that product`, [{ path: 'product', message: 'Choose a product made from this crop' }]);
     }
     const r = await this.prisma.db.processingLine.updateMany({ where: { id: lineId, version: expectedVersion }, data: { ...rest, version: { increment: 1 } } });
     if (r.count !== 1) throw new DomainError('VERSION_CONFLICT', 'The line was changed elsewhere. Reload and try again.');
@@ -228,6 +232,7 @@ export class FacilitiesService {
       },
     });
     await audit(this.prisma.db, { actor, organisationId: line.facility.organisationId, action: 'slot.created', entityType: 'slot', entityId: slot.id, data: { published: input.publish } });
+    if (input.publish) await this.tellWaitingFarmers(line.id, slot.startsAt, slot.endsAt);
     return this.getSlot(actor, slot.id);
   }
 
@@ -237,6 +242,7 @@ export class FacilitiesService {
    */
   async createBuyingSlot(actor: Actor, orgId: string, input: z.infer<typeof buyingSlotSchema>): Promise<SlotDto> {
     const membership = await this.access.requireOrg(actor, orgId, 'processor.slot.manage');
+    const crop = await activeCrop(this.prisma.db, input.crop);
     let facilityId = input.facilityId;
     if (facilityId) {
       const f = await this.prisma.db.facility.findUnique({ where: { id: facilityId } });
@@ -253,7 +259,7 @@ export class FacilitiesService {
         lga: nf.lga,
         address: nf.address,
         point,
-        qualityCriteria: qualityTermsSchema.parse(CROPS[input.crop].defaultQuality),
+        qualityCriteria: qualityTermsSchema.parse(qualityForCrop(crop)),
         minOrderKg: '100',
         maxPickupDistanceKm: 100,
         indicativePriceKoboPerKg: input.priceKoboPerKg,
@@ -266,13 +272,14 @@ export class FacilitiesService {
       await this.prisma.db.organisation.updateMany({ where: { id: orgId, lga: null }, data: { lga: nf.lga } });
     }
     // Each crop is bought on its own line: the first buying slot for a crop at a place creates its intake line.
-    let line = await this.prisma.db.processingLine.findFirst({ where: { facilityId, crop: input.crop, status: 'ACTIVE' }, orderBy: { createdAt: 'asc' } });
+    let line = await this.prisma.db.processingLine.findFirst({ where: { facilityId, crop: crop.code, status: 'ACTIVE' }, orderBy: { createdAt: 'asc' } });
     if (!line) {
       const existingNames = new Set((await this.prisma.db.processingLine.findMany({ where: { facilityId }, select: { name: true } })).map((l) => l.name));
-      let name = CROPS[input.crop].intakeLineName;
-      for (let n = 2; existingNames.has(name); n++) name = `${CROPS[input.crop].intakeLineName} ${n}`;
-      await this.addLine(actor, facilityId, { name, crop: input.crop, product: 'OTHER' });
-      line = await this.prisma.db.processingLine.findFirstOrThrow({ where: { facilityId, crop: input.crop, status: 'ACTIVE' }, orderBy: { createdAt: 'asc' } });
+      const base = `${crop.label} intake`;
+      let name = base;
+      for (let n = 2; existingNames.has(name); n++) name = `${base} ${n}`;
+      await this.addLine(actor, facilityId, { name, crop: crop.code, product: crop.products.includes('OTHER') ? 'OTHER' : (crop.products[0] ?? 'OTHER') });
+      line = await this.prisma.db.processingLine.findFirstOrThrow({ where: { facilityId, crop: crop.code, status: 'ACTIVE' }, orderBy: { createdAt: 'asc' } });
     }
     const startsAt = lagosDateTime(input.fromDate, 8);
     const endsAt = lagosDateTime(input.toDate, 17);
@@ -295,6 +302,8 @@ export class FacilitiesService {
     const { line, membership } = await this.lineForWrite(actor, input.lineId);
     if (input.publish && membership.organisationStatus !== 'APPROVED') throw new DomainError('ORG_NOT_APPROVED', 'Your organisation must be approved before publishing');
     let created = 0;
+    let firstStart: Date | null = null;
+    let lastEnd: Date | null = null;
     const skipped: Array<{ date: string; reason: string }> = [];
     for (let i = 0; i < input.days; i++) {
       const date = addDays(input.firstDate, i);
@@ -320,12 +329,62 @@ export class FacilitiesService {
           },
         });
         created++;
+        firstStart ??= startsAt;
+        lastEnd = endsAt;
       } catch {
         skipped.push({ date, reason: 'overlaps an existing slot on this line' });
       }
     }
     await audit(this.prisma.db, { actor, organisationId: line.facility.organisationId, action: 'slot.series-created', entityType: 'processing_line', entityId: line.id, data: { created, skipped: skipped.length } });
+    if (input.publish && firstStart && lastEnd) await this.tellWaitingFarmers(line.id, firstStart, lastEnd);
     return { created, skipped };
+  }
+
+  /**
+   * "No buyer for your crop yet: we will tell you." Farmers with a listed harvest of this crop, near
+   * enough and with fitting dates, are told a buyer has opened a buying slot. At most once per harvest
+   * and buyer place. Best effort: a failure here never undoes the published slot.
+   */
+  private async tellWaitingFarmers(lineId: string, from: Date, to: Date): Promise<void> {
+    try {
+      const db = this.prisma.db;
+      const line = await db.processingLine.findUnique({ where: { id: lineId }, include: { cropInfo: true, facility: { include: { organisation: { select: { name: true, status: true } } } } } });
+      if (!line || line.facility.organisation.status !== 'APPROVED') return;
+      const maxHours = qualityTermsSchema.parse(line.facility.qualityCriteria).maxHoursHarvestToDelivery;
+      const harvests = await db.harvestRequest.findMany({
+        where: {
+          status: 'PUBLISHED',
+          crop: line.crop,
+          isDemo: line.facility.isDemo,
+          earliestHarvestDate: { lte: stringToDbDate(lagosDateString(to)) },
+          latestHarvestDate: { gte: stringToDbDate(lagosDateString(new Date(from.getTime() - maxHours * 3_600_000))) },
+        },
+        include: { farmLocation: true },
+        take: 200,
+      });
+      const place = { lat: Number(line.facility.lat), lng: Number(line.facility.lng) };
+      for (const h of harvests) {
+        if (toGrams(h.eligibleQuantityKg) < toGrams(line.facility.minOrderKg)) continue;
+        const l = h.farmLocation;
+        const lat = l.exactLat ?? l.approxLat;
+        const lng = l.exactLng ?? l.approxLng;
+        if (lat !== null && lng !== null) {
+          const km = haversineKm({ lat: Number(lat), lng: Number(lng) }, place);
+          if (km > line.facility.maxPickupDistanceKm || (h.maxDistanceKm !== null && km > h.maxDistanceKm)) continue;
+        }
+        await notify(db, {
+          userIds: await farmerRecipients(db, h.farmerProfileId, undefined),
+          type: 'harvest.buyer-available',
+          category: 'offers',
+          title: `A buyer for your ${line.cropInfo.noun} opened a buying slot`,
+          body: `${line.facility.organisation.name} can receive ${line.cropInfo.noun} at ${line.facility.name} from ${formatLagosDate(from)}. Open your harvest ${h.reference} to see if it fits and send a request.`,
+          link: `/farmer/harvests/${h.id}`,
+          dedupeKey: `buyer-available:${h.id}:${line.facilityId}`,
+        });
+      }
+    } catch {
+      // Notifications are a courtesy: the slot is already published and farmers still see it in their matches.
+    }
   }
 
   private async slotForWrite(actor: Actor, slotId: string) {
@@ -343,6 +402,7 @@ export class FacilitiesService {
     const r = await this.prisma.db.processingSlot.updateMany({ where: { id: slotId, version: expectedVersion }, data: { status: 'PUBLISHED', publishedAt: new Date(), closedReason: null, version: { increment: 1 } } });
     if (r.count !== 1) throw new DomainError('VERSION_CONFLICT', 'The slot was changed elsewhere. Reload and try again.');
     await audit(this.prisma.db, { actor, organisationId: slot.facility.organisationId, action: 'slot.published', entityType: 'slot', entityId: slotId });
+    await this.tellWaitingFarmers(slot.lineId, slot.startsAt, slot.endsAt);
     return this.getSlot(actor, slotId);
   }
 

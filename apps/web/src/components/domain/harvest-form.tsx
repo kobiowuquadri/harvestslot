@@ -3,12 +3,11 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { ArrowLeft, ArrowRight, CalendarDays, Cherry, CloudOff, LocateFixed, MapPin, Plus, Scale, Search, Sprout } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarDays, CloudOff, LocateFixed, MapPin, Plus, Scale, Search, Sprout } from 'lucide-react';
 import {
   addDays,
   createHarvestSchema,
-  CROPS,
-  CropE,
+  cropVerb,
   formatKg,
   formatLagosDate,
   formatTonnes,
@@ -16,7 +15,6 @@ import {
   OYO_LGAS,
   tonnesToKgString,
   updateHarvestSchema,
-  type Crop,
   type FarmerProfileDto,
   type HarvestDto,
 } from '@harvestslot/contracts';
@@ -26,18 +24,21 @@ import { Field, Input } from '@/components/ui/form';
 import { Alert, Dialog, DialogContent } from '@/components/ui/primitives';
 import { ApiError, api, newIdempotencyKey } from '@/lib/api';
 import { saveDraft } from '@/lib/drafts';
+import { useCrops } from '@/lib/crops';
 import { withFarmer, type FarmerContext } from '@/lib/hooks';
 import { useSession } from '@/lib/session';
 import { cn } from '@/lib/utils';
 import { useOnline } from './banners';
 import { LocationForm } from './location-form';
+import { RequestCropButton } from './request-crop';
 
 type Unit = 'kg' | 't';
 type Wait = '7' | '14' | '30';
 
 export interface HarvestFormValues {
   /** What is for sale; fixed once the harvest is created. */
-  crop: Crop;
+  /** A `crops.code`, e.g. CASSAVA. */
+  crop: string;
   /** A saved farm location; empty when describing a new place. */
   farmLocationId: string;
   newPlace: boolean;
@@ -74,7 +75,7 @@ export function normaliseDraftValues(raw: Record<string, unknown>): HarvestFormV
   const v = { ...emptyHarvestValues, ...(raw as Partial<HarvestFormValues>) };
   if (!v.quantity && typeof raw.estimatedQuantityKg === 'string') v.quantity = raw.estimatedQuantityKg;
   if (!v.readyDate && typeof raw.earliestHarvestDate === 'string') v.readyDate = raw.earliestHarvestDate;
-  if (!CropE.values.includes(v.crop)) v.crop = 'CASSAVA';
+  if (typeof v.crop !== 'string' || !v.crop) v.crop = 'CASSAVA';
   return v;
 }
 
@@ -135,7 +136,7 @@ const STEP_PATHS: Array<(path: string) => boolean> = [
 ];
 
 /**
- * "Add my harvest": what is for sale (cassava or tomatoes) and where, roughly how much, and when it will be ready — then a short
+ * "Add my harvest": what is for sale (any listed crop) and where, roughly how much, and when it will be ready — then a short
  * summary before "Find buyers". Works offline: the farmer can keep it on this phone and send it later;
  * sending uses the draft id as idempotency key, so retries never create a duplicate.
  */
@@ -170,14 +171,16 @@ export function HarvestForm({
   const lgas = config?.supportedLgas?.length ? config.supportedLgas : [...OYO_LGAS];
   const set = <K extends keyof HarvestFormValues>(k: K, value: HarvestFormValues[K]) => setV((p) => ({ ...p, [k]: value }));
   const kg = quantityKg(v);
-  const noun = CROPS[v.crop].noun;
+  const crops = useCrops();
+  const crop = crops.info(v.crop);
+  const noun = crop.noun;
 
   const validate = (): Record<string, string> => {
     const out: Record<string, string> = {};
     const payload = harvestPayload(v);
     if (v.quantity.trim() && !kg) out.estimatedQuantityKg = v.unit === 't' ? 'Enter tonnes like 2 or 2.5' : 'Enter kilograms like 2000';
     if (v.readyDate && v.readyDate < today) out.earliestHarvestDate = 'Choose today or a later date';
-    if (!existing && locations.length && !v.newPlace && !v.farmLocationId) out.farmLocationId = v.crop === 'TOMATO' ? 'Choose where the tomatoes are' : 'Choose where the cassava is';
+    if (!existing && locations.length && !v.newPlace && !v.farmLocationId) out.farmLocationId = `Choose where the ${noun} ${cropVerb(crop)}`;
     const result = existing
       ? updateHarvestSchema.safeParse({ farmLocationId: v.farmLocationId, estimatedQuantityKg: payload.estimatedQuantityKg, eligibleQuantityKg: payload.estimatedQuantityKg, earliestHarvestDate: payload.earliestHarvestDate, latestHarvestDate: payload.latestHarvestDate, expectedVersion: existing.version })
       : createHarvestSchema.safeParse({ ...payload, publish: true });
@@ -320,18 +323,21 @@ export function HarvestForm({
                 Selling <strong className="text-ink">{noun}</strong>. To sell another crop, add a new harvest.
               </p>
             ) : (
-              <ChoiceCards<Crop>
-                name="crop"
-                legend="What are you selling?"
-                columns={2}
-                value={v.crop}
-                onChange={(c) => set('crop', c)}
-                error={errors.crop}
-                options={CropE.values.map((c) => ({ value: c, label: CROPS[c].label, description: CROPS[c].why, icon: c === 'TOMATO' ? <Cherry className="size-6" /> : <Sprout className="size-6" /> }))}
-              />
+              <div className="flex flex-col gap-2">
+                <ChoiceCards<string>
+                  name="crop"
+                  legend="What are you selling?"
+                  columns={2}
+                  value={v.crop}
+                  onChange={(c) => set('crop', c)}
+                  error={errors.crop}
+                  options={(crops.list.length ? crops.list : [crop]).map((c) => ({ value: c.code, label: c.label, description: 'why' in c ? c.why : undefined, icon: <Sprout className="size-6" /> }))}
+                />
+                <RequestCropButton />
+              </div>
             )}
             <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
-              <MapPin className="size-5 text-forest" aria-hidden /> Where {v.crop === 'TOMATO' ? 'are the tomatoes' : 'is the cassava'}?
+              <MapPin className="size-5 text-forest" aria-hidden /> Where {cropVerb(crop)} the {noun}?
             </h2>
             {locations.length ? (
               <ChoiceCards<string>
@@ -400,7 +406,7 @@ export function HarvestForm({
         {step === 1 ? (
           <div className="flex flex-col gap-5">
             <h2 className="flex items-center gap-2 text-lg font-semibold text-ink">
-              <Scale className="size-5 text-forest" aria-hidden /> Roughly how much {noun} {v.crop === 'TOMATO' ? 'are' : 'is'} for sale?
+              <Scale className="size-5 text-forest" aria-hidden /> Roughly how much are you selling?
             </h2>
             <ChoiceCards<Unit>
               name="unit"
@@ -440,7 +446,7 @@ export function HarvestForm({
             </Field>
             <ChoiceCards<Wait>
               name="waitDays"
-              legend={v.crop === 'TOMATO' ? 'How long can they stay on the plants after that?' : 'How long can it wait in the ground after that?'}
+              legend={v.crop === 'CASSAVA' ? 'How long can it wait in the ground after that?' : `How long can the ${noun} wait after that?`}
               size="sm"
               columns={3}
               value={v.waitDays}
@@ -461,7 +467,7 @@ export function HarvestForm({
             <h2 className="text-lg font-semibold text-ink">{existing ? 'Check your changes' : 'Check your harvest'}</h2>
             <dl className="divide-y divide-line rounded-xl border border-line">
               {[
-                ['Selling', CROPS[v.crop].label, 0],
+                ['Selling', crop.label, 0],
                 ['Where', placeLabel, 0],
                 ['How much', kg ? formatKg(kg) : 'Not entered', 1],
                 ['Ready', v.readyDate ? `${formatLagosDate(v.readyDate)} — can wait until ${formatLagosDate(addDays(v.readyDate, Number(v.waitDays)))}` : 'Not chosen', 2],

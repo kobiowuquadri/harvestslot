@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { CROPS, CropE, PRODUCT_LABELS, type Crop, type FacilityDto } from '@harvestslot/contracts';
+import { PRODUCT_LABELS, type FacilityDto } from '@harvestslot/contracts';
 import { DemoTag, Kg, Price, StatusBadge } from '@/components/domain/display';
 import { FacilityForm } from '@/components/domain/facility-form';
 import { OrgGate } from '@/components/domain/org-gate';
@@ -13,11 +13,13 @@ import { Field, Input, Select } from '@/components/ui/form';
 import { Badge, Card, CardContent, CardHeader, CardTitle, DescriptionList, Dialog, DialogContent } from '@/components/ui/primitives';
 import { useApi } from '@/lib/hooks';
 import { useAction } from '@/lib/mutations';
+import { useCrops } from '@/lib/crops';
 
 function AddLine({ facility, orgId }: { facility: FacilityDto; orgId: string }) {
   const [name, setName] = useState('');
-  const [crop, setCrop] = useState<Crop>('CASSAVA');
-  const [product, setProduct] = useState<string>(CROPS.CASSAVA.products[0]!);
+  const crops = useCrops();
+  const [crop, setCrop] = useState<string>('CASSAVA');
+  const [product, setProduct] = useState<string>(crops.info('CASSAVA').products[0] ?? 'OTHER');
   const add = useAction({ request: () => ({ path: `/facilities/${facility.id}/lines`, body: { name, crop, product }, idempotent: false }), invalidate: [['facilities', orgId]], success: 'Line added', onSuccess: () => setName('') });
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
@@ -28,21 +30,21 @@ function AddLine({ facility, orgId }: { facility: FacilityDto; orgId: string }) 
         <Select
           value={crop}
           onChange={(e) => {
-            const c = e.target.value as Crop;
+            const c = e.target.value;
             setCrop(c);
-            setProduct(CROPS[c].products[0]!);
+            setProduct(crops.info(c).products[0] ?? 'OTHER');
           }}
         >
-          {CropE.values.map((c) => (
-            <option key={c} value={c}>
-              {CROPS[c].label}
+          {crops.list.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.label}
             </option>
           ))}
         </Select>
       </Field>
       <Field label="Product">
         <Select value={product} onChange={(e) => setProduct(e.target.value)}>
-          {CROPS[crop].products.map((p) => (
+          {crops.info(crop).products.map((p) => (
             <option key={p} value={p}>
               {PRODUCT_LABELS[p]}
             </option>
@@ -66,6 +68,7 @@ function LineToggle({ line, orgId }: { line: FacilityDto['lines'][number]; orgId
 }
 
 function Facilities({ orgId }: { orgId: string }) {
+  const crops = useCrops();
   const q = useApi<FacilityDto[]>(['facilities', orgId], `/organisations/${orgId}/facilities`);
   const qc = useQueryClient();
   const [editing, setEditing] = useState<FacilityDto | 'new' | null>(null);
@@ -111,7 +114,7 @@ function Facilities({ orgId }: { orgId: string }) {
                     <ul className="flex flex-col gap-1">
                       {f.lines.map((l) => (
                         <li key={l.id} className="flex flex-wrap items-center gap-2 text-sm">
-                          {l.name} <Badge tone="neutral">{CROPS[l.crop].label} · {PRODUCT_LABELS[l.product].toLowerCase()}</Badge> <StatusBadge kind="generic" status={l.status} />
+                          {l.name} <Badge tone="neutral">{crops.info(l.crop).label} · {PRODUCT_LABELS[l.product].toLowerCase()}</Badge> <StatusBadge kind="generic" status={l.status} />
                           <LineToggle line={l} orgId={orgId} />
                         </li>
                       ))}

@@ -13,7 +13,7 @@ installSeedClock();
 
 import { hash } from '@node-rs/argon2';
 import { loadConfig } from '@harvestslot/config';
-import { CROPS, lagosDateString, lagosDateTime, addDays, qualityTermsSchema, type Crop, type ProcessingProduct, type QualityTerms } from '@harvestslot/contracts';
+import { lagosDateString, lagosDateTime, addDays, qualityForCrop, qualityTermsSchema, type Crop, type ProcessingProduct, type QualityTerms } from '@harvestslot/contracts';
 import { recheckReadiness, sweepExpiredHolds, type Actor } from '@harvestslot/core';
 import type { PrismaClient } from '@harvestslot/db';
 import { DEMO_PERSONAS } from '../modules/auth/auth.service.js';
@@ -25,6 +25,7 @@ import { BookingsService } from '../modules/bookings/bookings.service.js';
 import { ReceivingService } from '../modules/receiving/receiving.service.js';
 import { FinanceService } from '../modules/finance/finance.service.js';
 import { DisputesService } from '../modules/disputes/disputes.service.js';
+import { CropsService } from '../modules/crops/crops.service.js';
 import { createCliContext } from './context.js';
 
 export const DEMO_PASSWORD = 'HarvestSlot-Demo-2026';
@@ -83,6 +84,7 @@ async function main() {
   const receiving = app.get(ReceivingService);
   const finance = app.get(FinanceService);
   const disputes = app.get(DisputesService);
+  const crops = app.get(CropsService);
 
   const passwordHash = await hash(DEMO_PASSWORD, { memoryCost: 19_456, timeCost: 2, parallelism: 1 });
   const setupTime = new Date(slotStart(-12).getTime() - 2 * DAY);
@@ -256,7 +258,7 @@ async function main() {
   const f2fac = await fac('p2owner', p2.id, 'Akinyele Flour Mill', 'Akinyele', 7.552, 3.928, 25_500, 60, criteria(36));
   const f3fac = await fac('p3owner', p3.id, 'Iseyin Garri Hub', 'Iseyin', 7.968, 3.603, 23_000, 90, criteria(48));
   await fac('p4owner', p4.id, 'Ogbomoso Chips Plant', 'Ogbomosho North', 8.131, 4.244, 22_500, 80, criteria(48));
-  const f5fac = await fac('p5owner', p5.id, 'Egbeda Tomato Paste Plant', 'Egbeda', 7.392, 3.981, 45_000, 80, qualityTermsSchema.parse(CROPS.TOMATO.defaultQuality));
+  const f5fac = await fac('p5owner', p5.id, 'Egbeda Tomato Paste Plant', 'Egbeda', 7.392, 3.981, 45_000, 80, qualityTermsSchema.parse(qualityForCrop(await prisma.crop.findUniqueOrThrow({ where: { code: 'TOMATO' } }))));
   const addLine = async (actorKey: string, facilityId: string, name: string, product: ProcessingProduct, crop: Crop = 'CASSAVA') => {
     const f = await facilities.addLine(people[actorKey]!.actor, facilityId, { name, crop, product });
     return f.lines.find((l) => l.name === name)!.id;
@@ -573,6 +575,15 @@ async function main() {
     at(ago(8));
     await offerFor(h.id, 'p5:3', p5.id, '900', 46_000, { validForHours: 96, note: 'We collect in our own crates early in the morning, before the heat.' });
   }
+  // P1: Halima lists peppers, a crop no demo buyer buys yet: "No buyer for peppers yet — we'll tell you".
+  await harvestFor('f3', '400', 3, 10, ago(6), undefined, true, 'PEPPER');
+  // Crop requests waiting for the administrator: okra (two farmers) and watermelon (one).
+  at(ago(30));
+  await crops.request(farmers.adunni!.actor!, { name: 'Okra', note: 'I have about half a hectare ready every few weeks.' });
+  at(ago(22));
+  await crops.request(farmers.f7!.actor!, { name: 'okra' });
+  at(ago(14));
+  await crops.request(farmers.f8!.actor!, { name: 'Watermelon', note: 'Harvest in three weeks.' });
 
   // ── Open requests and offers ──────────────────────────────────────
   // Adunni's second request with two offers to compare: Oluyole collects; Iseyin pays less but she delivers.

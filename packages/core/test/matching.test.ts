@@ -15,6 +15,7 @@ function usage(availableKg: string): SlotUsageGrams {
 const request: MatchRequestInput = {
   id: 'r1',
   crop: 'CASSAVA',
+  cropNoun: 'cassava',
   remainingG: kgToGrams('2000'),
   earliestHarvestDate: '2026-10-27',
   latestHarvestDate: '2026-10-30',
@@ -25,7 +26,7 @@ const request: MatchRequestInput = {
   variety: null,
 };
 
-function candidate(id: string, o: Partial<{ price: bigint | null; availableKg: string; lat: number; lng: number; slotStart: string; orgStatus: string; minOrderKg: string; completed: number; onTime: number; radius: number; varieties: string[]; crop: 'CASSAVA' | 'TOMATO' }> = {}): MatchCandidateInput {
+function candidate(id: string, o: Partial<{ price: bigint | null; availableKg: string; lat: number; lng: number; slotStart: string; orgStatus: string; minOrderKg: string; completed: number; onTime: number; radius: number; varieties: string[]; crop: string }> = {}): MatchCandidateInput {
   const start = new Date(o.slotStart ?? '2026-10-28T07:00:00Z');
   return {
     facility: {
@@ -41,7 +42,7 @@ function candidate(id: string, o: Partial<{ price: bigint | null; availableKg: s
       qualityCriteria: { maxHoursHarvestToDelivery: 48, soilAndStemsRemoved: true, varietiesAccepted: o.varieties ?? [] },
     },
     org: { id: `o-${id}`, name: `Org ${id}`, status: o.orgStatus ?? 'APPROVED' },
-    slot: { id: `s-${id}`, startsAt: start, endsAt: new Date(start.getTime() + 8 * 3_600_000), status: 'PUBLISHED', lineName: 'Line A', lineStatus: 'ACTIVE', crop: o.crop ?? 'CASSAVA', product: o.crop === 'TOMATO' ? 'TOMATO_PASTE' : 'GARRI' },
+    slot: { id: `s-${id}`, startsAt: start, endsAt: new Date(start.getTime() + 8 * 3_600_000), status: 'PUBLISHED', lineName: 'Line A', lineStatus: 'ACTIVE', crop: o.crop ?? 'CASSAVA', cropNoun: o.crop === 'TOMATO' ? 'tomatoes' : 'cassava', product: o.crop === 'TOMATO' ? 'TOMATO_PASTE' : 'GARRI' },
     usage: usage(o.availableKg ?? '5000'),
     reliability: { completed: o.completed ?? 0, onTime: o.onTime ?? 0 },
     invited: false,
@@ -75,7 +76,7 @@ describe('matching eligibility', () => {
   });
 
   it('only pairs a harvest with buying slots for the same crop', () => {
-    const tomatoes = { ...request, crop: 'TOMATO' as const, minPriceKoboPerKg: null };
+    const tomatoes = { ...request, crop: 'TOMATO', cropNoun: 'tomatoes', minPriceKoboPerKg: null };
     const { matches, rejections } = rankMatches(tomatoes, [candidate('cassava-buyer'), candidate('tomato-buyer', { crop: 'TOMATO' })], opts);
     expect(matches.map((m) => m.candidate.facility.id)).toEqual(['f-tomato-buyer']);
     expect(rejections).toEqual([expect.objectContaining({ slotId: 's-cassava-buyer', reason: 'CROP_NOT_BOUGHT', detail: 'This buying slot is for cassava, not tomatoes.' })]);
@@ -84,8 +85,8 @@ describe('matching eligibility', () => {
   });
 
   it('explains when nobody buys the crop yet', () => {
-    const out = explainInfeasibility({ ...request, crop: 'TOMATO' }, [], 0);
-    expect(out.reasons[0]).toBe('No buyer has published open capacity for tomatoes on upcoming dates.');
+    const out = explainInfeasibility({ ...request, crop: 'OKRA', cropNoun: 'okra' }, [], 0);
+    expect(out.reasons[0]).toBe('No buyer has published open capacity for okra on upcoming dates.');
   });
 
   it('rejects a variety the facility does not accept when the farmer stated one', () => {

@@ -4,6 +4,21 @@ Every result below comes from a command that was actually run on the build machi
 
 Last full run: **2026-10-24**.
 
+### Re-run after making crops administrator-managed (2026-11-21, later)
+
+| Check | Command | Result |
+|---|---|---|
+| Lint | `pnpm lint` | pass |
+| Typecheck (all packages and apps) | `pnpm typecheck` | pass |
+| Unit tests | `pnpm test` | 164 passed (config 17, contracts 14, db 72, core 53, api 8) |
+| Integration tests (embedded PostgreSQL, migrations applied fresh) | `pnpm --filter @harvestslot/api test:integration` | 28 passed in 5 files; `crops.test.ts` (3) covers requests, adding and switching off crops, and the buyer-available notification |
+| Migration against the schema | `prisma migrate diff` (migrated database → schema) | empty diff |
+| Migration on existing data | `prisma migrate deploy` on the previous demo database | 24 cassava and 4 tomato harvests and all intake lines kept their crop |
+| Demo seed, fresh local database | `pnpm --filter @harvestslot/api seed` | completed: 29 harvest requests (one of peppers), 3 crop requests |
+| API smoke test (demo personas) | scratch script against a local API | five crops in the public config; okra ×2 and watermelon requests for the admin; peppers show “no buyer yet”; cassava and tomato journeys unchanged |
+| Production web build and screenshots | `pnpm --filter @harvestslot/web build`, Playwright | harvest form, request dialog, Admin → Crops and the peppers page render; no horizontal overflow checked at 390 px for the form |
+| Browser tests (Playwright suite) | `pnpm test:e2e` | **not re-run** |
+
 ### Re-run after adding the second crop (2026-11-21)
 
 | Check | Command | Result |
